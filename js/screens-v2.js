@@ -9,9 +9,10 @@
 
 import {
     PENSE_EN_VOS, FOTOS_DEL_DIA, AUDIOS, HISTORIAS,
-    PREGUNTA_SEMILLA, PROGRESO_LIBRO, CALENDARIO
+    PREGUNTA_SEMILLA, PROGRESO_LIBRO, CALENDARIO,
+    historiasVisiblesPara, etiquetaVisibilidad, esHijoDe
 } from './mocks.js';
-import { miembroActivo } from './state.js';
+import { miembroActivo, state } from './state.js';
 import { go } from './router.js';
 import { h, modal, bannerV2 } from './ui.js';
 
@@ -125,9 +126,31 @@ export function renderAudios($app) {
 }
 
 // =====================================================================
-// HISTORIAS / LEGADO
+// HISTORIAS / LEGADO  (pantalla del NARRADOR — sólo modo simple)
 // =====================================================================
 export function renderHistorias($app) {
+    const yo = miembroActivo();
+
+    // Sólo los miembros en modo simple graban historias. Si entra un
+    // dashboard, lo mandamos a la tab de "Historias para responder".
+    if (yo.interface_mode !== 'simple') {
+        $app.innerHTML = `
+            ${bannerV2}
+            ${headerV2('Historias', 'pense')}
+            <section class="card">
+                <p>Sólo el narrador (la persona en modo simple) puede grabar
+                anécdotas. Vos podés escuchar las que te haya compartido.</p>
+                <button class="btn btn--pense" data-go="#/v2/historias-tab">
+                    🎧 Ir a Historias para responder
+                </button>
+            </section>
+        `;
+        wireNav($app);
+        return;
+    }
+
+    const misHistorias = HISTORIAS.filter(x => x.narrador_id === yo.id);
+
     $app.innerHTML = `
         ${bannerV2}
         ${headerV2('Historias', 'pense')}
@@ -144,13 +167,16 @@ export function renderHistorias($app) {
 
         <h2>Tus historias guardadas</h2>
         <ul class="historias-lista">
-            ${HISTORIAS.map(h_ => `
+            ${misHistorias.map(h_ => `
                 <li class="historia-row">
                     <span class="historia-row__icono">📖</span>
                     <div>
                         <strong>${h(h_.titulo)}</strong>
                         <small>${h_.duracion_min} min · ${h(h_.fecha)}
                           ${h_.respondida_por ? `· ${h(h_.respondida_por)} respondió` : ''}
+                        </small>
+                        <small class="visibilidad-tag">
+                            ${h(etiquetaVisibilidad(h_.visibilidad, state.miembros))}
                         </small>
                     </div>
                 </li>
@@ -166,9 +192,9 @@ export function renderHistorias($app) {
     `;
     wireNav($app);
 
-    const dispararGrabacion = async (titulo) => {
-        await modal({
-            titulo,
+    const flujoGrabar = async (tituloModal) => {
+        const grabar = await modal({
+            titulo: tituloModal,
             cuerpo: `
                 <p class="muted">Grabando… contá tu historia con calma.</p>
                 <div class="dictado-fake dictado-fake--ancho">
@@ -184,12 +210,125 @@ export function renderHistorias($app) {
             ],
             tono: 'pense'
         });
+        if (grabar !== 'ok') return;
+
+        // Selector de visibilidad: lo elige el narrador, no se puede
+        // cambiar después.
+        const decision = await pedirVisibilidad(yo);
+        if (!decision) return;
+
+        await modal({
+            titulo: '✅ Historia guardada',
+            cuerpo: `
+                <p>Quedó guardada con esta visibilidad:</p>
+                <p><strong>${h(etiquetaVisibilidad(decision, state.miembros))}</strong></p>
+                <p class="muted">En la maqueta no se persiste — pero así
+                se vería el confirmador.</p>
+            `,
+            acciones: [{ label: 'Listo', clase: 'btn--pense btn--full', value: 'ok' }],
+            tono: 'ok'
+        });
     };
     document.getElementById('btn-anecdota').addEventListener('click', () => {
-        dispararGrabacion('🔴 Contar una anécdota');
+        flujoGrabar('🔴 Contar una anécdota');
     });
     document.getElementById('btn-semilla').addEventListener('click', () => {
-        dispararGrabacion('🌱 Contestar la pregunta semilla');
+        flujoGrabar('🌱 Contestar la pregunta semilla');
+    });
+}
+
+// ---------------------------------------------------------------------
+// Selector de visibilidad — modal custom (devuelve la decisión o null)
+// ---------------------------------------------------------------------
+function pedirVisibilidad(narrador) {
+    return new Promise((resolve) => {
+        // Audiencia posible = todos los miembros del círculo MENOS el narrador.
+        const audiencia = state.miembros.filter(m => m.id !== narrador.id);
+
+        const overlay = document.createElement('div');
+        overlay.className = 'modal-overlay';
+        overlay.innerHTML = `
+            <div class="modal modal--pense" role="dialog" aria-modal="true">
+                <h2 class="modal__titulo">🔒 ¿Quién la puede escuchar?</h2>
+                <p class="muted">Vos elegís ahora — los demás no pueden cambiarlo.</p>
+
+                <form class="visibilidad-form" id="vis-form">
+                    <label class="visibilidad-opt">
+                        <input type="radio" name="vis" value="todos" checked>
+                        <div>
+                            <strong>👥 Todos los del círculo</strong>
+                            <small>${audiencia.length} personas</small>
+                        </div>
+                    </label>
+
+                    <label class="visibilidad-opt">
+                        <input type="radio" name="vis" value="solo_hijos">
+                        <div>
+                            <strong>👨‍👩‍👧 Sólo mis hijos</strong>
+                            <small>Excluye cuidadoras, tutores y otros roles</small>
+                        </div>
+                    </label>
+
+                    <label class="visibilidad-opt">
+                        <input type="radio" name="vis" value="especifico">
+                        <div>
+                            <strong>🔒 Personas específicas</strong>
+                            <small>Elegís uno por uno</small>
+                        </div>
+                    </label>
+
+                    <fieldset class="visibilidad-personas" id="vis-personas" disabled>
+                        <legend class="sr-only">Elegí personas</legend>
+                        ${audiencia.map(m => `
+                            <label class="vis-persona">
+                                <input type="checkbox" name="persona" value="${h(m.id)}">
+                                <img src="${h(m.foto_url)}" alt="" width="32" height="32">
+                                <div>
+                                    <strong>${h(m.nombre_corto)}</strong>
+                                    <small>${h(m.parentesco)}</small>
+                                </div>
+                            </label>
+                        `).join('')}
+                    </fieldset>
+
+                    <div class="modal__acciones">
+                        <button type="button" class="btn" data-cancel>Cancelar</button>
+                        <button type="submit" class="btn btn--pense">Guardar historia</button>
+                    </div>
+                </form>
+            </div>
+        `;
+        document.body.appendChild(overlay);
+
+        const fieldset = overlay.querySelector('#vis-personas');
+        overlay.querySelectorAll('input[name="vis"]').forEach(r => {
+            r.addEventListener('change', () => {
+                fieldset.disabled = (r.value !== 'especifico') || !r.checked;
+                if (r.value === 'especifico' && r.checked) fieldset.disabled = false;
+            });
+        });
+
+        function close(v) { overlay.remove(); resolve(v); }
+        overlay.querySelector('[data-cancel]').addEventListener('click', () => close(null));
+        overlay.addEventListener('click', e => { if (e.target === overlay) close(null); });
+
+        overlay.querySelector('#vis-form').addEventListener('submit', (e) => {
+            e.preventDefault();
+            const tipo = new FormData(e.target).get('vis');
+            if (tipo === 'especifico') {
+                const personas = Array.from(
+                    overlay.querySelectorAll('input[name="persona"]:checked')
+                ).map(i => i.value);
+                if (!personas.length) {
+                    // sin elegidos no tiene sentido guardar
+                    overlay.querySelector('#vis-personas').classList.add('is-error');
+                    return;
+                }
+                close({ tipo, personas });
+            } else {
+                close({ tipo });
+            }
+        });
     });
 }
 
@@ -228,39 +367,91 @@ export function renderCalendario($app) {
 }
 
 // =====================================================================
-// TAB HISTORIAS (dashboard del acompañante)
+// TAB HISTORIAS (oyente — dashboard O simple cuidadora)
 // =====================================================================
 export function renderHistoriasTab($app) {
+    const yo = miembroActivo();
+    const visibles = historiasVisiblesPara(yo);
+    // Las que existen pero el narrador no le compartió: NO se enumeran.
+    // No hay "candado", directamente no aparecen.
+
+    const aclaracion = (() => {
+        if (yo.id === 'u-roberto') {
+            return 'Estás como narrador: acá no se graba, se escucha. Para grabar usá <a href="#/v2/historias">📖 Historias</a>.';
+        }
+        if (esHijoDe(yo)) return 'Las anécdotas que te compartió tu viejo. Escuchá y devolvele un audio o un texto.';
+        return 'Las anécdotas que te compartió Roberto. Escuchá y devolvele un mensaje.';
+    })();
+
     $app.innerHTML = `
         ${bannerV2}
         ${headerV2('Historias para responder', 'pense')}
 
-        <p class="muted">
-            Las anécdotas que grabó tu viejo. Escuchá y devolvele un audio.
-        </p>
+        <p class="muted">${aclaracion}</p>
 
-        <ul class="historias-tab-lista">
-            ${HISTORIAS.map(h_ => `
-                <li class="historia-tab-row">
-                    <button class="historia-tab-row__play" aria-label="Reproducir">▶</button>
-                    <div>
-                        <strong>${h(h_.titulo)}</strong>
-                        <small>${h_.duracion_min} min · ${h(h_.fecha)}</small>
-                    </div>
-                    <button class="btn btn--pense btn--mini" data-responder="${h_.id}">
-                        🎙️ Responder con audio
-                    </button>
-                </li>
-            `).join('')}
-        </ul>
+        ${visibles.length === 0 ? `
+            <section class="card">
+                <p>Todavía no hay historias compartidas con vos.</p>
+                <p class="muted">Cuando Roberto grabe una y te incluya en la
+                visibilidad, va a aparecer acá.</p>
+            </section>
+        ` : `
+            <ul class="historias-tab-lista">
+                ${visibles.map(h_ => {
+                    const esFavorita = (h_.favorita_de || []).includes(yo.id);
+                    return `
+                        <li class="historia-tab-row">
+                            <button class="historia-tab-row__play" aria-label="Reproducir">▶</button>
+                            <div>
+                                <strong>${h(h_.titulo)}</strong>
+                                <small>${h_.duracion_min} min · ${h(h_.fecha)}</small>
+                            </div>
+                            <button class="btn btn--mini fav-toggle${esFavorita ? ' is-fav' : ''}"
+                                    data-fav="${h(h_.id)}"
+                                    aria-label="${esFavorita ? 'Quitar favorita' : 'Marcar favorita'}">
+                                ${esFavorita ? '★' : '☆'}
+                            </button>
+                            <div class="historia-tab-row__responder">
+                                <button class="btn btn--pense btn--mini" data-responder-audio="${h(h_.id)}">
+                                    🎙️ Audio
+                                </button>
+                                <button class="btn btn--mini" data-responder-texto="${h(h_.id)}">
+                                    💬 Texto
+                                </button>
+                            </div>
+                        </li>
+                    `;
+                }).join('')}
+            </ul>
+
+            <p class="muted center">
+                Podés repreguntar y marcar como favorita.
+                No podés editar la historia ni cambiar quién la escucha — eso lo decide el narrador.
+            </p>
+        `}
     `;
     wireNav($app);
-    document.querySelectorAll('[data-responder]').forEach(btn => {
+
+    // Marcar favorita (en memoria — al recargar la página vuelve al mock)
+    document.querySelectorAll('[data-fav]').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const id = btn.dataset.fav;
+            const hist = HISTORIAS.find(x => x.id === id);
+            if (!hist) return;
+            hist.favorita_de = hist.favorita_de || [];
+            const idx = hist.favorita_de.indexOf(yo.id);
+            if (idx >= 0) hist.favorita_de.splice(idx, 1);
+            else hist.favorita_de.push(yo.id);
+            renderHistoriasTab($app);
+        });
+    });
+
+    document.querySelectorAll('[data-responder-audio]').forEach(btn => {
         btn.addEventListener('click', async () => {
             await modal({
-                titulo: '🎙️ Responder con audio',
+                titulo: '🎙️ Repreguntar con audio',
                 cuerpo: `
-                    <p class="muted">Grabá tu respuesta. Roberto la escucha cuando abre la app.</p>
+                    <p class="muted">Grabá tu repregunta. Roberto la escucha cuando abre la app.</p>
                     <div class="dictado-fake">
                         <span class="dictado-fake__onda">
                             <i></i><i></i><i></i><i></i><i></i><i></i><i></i>
@@ -269,6 +460,22 @@ export function renderHistoriasTab($app) {
                 `,
                 acciones: [{ label: 'Enviar', clase: 'btn--pense', value: 'ok' }],
                 tono: 'pense'
+            });
+        });
+    });
+
+    document.querySelectorAll('[data-responder-texto]').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            await modal({
+                titulo: '💬 Repreguntar con texto',
+                cuerpo: `
+                    <textarea rows="4" placeholder="Escribí tu repregunta…"
+                        style="width:100%;padding:0.5em;border:2px solid #111;border-radius:6px;"></textarea>
+                `,
+                acciones: [
+                    { label: 'Cancelar' },
+                    { label: 'Enviar', clase: 'btn--pense', value: 'ok' }
+                ]
             });
         });
     });

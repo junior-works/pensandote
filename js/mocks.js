@@ -295,29 +295,81 @@ export const AUDIOS = [
 ];
 
 // Historias / legado
+//
+// El narrador es SIEMPRE alguien con interface_mode === 'simple'.
+// La visibilidad la elige el narrador al terminar de grabar:
+//   { tipo: 'todos' }                        -> todos los miembros del círculo
+//   { tipo: 'solo_hijos' }                   -> excluye cuidadores/tutores/otros
+//   { tipo: 'especifico', personas: [...] }  -> lista explícita de ids
 export const HISTORIAS = [
     {
         id: 'h1',
+        narrador_id: 'u-roberto',
         titulo: 'El día que Mamá quiso enseñarme a manejar',
         duracion_min: 4,
         fecha: '2026-04-22',
-        respondida_por: 'Lucía'
+        respondida_por: 'Lucía',
+        visibilidad: { tipo: 'todos' },
+        favorita_de: []
     },
     {
         id: 'h2',
+        narrador_id: 'u-roberto',
         titulo: 'Aquel verano en Mar del Plata, 1972',
         duracion_min: 7,
         fecha: '2026-04-15',
-        respondida_por: null
+        respondida_por: null,
+        // María (Cuidadora) no debería ver esta historia.
+        visibilidad: { tipo: 'solo_hijos' },
+        favorita_de: ['u-charly']
     },
     {
         id: 'h3',
+        narrador_id: 'u-roberto',
         titulo: 'Cómo conocí a tu abuela en el tren',
         duracion_min: 11,
         fecha: '2026-03-30',
-        respondida_por: 'Charly'
+        respondida_por: 'Charly',
+        visibilidad: { tipo: 'especifico', personas: ['u-charly'] },
+        favorita_de: ['u-charly']
     }
 ];
+
+/** ¿Es "hijo/a" del narrador según el parentesco? */
+export function esHijoDe(miembro) {
+    return /^hij[oa]\b/i.test((miembro.parentesco || '').trim());
+}
+
+/** ¿Este miembro tiene permiso para escuchar esta historia? */
+export function puedeEscuchar(historia, miembro) {
+    if (!miembro || !historia) return false;
+    if (miembro.id === historia.narrador_id) return true;          // el narrador siempre
+    const v = historia.visibilidad || { tipo: 'todos' };
+    if (v.tipo === 'todos') return true;
+    if (v.tipo === 'solo_hijos') return esHijoDe(miembro);
+    if (v.tipo === 'especifico') return (v.personas || []).includes(miembro.id);
+    return false;
+}
+
+/** Listado filtrado para un miembro. */
+export function historiasVisiblesPara(miembro) {
+    return HISTORIAS.filter(h => puedeEscuchar(h, miembro));
+}
+
+/** Etiqueta humana de la visibilidad (para mostrar al narrador). */
+export function etiquetaVisibilidad(v, miembros) {
+    if (!v) return '';
+    if (v.tipo === 'todos')      return '👥 Todos los del círculo';
+    if (v.tipo === 'solo_hijos') return '👨‍👩‍👧 Sólo mis hijos';
+    if (v.tipo === 'especifico') {
+        const nombres = (v.personas || []).map(id => {
+            const m = miembros.find(x => x.id === id);
+            return m ? m.nombre_corto : '?';
+        });
+        return '🔒 Sólo: ' + (nombres.join(', ') || '(nadie)');
+    }
+    return '';
+}
 
 export const PREGUNTA_SEMILLA = {
     texto: '¿Cuál fue el primer trabajo que tuviste, y cómo te sentiste el primer día?',

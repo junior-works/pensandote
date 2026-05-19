@@ -658,7 +658,7 @@ body[data-mode="simple"] .btn--mini { min-height: 44px; font-size: var(--fs-md);
 .historias-tab-lista { list-style: none; padding: 0; margin: 0; display: grid; gap: 0.6rem; }
 .historia-tab-row {
     display: grid;
-    grid-template-columns: auto 1fr auto;
+    grid-template-columns: auto 1fr auto auto;
     align-items: center; gap: 0.8rem;
     background: var(--bg-soft);
     border: var(--bw) solid var(--line);
@@ -673,6 +673,66 @@ body[data-mode="simple"] .btn--mini { min-height: 44px; font-size: var(--fs-md);
     border-radius: 50%;
     font-size: 1.1rem;
 }
+.historia-tab-row__responder { display: flex; gap: 0.3rem; flex-wrap: wrap; }
+.fav-toggle {
+    background: #fff;
+    width: 40px; min-height: 40px;
+    padding: 0;
+    font-size: 1.2rem;
+    color: var(--ink-soft);
+}
+.fav-toggle.is-fav { background: var(--accent-inicio); color: var(--ink); }
+
+/* Etiqueta de visibilidad sobre la lista de historias del narrador */
+.visibilidad-tag {
+    display: inline-block;
+    margin-top: 0.25rem;
+    background: #fff;
+    border: 2px solid var(--line);
+    border-radius: 999px;
+    padding: 0.05em 0.55em;
+    font-weight: 700;
+    color: var(--ink);
+}
+
+/* Selector de visibilidad (modal) */
+.visibilidad-form { display: grid; gap: 0.6rem; margin-top: 0.5rem; }
+.visibilidad-opt {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    align-items: center; gap: 0.7rem;
+    background: #fff;
+    border: 2px solid var(--line);
+    border-radius: var(--r-sm);
+    padding: 0.6rem 0.8rem;
+    cursor: pointer;
+}
+.visibilidad-opt input { width: 22px; height: 22px; }
+.visibilidad-opt strong { display: block; }
+.visibilidad-opt small { color: var(--ink-soft); }
+.visibilidad-personas {
+    display: grid; gap: 0.35rem;
+    background: #fffbe0;
+    border: 2px dashed var(--line);
+    border-radius: var(--r-sm);
+    padding: 0.6rem;
+    margin: 0;
+}
+.visibilidad-personas[disabled] { opacity: 0.4; pointer-events: none; }
+.visibilidad-personas.is-error { border-color: var(--accent-emergencia); background: #ffe4dd; }
+.vis-persona {
+    display: grid;
+    grid-template-columns: auto auto 1fr;
+    align-items: center; gap: 0.6rem;
+    background: #fff;
+    border: 2px solid var(--line);
+    border-radius: var(--r-sm);
+    padding: 0.35rem 0.6rem;
+    cursor: pointer;
+}
+.vis-persona input { width: 20px; height: 20px; }
+.vis-persona img { border: 1.5px solid var(--line); border-radius: 50%; }
+.vis-persona small { color: var(--ink-soft); display: block; }
 
 /* Calendario afectivo */
 .calendario-lista { list-style: none; padding: 0; margin: 0; display: grid; gap: 0.6rem; }
