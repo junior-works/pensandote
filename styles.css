@@ -1,0 +1,168 @@
+/* =====================================================================
+   Pensándote — estilos globales (v0.1)
+   ---------------------------------------------------------------------
+   FILOSOFÍA: "La claridad ES la estética."
+   - Tipografía grande (16px base, escala generosa)
+   - Atkinson Hyperlegible para UI, Caveat sólo para emocional
+   - Neobrutalismo suave: borde grueso, sombra dura desplazada, colores
+     identitarios por sección, alto contraste, foco visible.
+   - Fondo crema cálido (NO blanco puro, NO gris).
+   ===================================================================== */
+
+:root {
+    /* --- Paleta base (crema cálido) --------------------------------- */
+    --bg:            #F6EFE2;   /* fondo de página */
+    --bg-soft:       #EFE5D2;   /* fondo de tarjetas / inputs */
+    --ink:           #2A1E12;   /* texto principal, marrón cálido oscuro */
+    --ink-soft:      #5C4630;   /* texto secundario */
+    --line:          #2A1E12;   /* borde neobrutalista */
+
+    /* --- Acentos por sección (placeholders, ajustar con identidad
+           definitiva). NUNCA usar rojo/negro PDLI. ----------------- */
+    --accent-inicio:      #F4B860;   /* mostaza cálida */
+    --accent-emergencia:  #E26B3F;   /* terracota — NO rojo bandera */
+    --accent-familia:     #6CA0A0;   /* verde-agua suave */
+    --accent-medico:      #8FA76C;   /* oliva claro */
+    --accent-tutoriales:  #B47BC7;   /* lavanda */
+
+    /* --- Sombras neobrutalistas (desplazada, sin blur) -------------- */
+    --shadow-sm: 3px 3px 0 var(--line);
+    --shadow-md: 5px 5px 0 var(--line);
+    --shadow-lg: 8px 8px 0 var(--line);
+
+    /* --- Radios (suaves pero no redonditos) ------------------------- */
+    --r-sm: 8px;
+    --r-md: 14px;
+    --r-lg: 22px;
+
+    /* --- Borde grueso característico -------------------------------- */
+    --bw: 3px;
+
+    /* --- Tipografías ------------------------------------------------ */
+    --font-ui:       'Atkinson Hyperlegible', system-ui, -apple-system, sans-serif;
+    --font-emocional:'Caveat', 'Atkinson Hyperlegible', cursive;
+
+    /* --- Escala tipográfica (generosa, para adulto mayor) ----------- */
+    --fs-xs: 1rem;       /* 16px */
+    --fs-sm: 1.125rem;   /* 18px */
+    --fs-md: 1.375rem;   /* 22px */
+    --fs-lg: 1.75rem;    /* 28px */
+    --fs-xl: 2.375rem;   /* 38px */
+    --fs-xxl: 3rem;      /* 48px — títulos pantalla simple */
+}
+
+/* ----------------- Reset suave ----------------- */
+*, *::before, *::after { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+    font-family: var(--font-ui);
+    font-size: var(--fs-md);
+    line-height: 1.4;
+    color: var(--ink);
+    background: var(--bg);
+    -webkit-font-smoothing: antialiased;
+}
+
+button { font: inherit; cursor: pointer; }
+input, textarea, select { font: inherit; color: inherit; }
+a { color: inherit; text-underline-offset: 3px; }
+
+/* Foco visible — accesibilidad no negociable */
+:focus-visible {
+    outline: 3px solid var(--ink);
+    outline-offset: 3px;
+}
+
+/* ----------------- Tipografías de uso ----------------- */
+h1, h2, h3 { font-weight: 700; line-height: 1.15; margin: 0 0 0.5em; }
+h1 { font-size: var(--fs-xxl); }
+h2 { font-size: var(--fs-xl); }
+h3 { font-size: var(--fs-lg); }
+
+.t-emocional { font-family: var(--font-emocional); font-size: var(--fs-xl); }
+
+/* ----------------- Botón base neobrutalista ----------------- */
+.btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.6em;
+    min-height: 64px;            /* target táctil grande */
+    padding: 0.75em 1.25em;
+    font-size: var(--fs-md);
+    font-weight: 700;
+    color: var(--ink);
+    background: var(--bg-soft);
+    border: var(--bw) solid var(--line);
+    border-radius: var(--r-md);
+    box-shadow: var(--shadow-md);
+    text-decoration: none;
+    transition: transform 60ms ease, box-shadow 60ms ease;
+}
+
+.btn:hover { transform: translate(-1px, -1px); box-shadow: var(--shadow-lg); }
+.btn:active { transform: translate(2px, 2px); box-shadow: var(--shadow-sm); }
+
+.btn--xl { min-height: 96px; font-size: var(--fs-lg); padding: 1em 1.5em; }
+.btn--full { width: 100%; }
+
+/* Variantes por color de sección */
+.btn--emergencia  { background: var(--accent-emergencia); color: #fff; }
+.btn--familia     { background: var(--accent-familia); }
+.btn--medico      { background: var(--accent-medico); }
+.btn--tutoriales  { background: var(--accent-tutoriales); }
+.btn--inicio      { background: var(--accent-inicio); }
+
+/* ----------------- Tarjetas ----------------- */
+.card {
+    background: var(--bg-soft);
+    border: var(--bw) solid var(--line);
+    border-radius: var(--r-lg);
+    box-shadow: var(--shadow-md);
+    padding: 1.25em;
+}
+
+/* ----------------- Layout app ----------------- */
+#app { min-height: 100dvh; padding: 1.25rem; max-width: 720px; margin: 0 auto; }
+
+.boot-loader {
+    display: grid;
+    place-items: center;
+    min-height: 60dvh;
+    text-align: center;
+}
+
+/* ----------------- Pantalla "simple" (adulto mayor) -----------------
+   TODO: ajustar saltos cuando entren los mocks reales. Por ahora dejo
+   un grid 1-columna mobile-first, los íconos serán SVG inline. */
+.simple-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 1.25rem;
+    margin-top: 1.5rem;
+}
+
+/* ----------------- Pantalla "dashboard" (familiar) -----------------
+   Más densa, ok mostrar info de varios campos. */
+.dashboard-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 1rem;
+}
+
+/* ----------------- Utilidades ----------------- */
+.stack > * + * { margin-top: 1rem; }
+.center { text-align: center; }
+.muted { color: var(--ink-soft); }
+.sr-only {
+    position: absolute !important;
+    width: 1px; height: 1px;
+    padding: 0; margin: -1px;
+    overflow: hidden; clip: rect(0,0,0,0);
+    white-space: nowrap; border: 0;
+}
+
+/* Respetar reducción de movimiento */
+@media (prefers-reduced-motion: reduce) {
+    .btn { transition: none; }
+}

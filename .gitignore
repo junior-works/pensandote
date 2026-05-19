@@ -1,0 +1,26 @@
+# --- Pensándote ---
+
+# Credenciales locales (la plantilla viva es config.example.js)
+config.js
+
+# OS / editor
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
+*.swp
+*~
+
+# Dependencias futuras (por ahora no usamos npm, pero por las dudas)
+node_modules/
+
+# Build / caches (si en el futuro agregamos build step)
+dist/
+.cache/
+*.log
+
+# Supabase CLI local (si más adelante linkeamos)
+.supabase/
+supabase/.branches
+supabase/.temp

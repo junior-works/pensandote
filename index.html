@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="es-AR">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="theme-color" content="#F6EFE2">
+    <meta name="description" content="Pensándote — la app para estar cerca de los que están lejos.">
+
+    <title>Pensándote</title>
+
+    <!-- PWA -->
+    <link rel="manifest" href="./manifest.json">
+    <link rel="icon" type="image/png" sizes="192x192" href="./assets/icon-192.png">
+    <link rel="apple-touch-icon" href="./assets/icon-192.png">
+
+    <!-- Tipografías: Atkinson Hyperlegible (UI legible para baja visión)
+         + Caveat (manuscrita, para textos emocionales).
+         Atkinson Hyperlegible es la tipografía base del Braille Institute
+         diseñada para máxima legibilidad. Mantenerla. -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet"
+          href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Caveat:wght@400;700&display=swap">
+
+    <link rel="stylesheet" href="./styles.css">
+
+    <!-- Config (anon key Supabase, etc). Este archivo NO va al repo. -->
+    <script src="./config.js" defer></script>
+</head>
+<body>
+    <!-- Punto de montaje único. app.js decide qué pantalla renderizar -->
+    <main id="app" aria-live="polite">
+        <div class="boot-loader">
+            <p>Cargando Pensándote…</p>
+        </div>
+    </main>
+
+    <script type="module" src="./app.js"></script>
+
+    <!-- Registro del service worker (sólo si el navegador lo soporta) -->
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('./service-worker.js')
+                    .catch(err => console.warn('[sw] no se pudo registrar:', err));
+            });
+        }
+    </script>
+</body>
+</html>

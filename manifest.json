@@ -1,0 +1,27 @@
+{
+    "name": "Pensándote",
+    "short_name": "Pensándote",
+    "description": "La app para estar cerca de los que están lejos.",
+    "start_url": "./",
+    "scope": "./",
+    "display": "standalone",
+    "orientation": "portrait",
+    "background_color": "#F6EFE2",
+    "theme_color": "#F6EFE2",
+    "lang": "es-AR",
+    "dir": "ltr",
+    "icons": [
+        {
+            "src": "./assets/icon-192.png",
+            "sizes": "192x192",
+            "type": "image/png",
+            "purpose": "any maskable"
+        },
+        {
+            "src": "./assets/icon-512.png",
+            "sizes": "512x512",
+            "type": "image/png",
+            "purpose": "any maskable"
+        }
+    ]
+}
