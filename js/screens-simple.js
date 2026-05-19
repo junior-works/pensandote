@@ -55,10 +55,17 @@ export function renderInicio($app) {
             </button>
         </nav>
 
-        <button class="btn btn--xl btn--pense btn--full" data-go="#/v2/pense">
-            <span>💛 Pensé en vos</span>
-            <span class="badge-v2 badge-v2--inline">v2</span>
-        </button>
+        <div class="simple-extras">
+            <button class="btn btn--xl btn--pense btn--full" data-go="#/v2/pense">
+                <span>💛 Pensé en vos</span>
+                <span class="badge-v2 badge-v2--inline">Próximamente</span>
+            </button>
+
+            <button class="btn btn--xl btn--pense btn--full" data-go="#/v2/historias">
+                <span>📖 Historias</span>
+                <span class="badge-v2 badge-v2--inline">Próximamente</span>
+            </button>
+        </div>
     `;
     wireNav($app);
 }

@@ -190,6 +190,8 @@ body[data-mode="simple"] .btn--mini { min-height: 44px; font-size: var(--fs-md);
 .tarjeton--tutoriales  { background: var(--accent-tutoriales); }
 .tarjeton--mini { min-height: 120px; }
 
+.simple-extras { display: grid; gap: 0.8rem; margin-top: 1rem; }
+
 /* ---------------- Badge V2 ---------------- */
 .badge-v2 {
     display: inline-block;
