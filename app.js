@@ -1,155 +1,113 @@
 /**
- * Pensándote — bootstrap
- * ---------------------------------------------------------------
- * Flujo:
- *  1) Si no hay config.js cargada, mostrar pantalla de "no configurado".
- *  2) Si hay sesión, consultar círculos del usuario.
- *  3) Si NO hay círculos, ofrecer "Crear círculo" o "Aceptar invitación".
- *  4) Si hay un círculo activo, mirar el `interface_mode` de la membresía
- *     y renderizar la UI correspondiente (simple ó dashboard).
+ * Pensándote — bootstrap de la MAQUETA NAVEGABLE (v0.2)
+ * ---------------------------------------------------------------------
+ * Estado actual:
+ *  - SIN Supabase. Todos los datos vienen de js/mocks.js.
+ *  - SIN login. Hay un "miembro activo" en memoria que se cambia desde
+ *    el panel de dev de arriba a la derecha.
+ *  - Routing por hash (#/inicio, #/familia, #/v2/pense, etc.).
  *
- * Por ahora todo trabaja con MOCKS. Los TODOs marcan dónde conectamos
- * Supabase real.
+ * Cuando volvamos a conectar Supabase:
+ *  - sustituir el bootstrap por el del esqueleto v0.1 (auth.js + circles.js).
+ *  - reemplazar js/mocks.js por queries reales.
+ *  - bajar la cortina del dev-panel detrás de una flag (`?dev=1`).
  */
 
-import { usuarioActual, enviarMagicLink, procesarCallback, cerrarSesion } from './js/auth.js';
-import { circulosDelUsuario, membresiaActiva } from './js/circles.js';
+import { onRouteChange, refresh as refreshRouter } from './js/router.js';
+import { onStateChange, miembroActivo } from './js/state.js';
+import { montarDevPanel } from './js/dev-panel.js';
+
+import * as Simple    from './js/screens-simple.js';
+import * as Dashboard from './js/screens-dashboard.js';
+import * as V2        from './js/screens-v2.js';
 
 const $app = document.getElementById('app');
 
-// ---------- Helpers de render ----------
-function render(html) {
-    $app.innerHTML = html;
-}
+// Tabla de rutas. Cada entrada conoce qué interface_mode acepta:
+//   - 'simple'   : sólo modo simple
+//   - 'dashboard': sólo modo dashboard
+//   - 'both'     : ambos (típicamente las v2)
+const RUTAS = {
+    // simple
+    'inicio':       { simple: Simple.renderInicio,       dashboard: Dashboard.renderInicio },
+    'emergencias':  { simple: Simple.renderEmergencias },
+    'familia':      { simple: Simple.renderFamilia },
+    'medico':       { simple: Simple.renderMedico },
+    'como-hago':    { simple: Simple.renderComoHago },
+    'tutorial':     { simple: Simple.renderTutorial },
 
-function renderNoConfig() {
-    render(`
-        <section class="card stack">
-            <h2>Falta configurar la app</h2>
-            <p class="muted">
-                Copiá <code>config.example.js</code> a <code>config.js</code>
-                y completá la URL y la <em>anon key</em> de Supabase.
-            </p>
-        </section>
-    `);
-}
+    // dashboard
+    'config':       { dashboard: Dashboard.renderConfig },
 
-function renderLogin(msg = '') {
-    render(`
-        <section class="card stack">
-            <h1 class="t-emocional center">Pensándote</h1>
-            <p class="center muted">La app para estar cerca de los que están lejos.</p>
-
-            <form id="form-login" class="stack">
-                <label class="stack">
-                    <span>Tu mail</span>
-                    <input id="email" type="email" required autocomplete="email"
-                           placeholder="vos@ejemplo.com">
-                </label>
-                <button class="btn btn--xl btn--inicio btn--full" type="submit">
-                    Mandame el link mágico
-                </button>
-            </form>
-
-            ${msg ? `<p class="center">${msg}</p>` : ''}
-        </section>
-    `);
-
-    document.getElementById('form-login').addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const email = document.getElementById('email').value.trim();
-        try {
-            await enviarMagicLink(email);
-            renderLogin('✓ Te mandamos un link a tu mail. Abrilo desde el mismo dispositivo.');
-        } catch (err) {
-            renderLogin('No pudimos mandar el link: ' + (err.message || err));
+    // v2 (accesibles desde ambos modos)
+    'v2': {
+        both: (app, ruta) => {
+            const sub = ruta.params[0] || 'pense';
+            const map = {
+                'pense':          V2.renderPense,
+                'foto-del-dia':   V2.renderFotoDelDia,
+                'audios':         V2.renderAudios,
+                'historias':      V2.renderHistorias,
+                'calendario':     V2.renderCalendario,
+                'historias-tab':  V2.renderHistoriasTab
+            };
+            // ajustamos la ruta para que la pantalla vea sub-params correctos
+            const rutaInterna = { ...ruta, params: ruta.params.slice(1) };
+            (map[sub] || V2.renderPense)(app, rutaInterna);
         }
-    });
-}
+    }
+};
 
-function renderSinCirculos() {
-    render(`
-        <section class="card stack">
-            <h2>Bienvenida/o</h2>
-            <p>Todavía no estás en ningún círculo. ¿Querés <strong>crear uno</strong>
-               (para acompañar a tu mamá/papá/abuelo) o <strong>aceptar una invitación</strong>
-               que te mandaron?</p>
+// ---------------------------------------------------------------------------
+// Render por ruta
+// ---------------------------------------------------------------------------
+function renderRoute(ruta) {
+    const yo = miembroActivo();
+    const def = RUTAS[ruta.name] || RUTAS['inicio'];
 
-            <button class="btn btn--xl btn--familia btn--full" id="btn-crear">
-                Crear un círculo nuevo
-            </button>
-            <button class="btn btn--xl btn--inicio btn--full" id="btn-invitacion">
-                Tengo un link de invitación
-            </button>
+    // marca al body con el modo activo (para que CSS pueda diferenciarlos)
+    document.body.dataset.mode = yo.interface_mode;
+    document.body.dataset.miembro = yo.id;
 
-            <button class="btn" id="btn-logout">Cerrar sesión</button>
-        </section>
-    `);
+    let handler = def[yo.interface_mode] || def.both;
 
-    // TODO: wirear handlers reales
-    document.getElementById('btn-logout').addEventListener('click', async () => {
-        await cerrarSesion();
-        renderLogin();
-    });
-}
+    // Si la ruta no aplica para este modo (ej: 'config' en modo simple),
+    // caemos elegantemente al inicio.
+    if (!handler) {
+        // intentamos con el inicio del modo activo
+        handler = RUTAS.inicio[yo.interface_mode];
+        ruta = { name: 'inicio', params: [], query: {}, raw: '/inicio' };
+    }
 
-// ---------- Routing por interface_mode ----------
-async function renderApp(usuario) {
-    const circulos = await circulosDelUsuario(usuario.id);
-
-    if (!circulos.length) return renderSinCirculos();
-
-    // TODO: si tiene varios círculos, mostrar selector. Por ahora tomamos el primero.
-    const circulo = circulos[0];
-    const membresia = await membresiaActiva(usuario.id, circulo.id);
-
-    if (membresia.interface_mode === 'simple') {
-        // TODO: importar dinámicamente js/screens-simple/inicio.js
-        render(`
-            <section class="stack">
-                <h1>Hola</h1>
-                <p class="muted">Pantalla simple — pendiente de conectar.</p>
-                <p>Estás en el círculo <strong>${circulo.nombre}</strong>
-                   como <strong>${membresia.parentesco}</strong>.</p>
+    try {
+        handler($app, ruta);
+        // scroll arriba al cambiar de pantalla
+        window.scrollTo({ top: 0 });
+    } catch (err) {
+        console.error('[render]', err);
+        $app.innerHTML = `
+            <section class="card">
+                <h2>Ups</h2>
+                <p>Algo salió mal renderizando la pantalla.</p>
+                <pre>${(err && err.message) || err}</pre>
             </section>
-        `);
-    } else {
-        // dashboard
-        // TODO: importar dinámicamente js/screens-dashboard/inicio.js
-        render(`
-            <section class="stack">
-                <h1>Panel de ${circulo.nombre}</h1>
-                <p class="muted">Dashboard — pendiente de conectar.</p>
-                <p>Tu rol: <strong>${membresia.parentesco}</strong>
-                   (permisos: ${membresia.permission_level}).</p>
-            </section>
-        `);
+        `;
     }
 }
 
-// ---------- Bootstrap ----------
-async function bootstrap() {
-    // 1) Config presente?
-    if (!window.PENSANDOTE_CONFIG || !window.PENSANDOTE_CONFIG.SUPABASE_URL) {
-        renderNoConfig();
-        return;
-    }
+// ---------------------------------------------------------------------------
+// Bootstrap
+// ---------------------------------------------------------------------------
+function bootstrap() {
+    montarDevPanel();
 
-    // 2) Callback de magic link (si la URL trae #access_token=…)
-    await procesarCallback();
+    // Si cambia el miembro activo (desde el dev-panel), re-renderizamos
+    // la ruta para que se cuelguen los handlers del nuevo modo.
+    onStateChange(() => refreshRouter());
 
-    // 3) Hay usuario?
-    const usuario = await usuarioActual();
-    if (!usuario) {
-        renderLogin();
-        return;
-    }
-
-    // 4) Render según membresía
-    renderApp(usuario);
+    // El router dispara una primera vez al registrarse, así que no hace
+    // falta navegar a mano.
+    onRouteChange(renderRoute);
 }
 
-bootstrap().catch(err => {
-    console.error('[bootstrap]', err);
-    render(`<section class="card"><h2>Algo salió mal</h2><pre>${err.message}</pre></section>`);
-});
+bootstrap();

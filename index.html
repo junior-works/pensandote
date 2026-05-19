@@ -24,8 +24,13 @@
 
     <link rel="stylesheet" href="./styles.css">
 
-    <!-- Config (anon key Supabase, etc). Este archivo NO va al repo. -->
-    <script src="./config.js" defer></script>
+    <!-- Config opcional (anon key Supabase, etc). NO va al repo y NO es
+         requerido por la maqueta navegable v0.2 — los datos vienen de
+         js/mocks.js. Se reactiva cuando volvamos a Supabase real. -->
+    <script>
+        // Stub para no romper si auth.js futuro lo busca.
+        window.PENSANDOTE_CONFIG = window.PENSANDOTE_CONFIG || { _maqueta: true };
+    </script>
 </head>
 <body>
     <!-- Punto de montaje único. app.js decide qué pantalla renderizar -->

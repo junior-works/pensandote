@@ -8,7 +8,7 @@
  * Cuando rompamos algo del shell, BUMPEAR CACHE_NAME (sufijo de versión).
  */
 
-const CACHE_NAME = 'pensandote-shell-v0.1.0';
+const CACHE_NAME = 'pensandote-shell-v0.2.0';
 
 const SHELL_FILES = [
     './',
@@ -16,8 +16,14 @@ const SHELL_FILES = [
     './styles.css',
     './manifest.json',
     './app.js',
-    './js/auth.js',
-    './js/circles.js'
+    './js/mocks.js',
+    './js/state.js',
+    './js/router.js',
+    './js/ui.js',
+    './js/dev-panel.js',
+    './js/screens-simple.js',
+    './js/screens-dashboard.js',
+    './js/screens-v2.js'
 ];
 
 self.addEventListener('install', (event) => {
