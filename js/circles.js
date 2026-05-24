@@ -73,28 +73,43 @@ export async function miembrosDelCirculo(circleId) {
 export async function crearCirculo(userId, nombre) {
     const sb = await sbClient();
 
-    // Asegurar fila en public.users (en su primer login todavía no existe).
+    // 1) Asegurar la fila en public.users (FK target de circles.owner_id;
+    //    el usuario recién logueado por magic link puede no tenerla).
     await sb.from('users').upsert({ id: userId }, { onConflict: 'id' });
 
-    const { data: c, error: e1 } = await sb
-        .from('circles')
-        .insert({ nombre, owner_id: userId })
-        .select('id, nombre, owner_id')
-        .single();
+    // 2) Generamos el id del círculo en el cliente y hacemos INSERT
+    //    SIN .select(): la policy circles_select_member exige ser
+    //    miembro, y todavía no lo somos. Si pidiéramos read-back acá,
+    //    el SELECT post-INSERT se cae con "row violates RLS" (Supabase
+    //    reporta el error del SELECT como si fuera del INSERT) y hace
+    //    rollback del round-trip entero — por eso circles quedaba vacío.
+    const circleId = crypto.randomUUID();
+    const { error: e1 } = await sb.from('circles').insert({
+        id:       circleId,
+        nombre,
+        owner_id: userId
+    });
     if (e1) throw e1;
 
-    const { error: e2 } = await sb
-        .from('circle_members')
-        .insert({
-            circle_id: c.id,
-            user_id: userId,
-            interface_mode: 'dashboard',
-            parentesco: 'Admin',
-            permission_level: 'admin'
-        });
+    // 3) Membresía del propio admin (destrabada por members_insert_bootstrap).
+    const { error: e2 } = await sb.from('circle_members').insert({
+        circle_id:        circleId,
+        user_id:          userId,
+        interface_mode:   'dashboard',
+        parentesco:       'Familiar',
+        permission_level: 'admin'
+    });
     if (e2) throw e2;
 
-    return c;
+    // 4) Ya somos miembros: ahora sí podemos leer el círculo con su
+    //    ntfy_topic generado por default.
+    const { data, error: e3 } = await sb
+        .from('circles')
+        .select('id, nombre, owner_id, ntfy_topic')
+        .eq('id', circleId)
+        .single();
+    if (e3) throw e3;
+    return data;
 }
 
 /**
