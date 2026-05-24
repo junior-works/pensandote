@@ -797,6 +797,11 @@ body[data-mode="simple"] .btn--mini { min-height: 44px; font-size: var(--fs-md);
     box-shadow: var(--shadow-lg);
     padding: 1.5rem;
     max-width: 480px; width: 100%;
+    /* Scrollable: en mobile el viewport baja con el teclado y formularios
+       largos quedaban con el botón primario recortado por abajo. */
+    max-height: calc(100vh - 2rem);
+    max-height: calc(100dvh - 2rem);
+    overflow-y: auto;
 }
 .modal--ok    { background: #d3eecf; }
 .modal--pense { background: #ffe5d7; }
@@ -805,6 +810,14 @@ body[data-mode="simple"] .btn--mini { min-height: 44px; font-size: var(--fs-md);
 .modal__cuerpo p { margin: 0 0 0.6rem; }
 .modal__acciones { display: flex; gap: 0.6rem; flex-wrap: wrap; justify-content: flex-end; }
 .modal__acciones .btn--full { width: 100%; }
+/* Variante apilada: primary full-width arriba, secundario debajo.
+   Para modales donde el primary no puede quedar fuera de vista. */
+.modal__acciones--stack {
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: stretch;
+}
+.modal__acciones--stack > .btn { width: 100%; }
 
 .loader-puntos { display: flex; gap: 0.4rem; justify-content: center; margin: 1rem 0; }
 .loader-puntos span {

@@ -251,9 +251,13 @@ export async function abrirModalInvitacion(circleId) {
                     </select>
                 </label>
 
-                <div class="modal__acciones">
-                    <button type="button" class="btn" data-cancel>Cancelar</button>
-                    <button type="submit" class="btn btn--inicio">Generar link</button>
+                <div class="modal__acciones modal__acciones--stack">
+                    <button type="submit" class="btn btn--xl btn--inicio">
+                        ➕ Generar link de invitación
+                    </button>
+                    <button type="button" class="btn btn--mini" data-cancel>
+                        Cancelar
+                    </button>
                 </div>
             </form>
 
@@ -299,7 +303,7 @@ export async function abrirModalInvitacion(circleId) {
             // Tapamos el form para no volver a generar sin querer.
             e.target.querySelectorAll('input,select,button[type=submit]').forEach(el => el.disabled = true);
         } catch (err) {
-            btn.disabled = false; btn.textContent = 'Generar link';
+            btn.disabled = false; btn.textContent = '➕ Generar link de invitación';
             await modal({
                 titulo: 'No pude generar el link',
                 cuerpo: `<pre>${h(err.message || err)}</pre>`,
