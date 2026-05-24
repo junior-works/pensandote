@@ -7,7 +7,7 @@
 
 import { CONTACTOS, MEDICO, TUTORIALES } from './mocks.js';
 import { miembroActivo } from './state.js';
-import { go } from './router.js';
+import { go, goReplace } from './router.js';
 import { h, modal, speakES, stopSpeak } from './ui.js';
 import {
     getContactos, getMedico, getTutoriales, getFotoDelDia,
@@ -411,6 +411,11 @@ export function renderTutorial($app, ruta) {
             ${pasoIdx > 0 ? `
                 <button class="btn btn--full" id="btn-prev">← Paso anterior</button>
             ` : ''}
+
+            <button class="btn btn--xl btn--full" id="btn-salir-tutorial"
+                    style="margin-top:1rem;">
+                ✕ Salir del tutorial
+            </button>
         </div>
     `;
     wireNav($app);
@@ -419,15 +424,24 @@ export function renderTutorial($app, ruta) {
         speakES(textoPaso);
     });
 
+    // Salida directa: desde cualquier paso vuelve al listado, sin
+    // retroceder paso por paso. Cortamos la voz si estaba leyendo.
+    document.getElementById('btn-salir-tutorial').addEventListener('click', () => {
+        stopSpeak();
+        go('#/como-hago');
+    });
+
+    // Navegación entre pasos: usa goReplace, así el botón atrás del
+    // Android no atrapa al usuario retrocediendo paso a paso.
     const sig = document.getElementById('btn-sig');
     if (sig) sig.addEventListener('click', () => {
         stopSpeak();
-        go(`#/tutorial/${t.id}?p=${pasoIdx + 1}`);
+        goReplace(`#/tutorial/${t.id}?p=${pasoIdx + 1}`);
     });
     const prev = document.getElementById('btn-prev');
     if (prev) prev.addEventListener('click', () => {
         stopSpeak();
-        go(`#/tutorial/${t.id}?p=${pasoIdx - 1}`);
+        goReplace(`#/tutorial/${t.id}?p=${pasoIdx - 1}`);
     });
     const listo = document.getElementById('btn-listo');
     if (listo) listo.addEventListener('click', async () => {

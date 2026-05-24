@@ -37,6 +37,23 @@ export function go(path) {
     }
 }
 
+/**
+ * Igual que go() pero reemplaza la entrada actual del historial en
+ * lugar de empujar una nueva. Útil para flujos donde no queremos que
+ * el botón "atrás" del navegador / Android retroceda paso por paso
+ * (ej: pasos del tutorial). hashchange NO se dispara con replaceState,
+ * así que llamamos manualmente al renderer.
+ */
+export function goReplace(path) {
+    if (!path.startsWith('#')) path = '#' + (path.startsWith('/') ? path : '/' + path);
+    if (window.location.hash === path) {
+        _trigger();
+        return;
+    }
+    history.replaceState(null, '', path);
+    _trigger();
+}
+
 /** Vuelve a renderear la ruta actual (útil cuando cambia el estado). */
 export function refresh() {
     _trigger();
