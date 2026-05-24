@@ -598,15 +598,22 @@ export async function renderTutorial($app, ruta) {
 
     // Navegación entre pasos: usa goReplace, así el botón atrás del
     // Android no atrapa al usuario retrocediendo paso a paso.
+    //
+    // OJO: usamos `id` (el param crudo de la ruta) — NO `t.id`. En modo
+    // DB la URL del listado manda el `slug`, pero el record devuelto por
+    // obtenerTutorialPorSlug trae el uuid en `t.id`. Si navegábamos con
+    // `t.id`, "Siguiente paso" llevaba a `#/tutorial/<uuid>` y la
+    // siguiente búsqueda por slug no encontraba nada → te sacaba al
+    // listado. Reusando `id` (= el slug que llegó) la URL queda estable.
     const sig = document.getElementById('btn-sig');
     if (sig) sig.addEventListener('click', () => {
         stopSpeak();
-        goReplace(`#/tutorial/${t.id}?p=${pasoIdx + 1}`);
+        goReplace(`#/tutorial/${id}?p=${pasoIdx + 1}`);
     });
     const prev = document.getElementById('btn-prev');
     if (prev) prev.addEventListener('click', () => {
         stopSpeak();
-        goReplace(`#/tutorial/${t.id}?p=${pasoIdx - 1}`);
+        goReplace(`#/tutorial/${id}?p=${pasoIdx - 1}`);
     });
     const listo = document.getElementById('btn-listo');
     if (listo) listo.addEventListener('click', async () => {
