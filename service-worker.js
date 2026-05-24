@@ -1,18 +1,25 @@
-/* Pensándote — Service Worker
+/* Pensándote — Service Worker (v0.4.0)
  *
- * Estrategia v0.1 (cache shell mínimo):
- *  - precache de los archivos estáticos del shell
- *  - network-first para todo lo demás (la app es 99% online por Supabase)
- *  - sin background sync ni push (todavía)
+ * Estrategia:
+ *   - App shell (HTML, JS, CSS, JSON):   NETWORK-FIRST con `cache:'no-store'`
+ *     en el fetch interno, así un deploy nuevo se ve sin quedar pegado al
+ *     HTTP cache del navegador.
+ *   - Estáticos (PNG/JPG/SVG/ICO/WEBP/WOFF): CACHE-FIRST. Cambian poco;
+ *     ahorrar red importa en mobile.
+ *   - skipWaiting + clients.claim para que un nuevo SW tome el control sin
+ *     esperar que el usuario cierre todas las tabs.
+ *   - Borrado de caches viejos en `activate`.
  *
- * Cuando rompamos algo del shell, BUMPEAR CACHE_NAME (sufijo de versión).
+ * Si rompemos algo del shell, BUMPEAR CACHE_NAME.
+ *
+ * Scope: el SW vive en el mismo directorio que index.html (subpath
+ * /pensandote/ en GitHub Pages, raíz en dev local). Como se registra con
+ * path relativo (`./service-worker.js`), el scope se deriva solo y queda
+ * correcto en ambos entornos.
  */
 
-const CACHE_NAME = 'pensandote-shell-v0.3.0';
+const CACHE_NAME = 'pensandote-shell-v0.4.0';
 
-// Todo path relativo: el sitio se sirve tanto en local como bajo el
-// subpath /pensandote/ de GitHub Pages, y el scope del SW respeta la
-// ubicación del archivo.
 const SHELL_FILES = [
     './',
     './index.html',
@@ -36,43 +43,91 @@ const SHELL_FILES = [
     './js/circles.js'
 ];
 
+const STATIC_EXT = /\.(?:png|jpg|jpeg|svg|ico|webp|gif|woff2?|ttf)$/i;
+
+// ---------------------------------------------------------------------------
+// install: precache best-effort + skipWaiting
+// ---------------------------------------------------------------------------
 self.addEventListener('install', (event) => {
-    event.waitUntil(
-        caches.open(CACHE_NAME)
-            .then(cache => cache.addAll(SHELL_FILES))
-            .catch(err => console.warn('[sw] precache parcial:', err))
-            .then(() => self.skipWaiting())
-    );
+    event.waitUntil((async () => {
+        const cache = await caches.open(CACHE_NAME);
+        // cache.add por archivo (no addAll) — si uno falla, los demás siguen.
+        await Promise.all(SHELL_FILES.map(f =>
+            cache.add(new Request(f, { cache: 'no-store' }))
+                 .catch(err => console.warn('[sw] no precache:', f, err?.message || err))
+        ));
+        await self.skipWaiting();
+    })());
 });
 
+// ---------------------------------------------------------------------------
+// activate: limpiar caches viejos + tomar el control de los clients ya abiertos
+// ---------------------------------------------------------------------------
 self.addEventListener('activate', (event) => {
-    event.waitUntil(
-        caches.keys().then(keys =>
-            Promise.all(
-                keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k))
-            )
-        ).then(() => self.clients.claim())
-    );
+    event.waitUntil((async () => {
+        const keys = await caches.keys();
+        await Promise.all(
+            keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k))
+        );
+        await self.clients.claim();
+    })());
 });
 
+// ---------------------------------------------------------------------------
+// fetch: network-first para shell, cache-first para estáticos
+// ---------------------------------------------------------------------------
 self.addEventListener('fetch', (event) => {
     const { request } = event;
-
-    // Sólo cacheamos GET.
     if (request.method !== 'GET') return;
 
-    // Bypass para Supabase y para cualquier llamada cross-origin (auth, RPC, storage).
     const url = new URL(request.url);
+    // Cross-origin (Supabase, ntfy, fonts.googleapis, dicebear, etc.):
+    // dejar pasar sin tocar.
     if (url.origin !== self.location.origin) return;
 
-    event.respondWith(
-        fetch(request)
-            .then(resp => {
-                // Clonamos para guardar en cache sin consumir el body
-                const copy = resp.clone();
-                caches.open(CACHE_NAME).then(cache => cache.put(request, copy)).catch(() => {});
-                return resp;
-            })
-            .catch(() => caches.match(request).then(hit => hit || caches.match('./index.html')))
-    );
+    if (STATIC_EXT.test(url.pathname)) {
+        event.respondWith(cacheFirst(request));
+    } else {
+        event.respondWith(networkFirst(request));
+    }
+});
+
+// Network-first: fuerza bypass del HTTP cache del navegador con
+// `cache: 'no-store'`. Si la red falla, cae al cache; si es una
+// navegación y tampoco hay cache, sirve el index.html offline.
+async function networkFirst(request) {
+    const cache = await caches.open(CACHE_NAME);
+    try {
+        const fresh = await fetch(request, { cache: 'no-store' });
+        if (fresh && fresh.ok && fresh.type !== 'opaque') {
+            cache.put(request, fresh.clone()).catch(() => {});
+        }
+        return fresh;
+    } catch (_) {
+        const hit = await cache.match(request);
+        if (hit) return hit;
+        if (request.mode === 'navigate') {
+            const idx = await cache.match('./index.html');
+            if (idx) return idx;
+        }
+        throw _;
+    }
+}
+
+async function cacheFirst(request) {
+    const cache = await caches.open(CACHE_NAME);
+    const hit = await cache.match(request);
+    if (hit) return hit;
+    const fresh = await fetch(request);
+    if (fresh && fresh.ok && fresh.type !== 'opaque') {
+        cache.put(request, fresh.clone()).catch(() => {});
+    }
+    return fresh;
+}
+
+// Permite que el front mande `postMessage('skipWaiting')` cuando detecte
+// un nuevo SW esperando, así forzamos la transición sin tener que cerrar
+// la PWA. Aún no lo usamos desde app.js, pero queda listo.
+self.addEventListener('message', (event) => {
+    if (event.data === 'skipWaiting') self.skipWaiting();
 });
