@@ -433,19 +433,31 @@ export async function renderInvitacion($app, token) {
         return pintarError($app, 'Invitación no encontrada',
             'Puede que el link esté mal copiado. Pedí uno nuevo.');
     }
-    if (inv.claimed) {
-        return pintarError($app, 'Este link ya fue usado',
-            'Si sos vos y necesitás volver a entrar, pedí un link nuevo.');
-    }
+    // Vencido es vencido para los dos modos.
     if (inv.expires_at && new Date(inv.expires_at) < new Date()) {
-        return pintarError($app, 'Este link venció',
-            'Pedí uno nuevo.');
+        return pintarError($app, 'Este link venció', 'Pedí uno nuevo.');
     }
 
     // Matching estricto + normalización defensiva.
     const modo = String(inv.interface_mode_sugerido ?? '').toLowerCase().trim();
-    if (modo === 'simple')    return renderInvitacionSimple($app, token, inv);
-    if (modo === 'dashboard') return renderInvitacionDashboard($app, token, inv);
+
+    if (modo === 'simple') {
+        // El link simple es REUTILIZABLE — la edge function resuelve
+        // el caso 'ya claimed' (busca al usuario sintético por email
+        // determinístico y regenera el magic-link). No bloqueamos por
+        // claimed acá; mandamos siempre al flujo de un toque.
+        return renderInvitacionSimple($app, token, inv);
+    }
+    if (modo === 'dashboard') {
+        // Dashboard sí mantiene el bloqueo: cada invitación es para una
+        // persona específica que se loguea con SU mail; reabrir el link
+        // después de claimed no es el flujo correcto.
+        if (inv.claimed) {
+            return pintarError($app, 'Este link ya fue usado',
+                'Si sos vos y necesitás volver a entrar, pedí un link nuevo.');
+        }
+        return renderInvitacionDashboard($app, token, inv);
+    }
 
     // Si el modo no es ninguno de los dos (null, '', valor raro), NO caemos
     // silenciosamente a dashboard — eso le mostraba el form de email a un
