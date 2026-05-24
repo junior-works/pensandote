@@ -305,6 +305,42 @@ export async function urlInteraccionAudio(storagePath) {
 // helpers
 // ---------------------------------------------------------------------
 // =====================================================================
+// "Cómo hago" con IA — edge function como-hago-ia
+// =====================================================================
+export async function preguntarComoHagoIA(pregunta) {
+    const cfg = window.PENSANDOTE_CONFIG;
+    const sb = await sbClient();
+    const { data: sess } = await sb.auth.getSession();
+    const token = sess?.session?.access_token;
+    if (!token) {
+        throw enriquecer('como-hago-ia',
+            new Error('Tenés que estar logueado para usar esta función.'));
+    }
+    const url = `${cfg.SUPABASE_URL}/functions/v1/como-hago-ia`;
+    let resp;
+    try {
+        resp = await fetch(url, {
+            method:  'POST',
+            headers: {
+                'Content-Type':  'application/json',
+                'apikey':        cfg.SUPABASE_ANON_KEY,
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({ pregunta })
+        });
+    } catch (e) {
+        throw enriquecer('como-hago-ia fetch', e);
+    }
+    const data = await resp.json().catch(() => ({}));
+    if (!resp.ok || data.error) {
+        const e = new Error(data.error || `HTTP ${resp.status}`);
+        e.status = resp.status;
+        throw enriquecer('como-hago-ia', e);
+    }
+    return data; // { explicacion, youtube_query }
+}
+
+// =====================================================================
 // Contactos del círculo (tabla public.contacts)
 // =====================================================================
 export async function listarContactos(circleId) {

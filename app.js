@@ -40,6 +40,7 @@ const RUTAS = {
     'familia':      { simple: Simple.renderFamilia },
     'medico':       { simple: Simple.renderMedico },
     'como-hago':    { simple: Simple.renderComoHago },
+    'como-hago-ia': { simple: Simple.renderComoHagoIA },
     'tutorial':     { simple: Simple.renderTutorial },
     'config':       { dashboard: Dashboard.renderConfig },
 
@@ -84,6 +85,7 @@ function renderRoutePreview(ruta) {
         if (ruta.name === 'medico')      return Admin.renderMedicoSimpleReal($app);
         if (ruta.name === 'como-hago')   return Simple.renderComoHago($app);
         if (ruta.name === 'tutorial')    return Simple.renderTutorial($app, ruta);
+        if (ruta.name === 'como-hago-ia') return Simple.renderComoHagoIA($app);
         if (ruta.name === 'v2') {
             const sub = ruta.params[0];
             if (sub === 'pense')     return Preview.renderPensePreview($app);
@@ -170,6 +172,11 @@ function renderRouteReal(ruta) {
         if (ruta.name === 'datos-medicos')  return Admin.renderMedicoAdmin($app);
         if (ruta.name === 'accesos-admin')  return Admin.renderAccesosAdmin($app);
         if (ruta.name === 'medico')         return Admin.renderMedicoSimpleReal($app);
+        // Cómo hago + IA — funcional en uso real (la edge function
+        // requiere JWT, que tenemos por la sesión).
+        if (ruta.name === 'como-hago')      return Simple.renderComoHago($app);
+        if (ruta.name === 'tutorial')       return Simple.renderTutorial($app, ruta);
+        if (ruta.name === 'como-hago-ia')   return Simple.renderComoHagoIA($app);
         // #/v2/pense y #/v2/historias en modo real (no preview): pantallas
         // funcionales del papá. En preview el router las desvía a
         // Preview.renderPensePreview / HistoriasPreview más arriba.

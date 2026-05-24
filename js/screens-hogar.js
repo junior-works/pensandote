@@ -87,6 +87,10 @@ export async function renderHogar($app) {
             <button class="btn btn--xl btn--medico btn--full" id="btn-ir-medico">
                 Ir a la pantalla del médico
             </button>
+            <button class="btn btn--xl btn--tutoriales btn--full" id="btn-ir-comohago"
+                    style="margin-top:0.5rem;">
+                💡 Cómo hago…
+            </button>
         </section>
         `}
 
@@ -206,6 +210,8 @@ export async function renderHogar($app) {
         // Simple: link a la pantalla Médico con dictado por voz.
         const btnIrMed = $app.querySelector('#btn-ir-medico');
         if (btnIrMed) btnIrMed.addEventListener('click', () => go('#/medico'));
+        const btnIrCh = $app.querySelector('#btn-ir-comohago');
+        if (btnIrCh) btnIrCh.addEventListener('click', () => go('#/como-hago'));
     }
 
     if (puedeEscribir) {

@@ -8,7 +8,8 @@
 import { CONTACTOS, MEDICO, TUTORIALES } from './mocks.js';
 import { miembroActivo } from './state.js';
 import { go, goReplace } from './router.js';
-import { h, modal, speakES, stopSpeak } from './ui.js';
+import { h, modal, speakES, stopSpeak, renderErrorEstructurado } from './ui.js';
+import { preguntarComoHagoIA } from './data-emotiva.js';
 import {
     getContactos, getMedico, getTutoriales, getFotoDelDia,
     getMiembroVisto, getAccesos, esPreview, avisarPreview
@@ -334,6 +335,11 @@ export function renderComoHago($app) {
     $app.innerHTML = `
         ${barraVolver('Cómo hago…', 'tutoriales')}
 
+        <button class="btn btn--xl btn--pense btn--full" data-go="#/como-hago-ia"
+                style="margin-bottom: 1rem;">
+            🎤 Tengo otra duda
+        </button>
+
         <p class="simple-instruccion">Elegí qué querés aprender hoy.</p>
 
         <div class="tutoriales-grid">
@@ -489,5 +495,146 @@ function barraVolver(titulo, acento, destino = '#/inicio') {
 function wireNav($app) {
     $app.querySelectorAll('[data-go]').forEach(el => {
         el.addEventListener('click', () => go(el.dataset.go));
+    });
+}
+
+// =====================================================================
+// CÓMO HAGO… con IA (pregunta libre, dictado + texto)
+// =====================================================================
+export function renderComoHagoIA($app) {
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const speechOK = !!SR;
+
+    $app.innerHTML = `
+        ${barraVolver('Tengo otra duda', 'tutoriales', '#/como-hago')}
+
+        <p class="simple-instruccion">
+            Decime qué querés hacer. Te explico paso a paso, con palabras simples.
+        </p>
+
+        ${speechOK ? `
+            <button class="btn btn--xl btn--pense btn--full" id="btn-mic">
+                🎤 Hablar
+            </button>
+            <p id="mic-estado" class="muted center" style="min-height:1.2em; margin: 0.3rem 0 0.8rem;"></p>
+        ` : `
+            <p class="muted">Tu teléfono no soporta dictado por voz. Escribí abajo.</p>
+        `}
+
+        <label class="stack">
+            <span class="muted">Tu pregunta</span>
+            <textarea id="ia-texto" class="input-real" rows="4"
+                      placeholder="Por ejemplo: ¿Cómo hago para pagar la luz?"></textarea>
+        </label>
+
+        <button class="btn btn--xl btn--tutoriales btn--full" id="btn-preguntar"
+                style="margin-top:0.5rem;">
+            ✨ Preguntar
+        </button>
+
+        <div id="ia-resultado"></div>
+
+        <button class="btn btn--xl btn--full" id="btn-salir-ia" data-go="#/como-hago"
+                style="margin-top:1.5rem;">
+            ✕ Volver a los tutoriales
+        </button>
+    `;
+    wireNav($app);
+
+    const $texto    = $app.querySelector('#ia-texto');
+    const $estado   = $app.querySelector('#mic-estado');
+    const $mic      = $app.querySelector('#btn-mic');
+    const $btnPreg  = $app.querySelector('#btn-preguntar');
+    const $res      = $app.querySelector('#ia-resultado');
+
+    // Dictado por voz (mismo patrón que el dictado del mail al médico).
+    let recognizer = null;
+    let grabando   = false;
+    let acumulado  = '';
+
+    if (speechOK && $mic) {
+        $mic.addEventListener('click', () => {
+            if (grabando) { try { recognizer.stop(); } catch (_) {} return; }
+            recognizer = new SR();
+            recognizer.lang = 'es-AR';
+            recognizer.continuous = true;
+            recognizer.interimResults = true;
+            acumulado = $texto.value ? $texto.value.trim() + ' ' : '';
+            recognizer.onresult = (e) => {
+                let final = acumulado;
+                let interim = '';
+                for (let i = e.resultIndex; i < e.results.length; i++) {
+                    const t = e.results[i][0].transcript;
+                    if (e.results[i].isFinal) final += t + ' ';
+                    else interim += t;
+                }
+                acumulado = final;
+                $texto.value = (final + interim).trim();
+            };
+            recognizer.onerror = (e) => {
+                grabando = false;
+                $mic.textContent = '🎤 Hablar';
+                $estado.textContent = `No pude grabar (${e.error || 'error'}). Probá escribir.`;
+            };
+            recognizer.onend = () => {
+                grabando = false;
+                $mic.textContent = '🎤 Hablar de nuevo';
+                $estado.textContent = '';
+            };
+            try {
+                recognizer.start();
+                grabando = true;
+                $mic.textContent = '⏹ Parar';
+                $estado.textContent = 'Te escucho…';
+            } catch (_) {
+                $estado.textContent = 'No pude empezar a grabar.';
+            }
+        });
+    }
+
+    $btnPreg.addEventListener('click', async () => {
+        const pregunta = $texto.value.trim();
+        if (!pregunta) {
+            $estado && ($estado.textContent = 'Decime primero qué querés saber.');
+            $texto.focus();
+            return;
+        }
+        if (grabando) { try { recognizer.stop(); } catch (_) {} }
+
+        const origLabel = $btnPreg.textContent;
+        $btnPreg.disabled = true;
+        $btnPreg.textContent = '🤔 Pensando…';
+        $res.innerHTML = `<p class="muted center" style="margin-top:1rem;">🤔 Estoy pensando…</p>`;
+
+        try {
+            const r = await preguntarComoHagoIA(pregunta);
+            $res.innerHTML = `
+                <section class="card stack" style="margin-top:1rem;">
+                    <h2>💡 Te explico</h2>
+                    <p class="tutorial-paso__texto" id="ia-explicacion"
+                       style="white-space:pre-wrap;">${h(r.explicacion || '')}</p>
+                    <button class="btn btn--xl btn--tutoriales btn--full" id="btn-leer-ia">
+                        🔊 Leer en voz alta
+                    </button>
+                    ${r.youtube_query ? `
+                        <a class="btn btn--xl btn--tutoriales btn--full"
+                           href="https://www.youtube.com/results?search_query=${encodeURIComponent(r.youtube_query)}"
+                           target="_blank" rel="noopener">
+                            ▶️ Ver un video en YouTube
+                        </a>
+                    ` : ''}
+                </section>
+            `;
+            $res.querySelector('#btn-leer-ia').addEventListener('click', () => {
+                speakES(r.explicacion || '');
+            });
+            $btnPreg.textContent = '✨ Preguntar otra cosa';
+        } catch (err) {
+            console.error('[como-hago-ia]', err, err?.detalle);
+            renderErrorEstructurado($res, err, { titulo: 'No pude responderte' });
+            $btnPreg.textContent = origLabel;
+        } finally {
+            $btnPreg.disabled = false;
+        }
     });
 }
