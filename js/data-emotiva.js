@@ -72,10 +72,10 @@ export async function ultimaFotoDia(circleId) {
     if (!data) return null;
     let url;
     try {
-        url = await firmarUrl('fotos', data.storage_path);
+        url = await descargarComoObjectURL('fotos', data.storage_path);
     } catch (e) {
-        console.error('[ultimaFotoDia] createSignedUrl', e);
-        throw enriquecer('createSignedUrl fotos', e);
+        console.error('[ultimaFotoDia] storage.download', e);
+        throw enriquecer('storage.download fotos', e);
     }
     return { ...data, url };
 }
@@ -193,8 +193,8 @@ export async function listarHistorias(circleId) {
     return data || [];
 }
 
-export async function urlHistoriaAudio(storagePath, expirySec = 3600) {
-    return firmarUrl('historias', storagePath, expirySec);
+export async function urlHistoriaAudio(storagePath) {
+    return descargarComoObjectURL('historias', storagePath);
 }
 
 /**
@@ -298,7 +298,7 @@ export async function repreguntarAudio({ historiaId, circleId, audioBlob }) {
 }
 
 export async function urlInteraccionAudio(storagePath) {
-    return firmarUrl('historias', storagePath);
+    return descargarComoObjectURL('historias', storagePath);
 }
 
 // ---------------------------------------------------------------------
@@ -365,11 +365,22 @@ export async function guardarDatosMedicos(circleId, datos) {
     if (error) throw enriquecer('upsert medical_info', error);
 }
 
-async function firmarUrl(bucket, path, expirySec = 3600) {
+/**
+ * Descarga el objeto del bucket privado y lo expone como blob: URL
+ * usable en <img src> / <audio src>. Reemplaza createSignedUrl porque
+ * el endpoint /sign de Supabase Storage estaba tirando 400 "schema is
+ * invalid or incompatible" en este proyecto, mientras que /object
+ * (descarga directa con auth header) funciona perfecto.
+ *
+ * IMPORTANTE: el caller es responsable de revocar la URL con
+ * URL.revokeObjectURL() cuando ya no la necesite, para no leakear
+ * memoria. Si no, el browser libera al cerrar el documento.
+ */
+async function descargarComoObjectURL(bucket, path) {
     const sb = await sbClient();
-    const { data, error } = await sb.storage.from(bucket).createSignedUrl(path, expirySec);
+    const { data: blob, error } = await sb.storage.from(bucket).download(path);
     if (error) throw error;
-    return data.signedUrl;
+    return URL.createObjectURL(blob);
 }
 
 /** Adivina MIME por extensión cuando File.type viene vacío (Android galería). */

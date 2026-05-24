@@ -32,6 +32,11 @@ const LS_LAST_SEEN = (circleId, userId) =>
 
 let _miembrosCache = null;
 
+// Object URL de la foto del día actualmente montada en el <img>. Lo
+// revocamos antes de poner una nueva, así no leakeamos memoria si el
+// usuario recarga / sube otra foto / cambia de pantalla.
+let _fotoUrlActiva = null;
+
 export async function renderHogar($app) {
     const u = state.usuarioReal;
     const m = state.membresiaReal;
@@ -328,10 +333,17 @@ async function cargarPensRecibidos(c, u, $cont) {
 async function cargarFoto(c, $cont) {
     try {
         const f = await ultimaFotoDia(c.id);
+        // La foto anterior (si la había) deja de ser referenciada por
+        // el DOM en cuanto reemplazamos innerHTML; revocamos el blob.
+        if (_fotoUrlActiva) {
+            URL.revokeObjectURL(_fotoUrlActiva);
+            _fotoUrlActiva = null;
+        }
         if (!f) {
             $cont.innerHTML = `<p class="muted center">Todavía no hay foto del día. Cuando alguien suba una, aparece acá grande.</p>`;
             return;
         }
+        _fotoUrlActiva = f.url;  // blob:... URL — revocar en el próximo render
         $cont.innerHTML = `
             <figure class="foto-carousel">
                 <img class="foto-carousel__img" src="${h(f.url)}" alt="${h(f.epigrafe || 'Foto del día')}">
@@ -544,8 +556,9 @@ async function cargarHistorias(c, m, u, $cont) {
 
 async function onPlayHistoria(hi) {
     if (!hi) return;
+    let url = null;
     try {
-        const url = await urlHistoriaAudio(hi.storage_path);
+        url = await urlHistoriaAudio(hi.storage_path);
         await modal({
             titulo: hi.titulo || 'Historia',
             cuerpo: `
@@ -560,7 +573,10 @@ async function onPlayHistoria(hi) {
             acciones: [{ label: 'Cerrar', clase: 'btn--pense', value: 'ok' }],
             tono: 'pense'
         });
+        // Modal cerrado: liberamos el blob URL.
+        if (url) URL.revokeObjectURL(url);
     } catch (err) {
+        if (url) URL.revokeObjectURL(url);
         await modal({
             titulo: 'No pude reproducir',
             cuerpo: `<pre>${h(err.message || err)}</pre>`,
