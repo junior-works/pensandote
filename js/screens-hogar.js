@@ -35,6 +35,32 @@ import { entrarPreviewVerComoPapa } from './preview.js';
 const LS_LAST_SEEN = (circleId, userId) =>
     `pensandote.pensamientos.lastSeen.${circleId}.${userId}`;
 
+// Catálogo de ideas sugeridas — disparadores universales de historia de
+// vida. Hardcoded en el front para que la familia no arranque con la
+// caja vacía (cuando todavía no se les ocurrió nada para preguntarle).
+// Tono argentino, voseo, abiertos. Si se quieren editar, editar acá:
+// no hay UI para gestionarlos.
+const IDEAS_SUGERIDAS = [
+    '¿Cómo conociste a mamá?',
+    '¿Cuál fue tu primer trabajo y cómo lo conseguiste?',
+    'Contame cómo era tu barrio cuando eras chico',
+    '¿Qué hacían los domingos en familia?',
+    '¿Cuál fue el viaje que más te marcó?',
+    'Contame de tus abuelos, ¿cómo eran?',
+    '¿Qué música escuchabas de joven?',
+    '¿Cómo fue el día que nació tu primer hijo?',
+    '¿Cuál fue tu mayor travesura de pibe?',
+    'Contame una comida que te recuerde a tu vieja',
+    '¿Qué soñabas ser cuando eras chico?',
+    '¿Cómo era la escuela en tu época?',
+    'Contame de un amigo de toda la vida',
+    '¿Cuál fue el mejor consejo que te dieron?',
+    '¿Qué momento te gustaría que la familia no olvide nunca?',
+    '¿Cómo te pidió matrimonio o cómo decidieron casarse?',
+    '¿Qué juegos jugabas en la calle cuando eras chico?',
+    '¿Cuál es el recuerdo más feliz que tenés?'
+];
+
 let _miembrosCache = null;
 
 // Object URL de la foto del día actualmente montada en el <img>. Lo
@@ -214,6 +240,18 @@ export async function renderHogar($app) {
                             : 'Contame cuándo empezaste a trabajar en la verdulería…'}"></textarea>
                 <button type="submit" class="btn btn--inicio">📤 Mandar idea</button>
             </form>
+
+            <details class="ideas-sugeridas">
+                <summary class="ideas-sugeridas__summary">
+                    💡 ¿Sin ideas? Ver sugerencias (${IDEAS_SUGERIDAS.length})
+                </summary>
+                <p class="muted" style="font-size:0.85em; margin: 0.4rem 0 0.6rem;">
+                    Disparadores de historia de vida. Tocá "Agregar" en las
+                    que te sirvan — se suman a la cola del papá una por una.
+                </p>
+                <ul class="ideas-sugeridas__lista" id="sec-ideas-sugeridas"></ul>
+            </details>
+
             <div id="sec-puntas-cola"><p class="muted">Cargando cola…</p></div>
         </section>
         ` : ''}
@@ -338,10 +376,9 @@ export async function renderHogar($app) {
             });
         }
 
-        // Sección "Ideas para contar" — wire form + cargar cola inicial.
+        // Sección "Ideas para contar" — wire form + cargar cola/sugeridas inicial.
         const $formPunta = $app.querySelector('#form-punta');
-        const $listaPuntas = $app.querySelector('#sec-puntas-cola');
-        if ($formPunta && $listaPuntas) {
+        if ($formPunta) {
             $formPunta.addEventListener('submit', async (ev) => {
                 ev.preventDefault();
                 const $txt = $app.querySelector('#punta-texto');
@@ -352,7 +389,7 @@ export async function renderHogar($app) {
                 try {
                     await crearPunta(c.id, texto);
                     $txt.value = '';
-                    await cargarPuntasCola(c, u, $listaPuntas);
+                    await actualizarSeccionPuntas(c, u, $app);
                 } catch (err) {
                     await modal({
                         titulo: 'No pude mandarla',
@@ -363,7 +400,7 @@ export async function renderHogar($app) {
                     btn.disabled = false; btn.textContent = '📤 Mandar idea';
                 }
             });
-            cargarPuntasCola(c, u, $listaPuntas);
+            actualizarSeccionPuntas(c, u, $app);
         }
 
         // Crear OTRO círculo desde el panel. Mismo flujo que renderSinCirculos:
@@ -1044,65 +1081,117 @@ function pedirVisibilidad(narradorId) {
 }
 
 // =====================================================================
-// Cola de puntas (admin dashboard)
+// Cola de puntas + catálogo de sugerencias (admin dashboard)
 // =====================================================================
-async function cargarPuntasCola(c, u, $cont) {
+//
+// Una sola query a `puntas_historia` alimenta dos renders:
+//   1) Cola: pendientes (con la próxima marcada) + usadas con fecha.
+//   2) Sugeridas (catálogo constante): cada idea, "Agregar" o "✓ Ya
+//      agregada" si el texto exacto ya está en la cola — así no
+//      duplicamos.
+async function actualizarSeccionPuntas(c, u, $app) {
+    const $cola      = $app.querySelector('#sec-puntas-cola');
+    const $sugeridas = $app.querySelector('#sec-ideas-sugeridas');
+    if (!$cola && !$sugeridas) return;
+    let puntas = [];
     try {
-        const puntas = await listarPuntas(c.id);
-        if (!puntas.length) {
-            $cont.innerHTML = `<p class="muted">Todavía no mandaron ninguna idea. Probá con algo concreto y chiquito.</p>`;
-            return;
-        }
-        // Pendientes primero (más vieja arriba — es la próxima que va a
-        // ver el papá), después las ya usadas.
-        const pend = puntas.filter(p => !p.usada_at);
-        const usadas = puntas.filter(p =>  p.usada_at);
-        const ordered = [...pend, ...usadas];
-        $cont.innerHTML = `
-            <h3 style="margin: 0.8rem 0 0.4rem; font-size: 0.95em;">Cola (${pend.length} sin usar)</h3>
-            <ul class="puntas-cola">
-                ${ordered.map((p, i) => {
-                    const usada = !!p.usada_at;
-                    const mia   = p.de_user_id === u.id;
-                    const proxima = !usada && i === 0;
-                    return `
-                        <li class="puntas-cola__item ${usada ? 'is-usada' : ''}">
-                            <span class="puntas-cola__texto">
-                                ${proxima ? '<strong>👉 La próxima:</strong> ' : ''}${h(p.texto)}
-                            </span>
-                            <span class="puntas-cola__chip ${usada ? 'puntas-cola__chip--usada' : ''}">
-                                ${usada
-                                    ? `✓ contada ${new Date(p.usada_at).toLocaleDateString('es-AR')}`
-                                    : 'pendiente'}
-                            </span>
-                            ${mia
-                                ? `<button class="btn btn--mini btn--danger" data-borrar-punta="${h(p.id)}" title="Borrar">×</button>`
-                                : '<span></span>'}
-                        </li>
-                    `;
-                }).join('')}
-            </ul>
-        `;
-        $cont.querySelectorAll('[data-borrar-punta]').forEach(btn => {
-            btn.addEventListener('click', async () => {
-                const id = btn.dataset.borrarPunta;
-                btn.disabled = true;
-                try {
-                    await borrarPunta(id);
-                    await cargarPuntasCola(c, u, $cont);
-                } catch (err) {
-                    btn.disabled = false;
-                    await modal({
-                        titulo: 'No pude borrarla',
-                        cuerpo: `<pre>${h(err?.message || err)}</pre>`,
-                        acciones: [{ label: 'OK', value: 'ok' }]
-                    });
-                }
-            });
-        });
+        puntas = await listarPuntas(c.id);
     } catch (err) {
-        $cont.innerHTML = `<p class="muted">Error cargando la cola: ${h(err?.message || err)}</p>`;
+        if ($cola) $cola.innerHTML = `<p class="muted">Error cargando la cola: ${h(err?.message || err)}</p>`;
     }
+    // Set de textos normalizados (lower + trim) para dedup contra el
+    // catálogo. Cubre tanto pendientes como usadas — si el papá ya la
+    // contó, no la volvemos a empujar a la cola automáticamente.
+    const yaCargadas = new Set(
+        puntas.map(p => String(p.texto || '').trim().toLowerCase())
+    );
+    if ($sugeridas) renderSugeridas($sugeridas, yaCargadas, c, u, $app);
+    if ($cola) renderCola($cola, puntas, c, u, $app);
+}
+
+function renderCola($cont, puntas, c, u, $app) {
+    if (!puntas.length) {
+        $cont.innerHTML = `<p class="muted">Todavía no mandaron ninguna idea. Empezá con una sugerida o escribí algo concreto arriba.</p>`;
+        return;
+    }
+    const pend = puntas.filter(p => !p.usada_at);
+    const usadas = puntas.filter(p =>  p.usada_at);
+    const ordered = [...pend, ...usadas];
+    $cont.innerHTML = `
+        <h3 style="margin: 0.8rem 0 0.4rem; font-size: 0.95em;">Cola (${pend.length} sin usar)</h3>
+        <ul class="puntas-cola">
+            ${ordered.map((p, i) => {
+                const usada = !!p.usada_at;
+                const mia   = p.de_user_id === u.id;
+                const proxima = !usada && i === 0;
+                return `
+                    <li class="puntas-cola__item ${usada ? 'is-usada' : ''}">
+                        <span class="puntas-cola__texto">
+                            ${proxima ? '<strong>👉 La próxima:</strong> ' : ''}${h(p.texto)}
+                        </span>
+                        <span class="puntas-cola__chip ${usada ? 'puntas-cola__chip--usada' : ''}">
+                            ${usada
+                                ? `✓ contada ${new Date(p.usada_at).toLocaleDateString('es-AR')}`
+                                : 'pendiente'}
+                        </span>
+                        ${mia
+                            ? `<button class="btn btn--mini btn--danger" data-borrar-punta="${h(p.id)}" title="Borrar">×</button>`
+                            : '<span></span>'}
+                    </li>
+                `;
+            }).join('')}
+        </ul>
+    `;
+    $cont.querySelectorAll('[data-borrar-punta]').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            const id = btn.dataset.borrarPunta;
+            btn.disabled = true;
+            try {
+                await borrarPunta(id);
+                await actualizarSeccionPuntas(c, u, $app);
+            } catch (err) {
+                btn.disabled = false;
+                await modal({
+                    titulo: 'No pude borrarla',
+                    cuerpo: `<pre>${h(err?.message || err)}</pre>`,
+                    acciones: [{ label: 'OK', value: 'ok' }]
+                });
+            }
+        });
+    });
+}
+
+function renderSugeridas($cont, yaCargadas, c, u, $app) {
+    $cont.innerHTML = IDEAS_SUGERIDAS.map(idea => {
+        const ya = yaCargadas.has(idea.trim().toLowerCase());
+        return `
+            <li class="ideas-sugeridas__item ${ya ? 'is-agregada' : ''}">
+                <span class="ideas-sugeridas__texto">${h(idea)}</span>
+                ${ya
+                    ? `<span class="ideas-sugeridas__chip">✓ Ya agregada</span>`
+                    : `<button class="btn btn--mini" data-agregar-idea="${h(idea)}">+ Agregar</button>`}
+            </li>
+        `;
+    }).join('');
+    $cont.querySelectorAll('[data-agregar-idea]').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            const idea = btn.dataset.agregarIdea;
+            btn.disabled = true;
+            btn.textContent = 'Agregando…';
+            try {
+                await crearPunta(c.id, idea);
+                await actualizarSeccionPuntas(c, u, $app);
+            } catch (err) {
+                btn.disabled = false;
+                btn.textContent = '+ Agregar';
+                await modal({
+                    titulo: 'No pude agregarla',
+                    cuerpo: `<pre>${h(err?.message || err)}</pre>`,
+                    acciones: [{ label: 'OK', value: 'ok' }]
+                });
+            }
+        });
+    });
 }
 
 /** Devuelve el parentesco del primer miembro modo simple del círculo
