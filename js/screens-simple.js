@@ -279,74 +279,54 @@ export function renderEmergencias($app) {
     document.getElementById('btn-panico').addEventListener('click', async () => {
         if (esPreview()) {
             await avisarPreview('👀 Vista previa — botón de pánico',
-                'En la app real este botón le manda un aviso (ntfy + WhatsApp con tu ubicación) a tu familia. Acá no se ejecuta nada porque es vista previa.');
+                'En la app real este botón abre WhatsApp para avisar al familiar de emergencia con tu ubicación. Acá no se ejecuta porque es vista previa.');
             return;
         }
-        // En modo REAL disparamos de verdad:
-        //   1) ntfy.sh al topic del círculo (notif push a la familia que
-        //      tenga la app ntfy.sh suscripta — ver SETUP.md).
-        //   2) WhatsApp al primer contacto de emergencia del círculo,
-        //      con la ubicación GPS embebida si el usuario la concede.
+        // Aviso real = SOLO WhatsApp. ntfy quedó descartado: nadie de la
+        // familia se va a instalar la app ntfy ni suscribirse a un topic.
+        // WhatsApp lo tienen todos.
         //
-        // El módulo panico.js maneja el caso sin permiso de geo (manda
-        // el aviso igual, sin coordenadas). Es fire-and-forget para
-        // ntfy y un window.open para WhatsApp.
-        const circ = state.modo === 'real'
-            ? state.circulosReal.find(x => x.id === state.circuloActivoIdReal)
-            : null;
-        const ntfyTopic = circ?.ntfy_topic || null;
-        // Primer contacto del círculo con es_emergencia=true y teléfono
-        // que NO sea uno de los fijos públicos (911/107/100) — ése es
-        // el "familiar de guardia".
+        // El módulo panico.js pide geo (timeout 5s, sigue sin coords si
+        // el usuario no la concede) y abre wa.me con un mensaje
+        // pre-armado tipo "🆘 [Nombre] tocó el botón…".
         const telsFijos2 = new Set(EMERGENCIAS_FIJAS.map(f => f.telefono));
         const familiar = (getContactos() || [])
             .filter(c => c.es_emergencia && c.telefono)
             .find(c => !telsFijos2.has(String(c.telefono || '').trim()));
         const telefonoEmergencia = familiar?.telefono || null;
 
-        // Si no tenemos NI topic NI número, no hay a quién avisar. Le
-        // decimos al usuario en vez de quedar pretendiendo.
-        if (!ntfyTopic && !telefonoEmergencia) {
+        if (!telefonoEmergencia) {
             await modal({
                 titulo: 'No puedo avisar todavía',
-                cuerpo: `<p>Tu familia todavía no configuró el aviso. Llamá vos directo
-                          al 911 si te sentís mal, o tocá los botones de abajo.</p>`,
+                cuerpo: `<p>Tu familia todavía no cargó un contacto de emergencia.
+                          <strong>Llamá vos directo al 911</strong> si te sentís mal.</p>`,
                 acciones: [{ label: 'Entendido', clase: 'btn--inicio btn--xl btn--full', value: 'ok' }]
             });
             return;
         }
 
-        // Modal "avisando…" mientras geo + ntfy + abrir WhatsApp corren.
-        const modalProm = modal({
-            titulo: '📡 Avisando a tu familia…',
-            cuerpo: `
-                <p>Estamos mandando un aviso${telefonoEmergencia ? ' a tu familiar' : ''}.</p>
-                <p class="muted">Te van a llamar en unos minutos. Quedate tranquila/o.</p>
-                <div class="loader-puntos" aria-hidden="true"><span></span><span></span><span></span></div>
-            `,
-            acciones: []
-        });
-        modalProm.catch(() => {});
-
+        const nombre = getMiembroVisto()?.nombre_corto
+                    || getMiembroVisto()?.nombre_completo
+                    || null;
         try {
-            await dispararPanico({ telefonoEmergencia, ntfyTopic });
-            // El WhatsApp abre una pestaña nueva, el modal sigue acá.
-            // Le damos al usuario un "Listo" para cerrar.
+            await dispararPanico({ telefonoEmergencia, nombre });
+            // dispararPanico abre WhatsApp en una pestaña nueva — el
+            // usuario tiene que tocar "Enviar" para que llegue. Le
+            // damos un cierre claro con la instrucción.
             await modal({
-                titulo: '✅ Aviso enviado',
-                cuerpo: telefonoEmergencia
-                    ? `<p>Tu familia recibió el aviso. Si se abrió WhatsApp, mandá el mensaje
-                       para que les llegue ya. Te van a llamar pronto.</p>`
-                    : `<p>Tu familia recibió el aviso. Te van a llamar pronto.</p>`,
-                acciones: [{ label: 'Cerrar', clase: 'btn--inicio btn--xl btn--full', value: 'ok' }],
+                titulo: '📲 Abrí WhatsApp para tu familiar',
+                cuerpo: `<p>Te abrí WhatsApp con el mensaje listo. <strong>Tocá el botón
+                          verde de enviar</strong> para que le llegue ahora.</p>
+                         <p class="muted">Si por algún motivo no se abrió, llamá directo al 911.</p>`,
+                acciones: [{ label: 'Listo', clase: 'btn--inicio btn--xl btn--full', value: 'ok' }],
                 tono: 'ok'
             });
         } catch (err) {
             console.error('[panico]', err);
             await modal({
-                titulo: 'No pude avisar bien',
-                cuerpo: `<p>Algo falló mandando el aviso. Llamá vos directo al 911 si te sentís
-                         mal.</p><pre>${h(err?.message || err)}</pre>`,
+                titulo: 'No pude abrir el aviso',
+                cuerpo: `<p>Algo falló abriendo WhatsApp. <strong>Llamá vos directo al 911</strong>
+                         si te sentís mal.</p><pre>${h(err?.message || err)}</pre>`,
                 acciones: [{ label: 'OK', clase: 'btn--inicio btn--xl btn--full', value: 'ok' }]
             });
         }

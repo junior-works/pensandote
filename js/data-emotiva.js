@@ -43,19 +43,6 @@ export async function pensamientosRecibidos(circleId, userId, limit = 15) {
     return data || [];
 }
 
-/** Publica en ntfy.sh (topic público, sin auth). Best-effort. */
-export async function publicarNtfy(topic, mensaje) {
-    try {
-        await fetch(`https://ntfy.sh/${encodeURIComponent(topic)}`, {
-            method:  'POST',
-            headers: { 'Title': 'Pensándote 💛' },
-            body:    mensaje
-        });
-    } catch (err) {
-        console.warn('[ntfy]', err);
-    }
-}
-
 // ---------------------------------------------------------------------
 // Foto del día
 // ---------------------------------------------------------------------
