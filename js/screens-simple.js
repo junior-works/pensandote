@@ -6,10 +6,12 @@
  */
 
 import { CONTACTOS, MEDICO, TUTORIALES } from './mocks.js';
-import { miembroActivo } from './state.js';
+import { state, miembroActivo } from './state.js';
 import { go, goReplace } from './router.js';
 import { h, modal, speakES, stopSpeak, renderErrorEstructurado } from './ui.js';
-import { preguntarComoHagoIA } from './data-emotiva.js';
+import {
+    preguntarComoHagoIA, listarTutoriales, obtenerTutorialPorSlug
+} from './data-emotiva.js';
 import {
     getContactos, getMedico, getTutoriales, getFotoDelDia, getFotosDia,
     getMiembroVisto, getAccesos, esPreview, avisarPreview
@@ -409,7 +411,17 @@ export function renderMedico($app) {
 // =====================================================================
 // CÓMO HAGO… (grid de tutoriales)
 // =====================================================================
-export function renderComoHago($app) {
+//
+// En modo REAL (con sesión Supabase) los tutoriales vienen de la tabla
+// `tutorials` — así Charly puede sumar uno desde el SQL editor y le
+// aparece al papá sin tocar código. En demo/preview seguimos con los
+// mocks (TUTORIALES) para que la maqueta navegue sin red.
+//
+// Identificador en la URL: el id del mock (string) o el `slug` de la
+// DB. Ambos son string, render y router se llevan bien sin distinguir.
+export async function renderComoHago($app) {
+    const usarDB = state.modo === 'real' && !state.modoPreview;
+
     $app.innerHTML = `
         ${barraVolver('Cómo hago…', 'tutoriales')}
 
@@ -420,25 +432,86 @@ export function renderComoHago($app) {
 
         <p class="simple-instruccion">Elegí qué querés aprender hoy.</p>
 
-        <div class="tutoriales-grid">
-            ${TUTORIALES.map(t => `
-                <button class="tarjeton tarjeton--tutoriales tarjeton--mini"
-                        data-go="#/tutorial/${h(t.id)}">
-                    <span class="tarjeton__icono">${t.icono}</span>
-                    <span class="tarjeton__label">${h(t.titulo)}</span>
-                </button>
-            `).join('')}
+        <div class="tutoriales-grid" id="tutoriales-grid">
+            <p class="muted">Cargando…</p>
         </div>
     `;
     wireNav($app);
+
+    const $grid = $app.querySelector('#tutoriales-grid');
+    try {
+        let lista;
+        if (usarDB) {
+            const desdeDB = await listarTutoriales();
+            // Mapeo a la forma uniforme que usa el grid: id (slug),
+            // titulo, icono. La DB no guarda icono, así que usamos un
+            // map por slug + fallback genérico — visualmente está OK.
+            lista = desdeDB.map(t => ({
+                id: t.slug,
+                titulo: t.titulo,
+                icono: iconoTutorial(t.slug)
+            }));
+        } else {
+            lista = TUTORIALES;
+        }
+        $grid.innerHTML = lista.map(t => `
+            <button class="tarjeton tarjeton--tutoriales tarjeton--mini"
+                    data-go="#/tutorial/${h(t.id)}">
+                <span class="tarjeton__icono">${t.icono}</span>
+                <span class="tarjeton__label">${h(t.titulo)}</span>
+            </button>
+        `).join('');
+        wireNav($app);
+    } catch (err) {
+        console.error('[renderComoHago]', err);
+        renderErrorEstructurado($grid, err, {
+            titulo: 'No pude cargar los tutoriales'
+        });
+    }
+}
+
+// Map slug → emoji. La DB no guarda icono porque es contenido
+// editorial chiquito; mantener acá la convención visual es más simple
+// que sumar una columna y migrar. Para slugs nuevos cae al '📘'.
+function iconoTutorial(slug) {
+    const MAP = {
+        'mandar-foto-whatsapp':    '📷',
+        'hacer-videollamada':      '📹',
+        'subir-volumen':           '🔊',
+        'borrar-mensaje-whatsapp': '🗑️',
+        'agrandar-letra':          '🔠',
+        'ver-bateria':             '🔋',
+        'como-usar-esta-app':      '📱',
+        'como-usar-pensandote':    '📱'
+    };
+    return MAP[slug] || '📘';
 }
 
 // =====================================================================
 // TUTORIAL — paso a paso
 // =====================================================================
-export function renderTutorial($app, ruta) {
+export async function renderTutorial($app, ruta) {
     const id = ruta.params[0];
-    const t = TUTORIALES.find(x => x.id === id);
+    const usarDB = state.modo === 'real' && !state.modoPreview;
+
+    // Loader chiquito mientras pegamos a Supabase. En demo el find es
+    // sincrónico y se omite este flash.
+    if (usarDB) {
+        $app.innerHTML = `<p class="muted center" style="margin-top:2rem;">Cargando tutorial…</p>`;
+    }
+
+    let t;
+    try {
+        if (usarDB) {
+            t = await obtenerTutorialPorSlug(id);
+        } else {
+            t = TUTORIALES.find(x => x.id === id);
+        }
+    } catch (err) {
+        console.error('[renderTutorial]', err);
+        renderErrorEstructurado($app, err, { titulo: 'No pude cargar el tutorial' });
+        return;
+    }
     if (!t) { go('#/como-hago'); return; }
 
     const pasoIdx = Math.max(0, Math.min(

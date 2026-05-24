@@ -366,6 +366,38 @@ export async function urlInteraccionAudio(storagePath) {
 // =====================================================================
 // "Cómo hago" con IA — edge function como-hago-ia
 // =====================================================================
+// ---------------------------------------------------------------------
+// Tutoriales (contenido editorial global — sin circle_id, RLS: select libre)
+// ---------------------------------------------------------------------
+//
+// La tabla `tutorials` es contenido curado compartido por todos los
+// círculos. Cuando alguien (Charly) agrega un tutorial nuevo a la DB,
+// debe aparecer en "Cómo hago" del papá sin tener que tocar código.
+// Orden por `orden` ascendente — los más importantes van con número
+// chico (1 = "Cómo usar esta app, paso a paso").
+export async function listarTutoriales() {
+    const sb = await sbClient();
+    const { data, error } = await sb
+        .from('tutorials')
+        .select('id, slug, titulo, descripcion, pasos, orden')
+        .eq('activo', true)
+        .order('orden', { ascending: true });
+    if (error) throw enriquecer('listarTutoriales', error);
+    return data || [];
+}
+
+export async function obtenerTutorialPorSlug(slug) {
+    const sb = await sbClient();
+    const { data, error } = await sb
+        .from('tutorials')
+        .select('id, slug, titulo, descripcion, pasos, orden')
+        .eq('slug', slug)
+        .eq('activo', true)
+        .maybeSingle();
+    if (error) throw enriquecer('obtenerTutorialPorSlug', error);
+    return data || null;
+}
+
 export async function preguntarComoHagoIA(pregunta) {
     const cfg = window.PENSANDOTE_CONFIG;
     const sb = await sbClient();
