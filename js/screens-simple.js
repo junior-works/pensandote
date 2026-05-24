@@ -8,7 +8,7 @@
 import { CONTACTOS, MEDICO, TUTORIALES } from './mocks.js';
 import { state, miembroActivo } from './state.js';
 import { go, goReplace } from './router.js';
-import { h, modal, speakES, stopSpeak, renderErrorEstructurado } from './ui.js';
+import { h, modal, speakES, stopSpeak, wireTTSToggle, renderErrorEstructurado } from './ui.js';
 import {
     preguntarComoHagoIA, listarTutoriales, obtenerTutorialPorSlug
 } from './data-emotiva.js';
@@ -618,9 +618,10 @@ export async function renderTutorial($app, ruta) {
     `;
     wireNav($app);
 
-    document.getElementById('btn-leer').addEventListener('click', () => {
-        speakES(textoPaso);
-    });
+    // TTS toggle: tocar lee/repite, tocar de nuevo mientras suena corta.
+    // Cuando termina solo, el botón vuelve a "🔊 Leer en voz alta" así
+    // el papá lo puede tocar para repetir.
+    wireTTSToggle(document.getElementById('btn-leer'), textoPaso);
 
     // Salida directa: desde cualquier paso vuelve al listado, sin
     // retroceder paso por paso. Cortamos la voz si estaba leyendo.
@@ -794,9 +795,9 @@ export function renderComoHagoIA($app) {
                     ` : ''}
                 </section>
             `;
-            $res.querySelector('#btn-leer-ia').addEventListener('click', () => {
-                speakES(r.explicacion || '');
-            });
+            // TTS toggle sobre la respuesta de la IA — mismo patrón que
+            // tutoriales: tocar lee/repite, tocar de nuevo corta.
+            wireTTSToggle($res.querySelector('#btn-leer-ia'), r.explicacion || '');
             $btnPreg.textContent = '✨ Preguntar otra cosa';
         } catch (err) {
             console.error('[como-hago-ia]', err, err?.detalle);

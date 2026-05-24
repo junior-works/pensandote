@@ -112,23 +112,103 @@ export function cleanupModalBackButton(overlay) {
     }
 }
 
-/** Text-to-speech en español argentino. Silencioso si no está soportado. */
-export function speakES(texto) {
-    if (!('speechSynthesis' in window)) return;
+/**
+ * Text-to-speech en español argentino. Silencioso si no está soportado.
+ * Acepta `onEnd` callback opcional — se llama tanto cuando termina
+ * naturalmente como en cancel/error. Útil para que la UI vuelva al
+ * estado "leer" cuando la voz se calla sola.
+ */
+export function speakES(texto, { onEnd } = {}) {
+    if (!('speechSynthesis' in window)) { onEnd?.(); return; }
     try {
         window.speechSynthesis.cancel();
         const u = new SpeechSynthesisUtterance(texto);
         u.lang = 'es-AR';
         u.rate = 0.95;
         u.pitch = 1;
+        if (onEnd) {
+            u.onend   = onEnd;
+            u.onerror = onEnd;
+        }
         window.speechSynthesis.speak(u);
     } catch (e) {
         console.warn('TTS falló:', e);
+        onEnd?.();
     }
 }
 
 export function stopSpeak() {
     if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+}
+
+/**
+ * Convierte un `<button>` en un toggle de TTS:
+ *   - tocar (no está sonando) → leer/repetir el texto;
+ *   - tocar (mientras suena)  → cortar al instante;
+ *   - cuando termina solo, vuelve al estado "Leer" para repetir.
+ *
+ * El texto puede ser string o función (lazy, se evalúa por click — útil
+ * cuando el contenido depende del estado actual del render).
+ *
+ * Registra un `hashchange` { once:true } como safety net: si el usuario
+ * navega afuera de la pantalla con el "← Volver" del barra-volver
+ * (que no llama stopSpeak explícito), igual cortamos la voz.
+ *
+ * Devuelve `{ stop }` para que el caller pueda forzar parada en otros
+ * eventos (cambio de paso, modal de salida, etc.).
+ */
+export function wireTTSToggle($btn, getTexto, opts = {}) {
+    if (!$btn) return { stop: () => {} };
+    const {
+        labelLeer  = '🔊 Leer en voz alta',
+        labelParar = '⏹ Parar',
+        // btn--anecdota = rojo loud (bg color), gana en cascade contra
+        // las variantes de color que ya tenga el botón. Para que el
+        // estado "Parar" se vea distinto y obvio.
+        claseParar = 'btn--anecdota'
+    } = opts;
+    const clasesParar = claseParar.split(/\s+/).filter(Boolean);
+
+    let sonando = false;
+    let vivo    = true;   // tras stop() ignoramos callbacks tardíos
+
+    function setLeer() {
+        if (!vivo) return;
+        sonando = false;
+        $btn.textContent = labelLeer;
+        if (clasesParar.length) $btn.classList.remove(...clasesParar);
+    }
+    function setParar() {
+        if (!vivo) return;
+        sonando = true;
+        $btn.textContent = labelParar;
+        if (clasesParar.length) $btn.classList.add(...clasesParar);
+    }
+
+    function onClick() {
+        if (sonando) {
+            stopSpeak();
+            setLeer();
+            return;
+        }
+        const texto = typeof getTexto === 'function' ? getTexto() : getTexto;
+        if (!texto) return;
+        setParar();
+        speakES(texto, { onEnd: setLeer });
+    }
+
+    $btn.addEventListener('click', onClick);
+    setLeer();
+
+    function stop() {
+        vivo = false;
+        stopSpeak();
+    }
+    // Si el usuario navega afuera (barra-volver, atrás del Android,
+    // cualquier hashchange) cortamos la voz sí o sí.
+    window.addEventListener('hashchange', stop, { once: true });
+
+    return { stop };
 }
 
 /**

@@ -14,7 +14,7 @@
 import { state } from './state.js';
 import { go, goReplace } from './router.js';
 import {
-    h, modal, speakES, stopSpeak,
+    h, modal, speakES, stopSpeak, wireTTSToggle,
     installModalBackButton, cleanupModalBackButton
 } from './ui.js';
 import { esPreview, getAccesos, avisarPreview } from './preview.js';
@@ -832,7 +832,9 @@ export function renderGuiaAdmin($app, ruta) {
         </div>
     `;
 
-    $app.querySelector('#btn-leer-guia').addEventListener('click', () => speakES(paso.texto));
+    // TTS toggle: tocar lee/repite, tocar de nuevo corta. Igual que en
+    // los tutoriales del papá — un solo botón, claro, sin sorpresas.
+    wireTTSToggle($app.querySelector('#btn-leer-guia'), paso.texto);
     $app.querySelector('#btn-salir-guia').addEventListener('click', () => {
         stopSpeak();
         go('#/inicio');
