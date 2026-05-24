@@ -17,6 +17,7 @@ import {
     h, modal,
     installModalBackButton, cleanupModalBackButton
 } from './ui.js';
+import { esPreview, getAccesos, avisarPreview } from './preview.js';
 import {
     listarContactos, crearContacto, actualizarContacto, borrarContacto,
     leerDatosMedicos, guardarDatosMedicos,
@@ -305,21 +306,31 @@ export async function renderMedicoSimpleReal($app) {
     if (!c) return go('#/inicio');
 
     let datos = null;
+    let accesosMed = [];
     try {
-        datos = await leerDatosMedicos(c.id);
+        // En preview tomamos los accesos de previewData (ya precargados);
+        // en uso real tiramos la query.
+        const [d, accesosTodos] = await Promise.all([
+            leerDatosMedicos(c.id),
+            esPreview() ? Promise.resolve(getAccesos()) : listarAccesos(c.id).catch(() => [])
+        ]);
+        datos = d;
+        accesosMed = (accesosTodos || []).filter(a => a.categoria === 'medico');
     } catch (err) {
         console.error('[renderMedicoSimpleReal]', err);
     }
 
-    const sinDatos = !datos || !Object.values(datos).filter(Boolean).length;
+    const hayDatos   = datos && Object.values(datos).filter(Boolean).length > 0;
+    const hayAccesos = accesosMed.length > 0;
+    const sinNada    = !hayDatos && !hayAccesos;
 
     $app.innerHTML = `
         ${barraVolverMedicoSimple()}
-        ${sinDatos ? cuerpoSinDatos() : cuerpoConDatos(datos)}
+        ${sinNada ? cuerpoSinDatos() : cuerpoConDatos(datos, accesosMed)}
     `;
     $app.querySelector('#btn-volver').addEventListener('click', () => go('#/inicio'));
 
-    if (sinDatos) {
+    if (sinNada) {
         $app.querySelector('#btn-pedir-ayuda').addEventListener('click', () => {
             modal({
                 titulo: '🆘 Listo, le avisé a tu familia',
@@ -333,26 +344,19 @@ export async function renderMedicoSimpleReal($app) {
     }
 
     const btnMail = $app.querySelector('#btn-mail');
-    if (btnMail) btnMail.addEventListener('click', () => abrirDictadoMail(datos));
+    if (btnMail) btnMail.addEventListener('click', () => abrirDictadoMail(datos || {}));
 
-    $app.querySelector('#btn-turno').addEventListener('click', async () => {
-        const r = await modal({
-            titulo: '📅 Pedir turno',
-            cuerpo: `
-                <p>Te llevamos a la app de tu obra social${datos.obra_social ? ' (<strong>' + h(datos.obra_social) + '</strong>)' : ''}
-                   para que pidas el turno desde ahí.</p>
-                <p class="muted">Si te perdés, llamá al consultorio o pedile ayuda a un familiar.</p>
-            `,
-            acciones: [
-                { label: 'Cancelar' },
-                ...(datos.medico_telefono
-                    ? [{ label: '📞 Llamar al consultorio', clase: 'btn--medico btn--full', value: 'tel' }]
-                    : [])
-            ]
+    // Wirear accesos categoría médico de tipo 'link' (los 'llamar' son <a href=tel:...>).
+    $app.querySelectorAll('[data-acceso-link]').forEach(b => {
+        b.addEventListener('click', () => {
+            const url = b.dataset.accesoLink;
+            if (esPreview()) {
+                avisarPreview('👀 Vista previa',
+                    `En la app real esto abriría ${url}. Acá no se ejecuta.`);
+                return;
+            }
+            window.open(url, '_blank', 'noopener');
         });
-        if (r === 'tel' && datos.medico_telefono) {
-            window.location.href = `tel:${datos.medico_telefono}`;
-        }
     });
 }
 
@@ -377,7 +381,9 @@ function cuerpoSinDatos() {
     `;
 }
 
-function cuerpoConDatos(d) {
+function cuerpoConDatos(d, accesosMed) {
+    d = d || {};
+    accesosMed = accesosMed || [];
     const filas = [
         ['Obra social',  d.obra_social],
         ['N° afiliado',  d.num_afiliado],
@@ -386,14 +392,18 @@ function cuerpoConDatos(d) {
         ['Teléfono',     d.medico_telefono]
     ].filter(([_, v]) => v);
 
+    const tieneAlgunDatoMedico = filas.length > 0 || d.notas;
+
     return `
-        <section class="card card--info">
-            <h2>Tu obra social</h2>
-            <dl class="info-dl">
-                ${filas.map(([k, v]) => `<dt>${h(k)}</dt><dd>${h(v)}</dd>`).join('')}
-            </dl>
-            ${d.notas ? `<p class="muted" style="margin-top:0.6rem;">${h(d.notas)}</p>` : ''}
-        </section>
+        ${tieneAlgunDatoMedico ? `
+            <section class="card card--info">
+                <h2>Tu obra social</h2>
+                <dl class="info-dl">
+                    ${filas.map(([k, v]) => `<dt>${h(k)}</dt><dd>${h(v)}</dd>`).join('')}
+                </dl>
+                ${d.notas ? `<p class="muted" style="margin-top:0.6rem;">${h(d.notas)}</p>` : ''}
+            </section>
+        ` : ''}
 
         <div class="stack" style="margin-top:1rem;">
             ${d.medico_email ? `
@@ -404,9 +414,21 @@ function cuerpoConDatos(d) {
                 <a class="btn btn--xl btn--medico btn--full" href="tel:${h(d.medico_telefono)}">
                     📞 Llamar al consultorio
                 </a>` : ''}
-            <button class="btn btn--xl btn--medico btn--full" id="btn-turno">
-                📅 Pedir turno
-            </button>
+
+            ${accesosMed.map(a => {
+                const emoji = a.emoji || (a.tipo === 'llamar' ? '📞' : '🔗');
+                if (a.tipo === 'llamar') {
+                    return `
+                        <a class="btn btn--xl btn--medico btn--full" href="tel:${h(a.valor)}">
+                            ${emoji} ${h(a.titulo)}
+                        </a>`;
+                }
+                return `
+                    <button class="btn btn--xl btn--medico btn--full"
+                            data-acceso-link="${h(a.valor)}">
+                        ${emoji} ${h(a.titulo)}
+                    </button>`;
+            }).join('')}
         </div>
     `;
 }
@@ -572,14 +594,18 @@ export async function renderAccesosAdmin($app) {
         }
         $lst.innerHTML = `
             <ul class="accesos-admin-lista">
-                ${lista.map(a => `
+                ${lista.map(a => {
+                    const cat = a.categoria || 'general';
+                    const catLabel = cat === 'medico' ? '🩺 médico' : '🔗 general';
+                    return `
                     <li class="acceso-admin-row">
                         <span class="acceso-admin-row__emoji">${h(a.emoji || (a.tipo === 'llamar' ? '📞' : '🔗'))}</span>
                         <div class="acceso-admin-row__info">
                             <strong>${h(a.titulo)}</strong>
                             <small>
-                                ${a.tipo === 'llamar' ? '📞 llamar' : '🔗 abrir'} ·
-                                <code>${h(a.valor)}</code>
+                                <span class="pill pill--${cat === 'medico' ? 'admin' : 'editor'}">${catLabel}</span>
+                                · ${a.tipo === 'llamar' ? '📞 llamar' : '🔗 abrir'}
+                                · <code>${h(a.valor)}</code>
                             </small>
                         </div>
                         <div class="acceso-admin-row__acc">
@@ -587,7 +613,7 @@ export async function renderAccesosAdmin($app) {
                             <button class="btn btn--mini btn--danger" data-del="${h(a.id)}">Borrar</button>
                         </div>
                     </li>
-                `).join('')}
+                `;}).join('')}
             </ul>
         `;
         $lst.querySelectorAll('[data-edit]').forEach(b => b.addEventListener('click', () => {
@@ -620,7 +646,7 @@ export async function renderAccesosAdmin($app) {
 
 function abrirFormAcceso(circleId, acceso, onSaved) {
     const editando = !!acceso;
-    const v = acceso || { titulo: '', emoji: '', tipo: 'llamar', valor: '', orden: 0 };
+    const v = acceso || { titulo: '', emoji: '', tipo: 'llamar', valor: '', orden: 0, categoria: 'general' };
 
     const overlay = document.createElement('div');
     overlay.className = 'modal-overlay';
@@ -633,6 +659,17 @@ function abrirFormAcceso(circleId, acceso, onSaved) {
                     <span>Título (lo que ve tu familiar) *</span>
                     <input name="titulo" class="input-real" required value="${h(v.titulo)}"
                            placeholder="Pedir turno PAMI">
+                </label>
+                <label class="stack">
+                    <span>Categoría — ¿dónde aparece?</span>
+                    <select name="categoria" class="input-real">
+                        <option value="general" ${(v.categoria || 'general') === 'general' ? 'selected' : ''}>
+                            🔗 General — en la pantalla de inicio
+                        </option>
+                        <option value="medico" ${v.categoria === 'medico' ? 'selected' : ''}>
+                            🩺 Médico — en la pantalla Médico
+                        </option>
+                    </select>
                 </label>
                 <label class="stack">
                     <span>Emoji (opcional, ej: 🏥 🏦 💊 📅)</span>
@@ -707,11 +744,12 @@ function abrirFormAcceso(circleId, acceso, onSaved) {
         e.preventDefault();
         const fd = new FormData(e.target);
         const datos = {
-            titulo: String(fd.get('titulo') || '').trim(),
-            emoji:  String(fd.get('emoji') || '').trim() || null,
-            tipo:   ['llamar','link'].includes(String(fd.get('tipo'))) ? String(fd.get('tipo')) : 'llamar',
-            valor:  String(fd.get('valor') || '').trim(),
-            orden:  Number(fd.get('orden') || 0)
+            titulo:    String(fd.get('titulo') || '').trim(),
+            emoji:     String(fd.get('emoji') || '').trim() || null,
+            tipo:      ['llamar','link'].includes(String(fd.get('tipo'))) ? String(fd.get('tipo')) : 'llamar',
+            valor:     String(fd.get('valor') || '').trim(),
+            orden:     Number(fd.get('orden') || 0),
+            categoria: ['general','medico'].includes(String(fd.get('categoria'))) ? String(fd.get('categoria')) : 'general'
         };
         const btn = e.target.querySelector('button[type=submit]');
         const orig = btn.textContent;

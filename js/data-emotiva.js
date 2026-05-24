@@ -358,22 +358,26 @@ export async function listarAccesos(circleId) {
     return data || [];
 }
 
-export async function crearAcceso({ circleId, titulo, emoji, tipo, valor, orden }) {
+export async function crearAcceso({ circleId, titulo, emoji, tipo, valor, orden, categoria }) {
     const sb = await sbClient();
+    const cat = ['general','medico'].includes(categoria) ? categoria : 'general';
     const { error } = await sb.from('accesos').insert({
         circle_id: circleId,
         titulo, emoji: emoji || null, tipo, valor,
-        orden: Number(orden) || 0
+        orden: Number(orden) || 0,
+        categoria: cat
     });
     if (error) throw enriquecer('insert accesos', error);
 }
 
 export async function actualizarAcceso(id, datos) {
     const sb = await sbClient();
+    const cat = ['general','medico'].includes(datos.categoria) ? datos.categoria : 'general';
     const { error } = await sb.from('accesos').update({
         ...datos,
         emoji: datos.emoji || null,
-        orden: Number(datos.orden) || 0
+        orden: Number(datos.orden) || 0,
+        categoria: cat
     }).eq('id', id);
     if (error) throw enriquecer('update accesos', error);
 }

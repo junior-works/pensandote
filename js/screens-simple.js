@@ -68,7 +68,10 @@ export function renderInicio($app) {
         </nav>
 
         ${(() => {
-            const accesos = getAccesos();
+            // En el inicio sólo van los accesos categoría 'general'.
+            // Los 'medico' viven dentro de la pantalla Médico.
+            const accesos = getAccesos()
+                .filter(a => (a.categoria || 'general') === 'general');
             if (!accesos.length) return '';
             return `
                 <section class="accesos-rapidos">
