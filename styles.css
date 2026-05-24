@@ -1346,6 +1346,75 @@ body[data-mode="dashboard"] .hogar-pense { background: #fff8f3; }
 }
 .circulo-card__acciones { display: flex; gap: 0.4rem; flex-wrap: wrap; }
 
+/* ---- Banner "📲 Instalar Pensándote" (global, sticky arriba) ---- */
+#install-banner {
+    background: var(--accent-inicio);
+    border-bottom: 3px solid var(--line);
+    padding: 0.6rem 1rem;
+    position: sticky;
+    top: 0;
+    z-index: 90;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+}
+.install-banner__inner {
+    max-width: 760px;
+    margin: 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 0.7rem;
+}
+.install-banner__txt { flex: 1; display: flex; flex-direction: column; gap: 0.15rem; }
+.install-banner__txt strong { font-size: 1rem; line-height: 1.2; color: var(--ink); }
+.install-banner__txt small { color: var(--ink); opacity: 0.78; font-size: 0.85em; line-height: 1.3; }
+.install-banner__acc { display: flex; align-items: center; gap: 0.3rem; flex-shrink: 0; }
+.install-banner__btn {
+    background: #111;
+    color: #fff;
+    border: 2px solid #111;
+    border-radius: 8px;
+    min-height: 36px;
+    padding: 0.4em 1em;
+    font-weight: 700;
+    font-family: inherit;
+    font-size: 0.95rem;
+    cursor: pointer;
+    box-shadow: none;
+}
+.install-banner__btn:hover { background: #333; border-color: #333; }
+.install-banner__close {
+    width: 32px; height: 32px;
+    background: transparent;
+    border: none;
+    font-size: 1.4rem;
+    line-height: 1;
+    cursor: pointer;
+    color: var(--ink);
+    padding: 0;
+}
+
+/* Variante simple — cartel grande, prominente, cálido. */
+#install-banner.is-grande {
+    padding: 1rem 1rem 1.15rem;
+    border-bottom-width: var(--bw-s, 2px);
+}
+.is-grande .install-banner__txt strong { font-size: 1.25rem; }
+.is-grande .install-banner__txt small  { font-size: 1rem; }
+.is-grande .install-banner__btn {
+    min-height: 56px;
+    font-size: 1.1rem;
+    padding: 0.6em 1.5em;
+    border-radius: 14px;
+}
+.is-grande .install-banner__close {
+    width: 42px; height: 42px;
+    font-size: 1.7rem;
+}
+
+/* iOS no tiene botón Instalar; sólo hint textual. Damos un poco más
+   de aire a la descripción. */
+#install-banner.is-ios .install-banner__txt small { font-size: 0.9em; }
+.is-grande.is-ios .install-banner__txt small { font-size: 1rem; }
+
 /* ---- Vista previa "Ver como lo ve papá" (banner global) ---- */
 #preview-banner {
     background: #111;

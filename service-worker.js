@@ -18,7 +18,7 @@
  * correcto en ambos entornos.
  */
 
-const CACHE_NAME = 'pensandote-shell-v0.8.4';
+const CACHE_NAME = 'pensandote-shell-v0.8.5';
 
 const SHELL_FILES = [
     './',
@@ -40,6 +40,7 @@ const SHELL_FILES = [
     './js/screens-admin.js',
     './js/preview.js',
     './js/screens-papa.js',
+    './js/install-prompt.js',
     './js/data-emotiva.js',
     './js/audio.js',
     './js/auth.js',

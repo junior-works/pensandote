@@ -16,6 +16,7 @@ import { onRouteChange, refresh as refreshRouter, currentRoute } from './js/rout
 import { state, onStateChange, miembroActivo, setSesionReal, setModo } from './js/state.js';
 import { montarDevPanel } from './js/dev-panel.js';
 import { esEntornoDev } from './js/ui.js';
+import { montarInstall } from './js/install-prompt.js';
 
 import { configEsReal, usuarioActual, procesarCallback } from './js/auth.js';
 import { circulosDelUsuario, membresiaActiva } from './js/circles.js';
@@ -198,6 +199,8 @@ async function bootstrap() {
     // localhost. En producción (Pages, dominio) la app va directo al modo
     // real sin opciones de demo para no confundir al usuario.
     if (esEntornoDev()) montarDevPanel();
+    // Cartel "📲 Instalar Pensándote" cuando el browser lo permite.
+    montarInstall();
     onStateChange(() => refreshRouter());
 
     if (configEsReal()) {
