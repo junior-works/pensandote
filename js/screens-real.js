@@ -97,6 +97,16 @@ export function renderSinCirculos($app) {
     const _btnDemo = document.getElementById('btn-demo');
     if (_btnDemo) _btnDemo.addEventListener('click', () => { setModo('demo'); go('#/inicio'); });
     document.getElementById('btn-logout').addEventListener('click', async () => {
+        const ok = await modal({
+            titulo: '¿Cerrar sesión?',
+            cuerpo: `<p>Si cerrás sesión vas a tener que volver a entrar
+                      con tu mail (link mágico).</p>`,
+            acciones: [
+                { label: 'Cancelar' },
+                { label: 'Cerrar sesión', clase: 'btn--danger', value: 'ok' }
+            ]
+        });
+        if (ok !== 'ok') return;
         await cerrarSesion(); limpiarSesionReal(); renderLogin($app);
     });
     document.getElementById('form-crear').addEventListener('submit', async (e) => {
@@ -236,6 +246,16 @@ export function renderCuenta($app) {
     const _btnDemo = document.getElementById('btn-demo');
     if (_btnDemo) _btnDemo.addEventListener('click', () => { setModo('demo'); go('#/inicio'); });
     document.getElementById('btn-logout').addEventListener('click', async () => {
+        const ok = await modal({
+            titulo: '¿Cerrar sesión?',
+            cuerpo: `<p>Si cerrás sesión vas a tener que volver a entrar
+                      con tu mail (link mágico).</p>`,
+            acciones: [
+                { label: 'Cancelar' },
+                { label: 'Cerrar sesión', clase: 'btn--danger', value: 'ok' }
+            ]
+        });
+        if (ok !== 'ok') return;
         await cerrarSesion(); limpiarSesionReal(); renderLogin($app);
     });
     const btnHogar = document.getElementById('btn-hogar');

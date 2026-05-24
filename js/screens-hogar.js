@@ -57,7 +57,7 @@ export async function renderHogar($app) {
             </div>
             <div class="hogar-header__acciones">
                 ${esEntornoDev() ? `<button class="btn btn--mini" id="btn-demo">🎭 Demo</button>` : ''}
-                <button class="btn btn--mini btn--danger" id="btn-logout">Salir</button>
+                <button class="btn btn--mini btn--danger" id="btn-logout">Cerrar sesión</button>
             </div>
         </header>
 
@@ -169,6 +169,18 @@ export async function renderHogar($app) {
     const btnDemoHogar = $app.querySelector('#btn-demo');
     if (btnDemoHogar) btnDemoHogar.addEventListener('click', () => { setModo('demo'); go('#/inicio'); });
     $app.querySelector('#btn-logout').addEventListener('click', async () => {
+        const ok = await modal({
+            titulo: '¿Cerrar sesión?',
+            cuerpo: `<p>Si cerrás sesión vas a tener que volver a entrar
+                      con tu mail (link mágico).</p>
+                     <p class="muted">Tip: si sólo querés volver al panel,
+                      tocá "Cancelar".</p>`,
+            acciones: [
+                { label: 'Cancelar' },
+                { label: 'Cerrar sesión', clase: 'btn--danger', value: 'ok' }
+            ]
+        });
+        if (ok !== 'ok') return;
         await cerrarSesion(); limpiarSesionReal(); go('#/inicio');
     });
 
