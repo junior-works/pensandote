@@ -1026,3 +1026,194 @@ body[data-mode="simple"] .btn--mini { min-height: 44px; font-size: var(--fs-md);
     .dictado-fake__onda i { animation: none; height: 50% !important; }
     .loader-puntos span { animation: none; }
 }
+
+/* ===================================================================
+   SKIN DASHBOARD (moderno / prolijo / compacto)
+   -------------------------------------------------------------------
+   Sólo se aplica a la vista del hijo-acompañante. La vista simple del
+   adulto mayor mantiene el neobrutalismo cálido con botones gigantes.
+   Tokens dashboard:
+     borde fino (1px), sombra suave de elevación (no la dura desplazada),
+     bordes redondeados (8-12px), targets táctiles ~40-44px, jerarquía
+     tipográfica más ligera.
+   =================================================================== */
+body[data-mode="dashboard"] {
+    --line-d:      rgba(17, 17, 17, 0.16);
+    --line-d-soft: rgba(17, 17, 17, 0.08);
+    --sh-d:        0 1px 2px rgba(0, 0, 0, 0.06), 0 1px 1px rgba(0, 0, 0, 0.04);
+    --sh-d-hover:  0 3px 6px rgba(0, 0, 0, 0.09);
+}
+
+body[data-mode="dashboard"] {
+    font-size: 1rem;
+}
+
+body[data-mode="dashboard"] h1 { font-size: 1.7rem; letter-spacing: -0.01em; }
+body[data-mode="dashboard"] h2 { font-size: 1.15rem; margin-top: 1.4em; font-weight: 700; }
+body[data-mode="dashboard"] h3 { font-size: 1rem;    font-weight: 600; }
+
+/* ---- Botones modernos (override de la base neobrutalista) ---- */
+body[data-mode="dashboard"] .btn {
+    min-height: 40px;
+    padding: 0.5em 1em;
+    font-size: 0.95rem;
+    font-weight: 600;
+    border: 1px solid var(--line-d);
+    border-radius: 8px;
+    box-shadow: var(--sh-d);
+    background: #fff;
+    color: var(--ink);
+    transition: background 120ms ease, box-shadow 120ms ease, transform 120ms ease;
+}
+body[data-mode="dashboard"] .btn:hover {
+    transform: translateY(-1px);
+    box-shadow: var(--sh-d-hover);
+    background: var(--bg);
+}
+body[data-mode="dashboard"] .btn:active {
+    transform: translateY(0);
+    box-shadow: var(--sh-d);
+}
+body[data-mode="dashboard"] .btn:disabled { opacity: 0.55; cursor: not-allowed; }
+body[data-mode="dashboard"] .btn:disabled:hover { transform: none; box-shadow: var(--sh-d); }
+
+body[data-mode="dashboard"] .btn--xl   { min-height: 48px; font-size: 1rem;    padding: 0.7em 1.3em; }
+body[data-mode="dashboard"] .btn--mini { min-height: 30px; font-size: 0.85rem; padding: 0.25em 0.7em; }
+
+/* Variantes de color con fill suave en lugar de border duro */
+body[data-mode="dashboard"] .btn--inicio    { background: var(--accent-inicio);    border-color: var(--accent-inicio); color: #1a1208; }
+body[data-mode="dashboard"] .btn--familia   { background: var(--accent-familia);   border-color: var(--accent-familia); color: #fff; }
+body[data-mode="dashboard"] .btn--medico    { background: var(--accent-medico);    border-color: var(--accent-medico); color: #fff; }
+body[data-mode="dashboard"] .btn--pense     { background: var(--accent-pense);     border-color: var(--accent-pense); color: #fff; }
+body[data-mode="dashboard"] .btn--anecdota  { background: var(--accent-anecdota);  border-color: var(--accent-anecdota); color: #fff; }
+body[data-mode="dashboard"] .btn--emergencia{ background: var(--accent-emergencia); border-color: var(--accent-emergencia); color: #fff; }
+body[data-mode="dashboard"] .btn--danger    { background: #fff; color: var(--accent-anecdota); border-color: var(--line-d); }
+body[data-mode="dashboard"] .btn--inicio:hover  { background: #e8a64a; }
+body[data-mode="dashboard"] .btn--familia:hover { background: #5b8e8e; }
+
+/* ---- Cards modernas ---- */
+body[data-mode="dashboard"] .card {
+    background: #fff;
+    border: 1px solid var(--line-d);
+    border-radius: 12px;
+    box-shadow: var(--sh-d);
+    padding: 1.1em 1.25em;
+}
+
+/* ---- Pills modernos ---- */
+body[data-mode="dashboard"] .pill {
+    border: 1px solid var(--line-d);
+    background: var(--bg-soft);
+    color: var(--ink);
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 0.2em 0.7em;
+    border-radius: 999px;
+}
+body[data-mode="dashboard"] .pill--simple    { background: #fdf2cf; color: #6b4f1a; }
+body[data-mode="dashboard"] .pill--dashboard { background: #dcebeb; color: #2e5a5a; }
+body[data-mode="dashboard"] .pill--admin     { background: #ebe0f3; color: #5a3a7a; }
+body[data-mode="dashboard"] .pill--editor    { background: #ffe5d7; color: #7a3a1a; }
+body[data-mode="dashboard"] .pill--solo_ver  { background: #eee;    color: #555; }
+
+/* ---- Modal moderno (sombra más suave, borde fino) ---- */
+body[data-mode="dashboard"] .modal {
+    border: 1px solid var(--line-d);
+    border-radius: 14px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.15), 0 2px 6px rgba(0,0,0,0.08);
+    background: #fff;
+}
+body[data-mode="dashboard"] .modal__close {
+    border: 1px solid var(--line-d);
+    box-shadow: none;
+}
+
+/* ---- Inputs modernos ---- */
+body[data-mode="dashboard"] .input-real,
+body[data-mode="dashboard"] select,
+body[data-mode="dashboard"] input[type="text"],
+body[data-mode="dashboard"] input[type="email"],
+body[data-mode="dashboard"] input[type="date"],
+body[data-mode="dashboard"] textarea {
+    background: #fff;
+    border: 1px solid var(--line-d);
+    border-radius: 8px;
+    padding: 0.55em 0.75em;
+    font-size: 0.95rem;
+    transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+body[data-mode="dashboard"] .input-real:focus,
+body[data-mode="dashboard"] select:focus,
+body[data-mode="dashboard"] input:focus,
+body[data-mode="dashboard"] textarea:focus {
+    border-color: var(--ink);
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(17,17,17,0.08);
+}
+
+/* ---- Hogar header en dashboard ---- */
+body[data-mode="dashboard"] .hogar-header {
+    background: #fff;
+    border: 1px solid var(--line-d);
+    border-radius: 12px;
+    box-shadow: var(--sh-d);
+}
+body[data-mode="dashboard"] .hogar-header__nombre { font-size: 1.4rem; }
+
+/* "Pensé en vos" no necesita ser tan ploplón en dashboard */
+body[data-mode="dashboard"] .hogar-pense { background: #fff8f3; }
+
+/* ---- Componente nuevo: circulo-card (lista "Tus círculos") ---- */
+.circulos-lista { list-style: none; padding: 0; margin: 0; display: grid; gap: 0.75rem; }
+.circulo-card {
+    background: #fff;
+    border: 1px solid var(--line-d, rgba(17,17,17,0.16));
+    border-radius: 12px;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+    padding: 0.9em 1.1em;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+.circulo-card__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.6rem;
+}
+.circulo-card__nombre {
+    margin: 0;
+    font-size: 1.05rem;
+    font-weight: 700;
+    line-height: 1.25;
+    flex: 1;
+    min-width: 0;
+    overflow-wrap: break-word;
+}
+.circulo-card__chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    align-items: center;
+}
+.circulo-card__chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3em;
+    background: var(--bg-soft);
+    border: 1px solid rgba(17, 17, 17, 0.08);
+    border-radius: 6px;
+    padding: 0.18em 0.55em;
+    font-size: 0.82rem;
+    color: var(--ink-soft);
+    white-space: nowrap;
+}
+.circulo-card__chip strong { color: var(--ink); font-weight: 600; }
+.circulo-card__chip--activo {
+    background: #e2efd9;
+    border-color: rgba(60, 100, 30, 0.25);
+    color: #2c5f15;
+    font-weight: 600;
+}
+.circulo-card__acciones { display: flex; gap: 0.4rem; flex-wrap: wrap; }
+

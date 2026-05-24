@@ -64,6 +64,19 @@ export async function miembrosDelCirculo(circleId) {
 }
 
 /**
+ * Cambia el `parentesco` de la membresía propia (o de cualquier
+ * miembro, si auth.uid() es admin). RLS members_write_admin valida.
+ */
+export async function actualizarParentesco(userId, circleId, parentesco) {
+    const sb = await sbClient();
+    const { error } = await sb.from('circle_members')
+        .update({ parentesco })
+        .eq('user_id', userId)
+        .eq('circle_id', circleId);
+    if (error) throw error;
+}
+
+/**
  * Crea un círculo nuevo. El usuario logueado queda como owner +
  * miembro admin en modo dashboard.
  *

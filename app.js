@@ -92,6 +92,10 @@ function renderRouteDemo(ruta) {
 }
 
 function renderRouteReal(ruta) {
+    // Setear body[data-mode] según la membresía real, para que la CSS
+    // scopée los estilos (dashboard moderno / simple grande) correctamente.
+    document.body.dataset.mode = state.membresiaReal?.interface_mode || 'dashboard';
+
     // Caso especial: link de invitación. Cae acá venga o no con sesión.
     // Si el token llegó vacío (link mal copiado / parser comió el hash),
     // renderInvitacion muestra un error claro en vez de silenciosamente

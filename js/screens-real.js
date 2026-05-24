@@ -11,7 +11,8 @@ import { enviarMagicLink, cerrarSesion, sbClient } from './auth.js';
 import {
     circulosDelUsuario, membresiaActiva, crearCirculo,
     crearInvitacion, infoInvitacion,
-    aceptarInvitacionDashboard, aceptarInvitacionSimple
+    aceptarInvitacionDashboard, aceptarInvitacionSimple,
+    actualizarParentesco
 } from './circles.js';
 import { state, setSesionReal, setModo, limpiarSesionReal } from './state.js';
 import { go, refresh } from './router.js';
@@ -139,26 +140,34 @@ export function renderCuenta($app) {
             <p>Hola <strong>${h(u?.email || '')}</strong>.</p>
 
             <h2>Tus círculos</h2>
-            <ul class="contactos-lista">
-                ${state.circulosReal.map(c => `
-                    <li class="contacto-card">
-                        <div class="contacto-card__info">
-                            <strong>${h(c.nombre)}</strong>
-                            <small>
-                                ${c.id === state.circuloActivoIdReal && m
-                                    ? `parentesco: <strong>${h(m.parentesco)}</strong>
-                                       · modo: <strong>${h(m.interface_mode)}</strong>
-                                       · permiso: <strong>${h(m.permission_level)}</strong>`
-                                    : 'cargando…'}
-                            </small>
-                        </div>
-                        <div class="contacto-card__acciones">
-                            ${c.id === state.circuloActivoIdReal
-                                ? `<span class="pill pill--admin">activo</span>`
-                                : `<button class="btn btn--mini" data-activar="${h(c.id)}">Activar</button>`}
-                        </div>
-                    </li>
-                `).join('')}
+            <ul class="circulos-lista">
+                ${state.circulosReal.map(c => {
+                    const esActivo = c.id === state.circuloActivoIdReal;
+                    return `
+                        <li class="circulo-card">
+                            <div class="circulo-card__head">
+                                <h3 class="circulo-card__nombre">${h(c.nombre)}</h3>
+                                ${esActivo
+                                    ? `<span class="circulo-card__chip circulo-card__chip--activo">● Activo</span>`
+                                    : `<button class="btn btn--mini" data-activar="${h(c.id)}">Activar</button>`}
+                            </div>
+                            ${esActivo && m ? `
+                                <div class="circulo-card__chips">
+                                    <span class="circulo-card__chip">Parentesco: <strong>${h(m.parentesco)}</strong></span>
+                                    <span class="circulo-card__chip">Modo: <strong>${h(m.interface_mode)}</strong></span>
+                                    <span class="circulo-card__chip">Permiso: <strong>${h(m.permission_level)}</strong></span>
+                                </div>
+                                ${m.permission_level === 'admin' ? `
+                                    <div class="circulo-card__acciones">
+                                        <button class="btn btn--mini" id="btn-editar-parentesco">
+                                            ✏️ Editar mi parentesco
+                                        </button>
+                                    </div>
+                                ` : ''}
+                            ` : `<small class="muted">cargando…</small>`}
+                        </li>
+                    `;
+                }).join('')}
             </ul>
 
             ${puedeInvitar ? `
@@ -193,6 +202,35 @@ export function renderCuenta($app) {
     const btnInvitar = document.getElementById('btn-invitar');
     if (btnInvitar) {
         btnInvitar.addEventListener('click', () => abrirModalInvitacion(state.circuloActivoIdReal));
+    }
+
+    const btnEditPar = document.getElementById('btn-editar-parentesco');
+    if (btnEditPar) {
+        btnEditPar.addEventListener('click', async () => {
+            const actual = state.membresiaReal?.parentesco || '';
+            const nuevo = await pedirTexto({
+                titulo: 'Editar mi parentesco',
+                label:  'Cómo te ven los demás del círculo',
+                valor:  actual,
+                placeholder: 'Hijo, Hija, Cuidadora, Tutor…'
+            });
+            if (!nuevo || nuevo === actual) return;
+            try {
+                await actualizarParentesco(
+                    state.usuarioReal.id,
+                    state.circuloActivoIdReal,
+                    nuevo
+                );
+                await recargarSesion();
+                renderCuenta($app);
+            } catch (err) {
+                await modal({
+                    titulo: 'No pude guardar',
+                    cuerpo: `<pre>${h(err?.message || err)}</pre>`,
+                    acciones: [{ label: 'OK', clase: 'btn--inicio', value: 'ok' }]
+                });
+            }
+        });
     }
 
     const _btnDemo = document.getElementById('btn-demo');
@@ -623,6 +661,55 @@ function tratamientoCirculo(nombre) {
     if ((m = n.match(/^c[íi]rculo de (.+)$/i))) return `al círculo de ${m[1]}`;
     if ((m = n.match(/^c[íi]rculo (.+)$/i)))    return `al círculo ${m[1]}`;
     return 'al círculo familiar';
+}
+
+/**
+ * Modalcito para pedir un texto corto (ej: editar parentesco). Resuelve
+ * el string capturado o `null` si se canceló.
+ */
+function pedirTexto({ titulo, label, valor = '', placeholder = '' }) {
+    return new Promise((resolve) => {
+        const overlay = document.createElement('div');
+        overlay.className = 'modal-overlay';
+        overlay.innerHTML = `
+            <div class="modal" role="dialog" aria-modal="true">
+                <button class="modal__close" aria-label="Cerrar" data-close-x>×</button>
+                <h2 class="modal__titulo">${h(titulo)}</h2>
+                <form id="form-texto" class="stack" style="margin-top:0.5rem;">
+                    <label class="stack">
+                        <span>${h(label)}</span>
+                        <input id="input-texto" class="input-real" required
+                               value="${h(valor)}" placeholder="${h(placeholder)}">
+                    </label>
+                    <div class="modal__acciones modal__acciones--stack">
+                        <button type="submit" class="btn btn--inicio">Guardar</button>
+                        <button type="button" class="btn btn--mini" data-cancel>Cancelar</button>
+                    </div>
+                </form>
+            </div>
+        `;
+        document.body.appendChild(overlay);
+
+        let cerrado = false;
+        function cerrar(v) {
+            if (cerrado) return;
+            cerrado = true;
+            cleanupModalBackButton(overlay);
+            overlay.remove();
+            resolve(v);
+        }
+        installModalBackButton(overlay, () => cerrar(null));
+        overlay.querySelector('[data-close-x]').addEventListener('click', () => cerrar(null));
+        overlay.querySelector('[data-cancel]').addEventListener('click', () => cerrar(null));
+        overlay.addEventListener('click', e => { if (e.target === overlay) cerrar(null); });
+        overlay.querySelector('#form-texto').addEventListener('submit', (e) => {
+            e.preventDefault();
+            const v = overlay.querySelector('#input-texto').value.trim();
+            if (!v) return;
+            cerrar(v);
+        });
+        setTimeout(() => overlay.querySelector('#input-texto').focus(), 50);
+    });
 }
 
 /** Arma el texto completo del mensaje de invitación. */
