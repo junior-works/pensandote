@@ -15,7 +15,7 @@ import {
 } from './circles.js';
 import { state, setSesionReal, setModo, limpiarSesionReal } from './state.js';
 import { go, refresh } from './router.js';
-import { h, modal, esEntornoDev } from './ui.js';
+import { h, modal, esEntornoDev, installModalBackButton, cleanupModalBackButton } from './ui.js';
 
 const STORAGE_PENDING_INVITE = 'pensandote.pending_invite';
 
@@ -212,6 +212,7 @@ export async function abrirModalInvitacion(circleId) {
     overlay.className = 'modal-overlay';
     overlay.innerHTML = `
         <div class="modal" role="dialog" aria-modal="true">
+            <button class="modal__close" aria-label="Cerrar" data-close-x>×</button>
             <h2 class="modal__titulo">➕ Invitar a un familiar</h2>
             <p class="muted">El link que generes funciona por 7 días.</p>
 
@@ -265,8 +266,19 @@ export async function abrirModalInvitacion(circleId) {
         </div>
     `;
     document.body.appendChild(overlay);
-    overlay.querySelector('[data-cancel]').addEventListener('click', () => overlay.remove());
-    overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+
+    // Cierre robusto: X, click fuera, Cancelar, botón atrás del Android, ESC.
+    let cerrado = false;
+    function cerrar() {
+        if (cerrado) return;
+        cerrado = true;
+        cleanupModalBackButton(overlay);
+        overlay.remove();
+    }
+    installModalBackButton(overlay, cerrar);
+    overlay.querySelector('[data-close-x]').addEventListener('click', cerrar);
+    overlay.querySelector('[data-cancel]').addEventListener('click', cerrar);
+    overlay.addEventListener('click', e => { if (e.target === overlay) cerrar(); });
 
     overlay.querySelector('#form-invitar').addEventListener('submit', async (e) => {
         e.preventDefault();
@@ -291,6 +303,7 @@ export async function abrirModalInvitacion(circleId) {
         console.info('[invitar] valores form:', { parentesco, interfaceMode, permission, circleId });
         btn.disabled = true; btn.textContent = 'Generando…';
 
+        let exito = false;
         try {
             const token  = await crearInvitacion({ circleId, parentesco, interfaceMode, permission });
             const link   = `${location.origin}${location.pathname}#/invitacion/${token}`;
@@ -310,15 +323,20 @@ export async function abrirModalInvitacion(circleId) {
                     </a>
                     <button class="btn" id="btn-copiar">📋 Copiar mensaje</button>
                 </div>
+                <button class="btn btn--inicio btn--full" id="btn-listo-inv" style="margin-top:0.8rem;">
+                    ✓ Listo
+                </button>
             `;
             $r.querySelector('#btn-copiar').addEventListener('click', () => {
                 navigator.clipboard?.writeText(txt).catch(() => {});
             });
-            // Tapamos el form para no volver a generar sin querer.
-            e.target.querySelectorAll('input,select,button[type=submit]').forEach(el => el.disabled = true);
+            $r.querySelector('#btn-listo-inv').addEventListener('click', cerrar);
+
+            // Form ya usado: lockeamos inputs y submit, pero el cierre sigue activo.
+            e.target.querySelectorAll('input,select').forEach(el => el.disabled = true);
+            exito = true;
         } catch (err) {
             console.error('[invitar] catch', err, err?.detalle);
-            btn.disabled = false; btn.textContent = '➕ Generar link de invitación';
             const d = err?.detalle || {};
             await modal({
                 titulo: 'No pude generar el link',
@@ -336,6 +354,17 @@ export async function abrirModalInvitacion(circleId) {
                 `,
                 acciones: [{ label: 'OK', clase: 'btn--inicio', value: 'ok' }]
             });
+        } finally {
+            // SIEMPRE: si hubo éxito, dejamos el botón en estado "Link generado"
+            // (disabled) para evitar regenerar; si hubo error, lo volvemos a
+            // habilitar. Esto cubre el bug del botón colgado en "Generando…".
+            if (exito) {
+                btn.disabled = true;
+                btn.textContent = '✓ Link generado';
+            } else {
+                btn.disabled = false;
+                btn.textContent = '➕ Generar link de invitación';
+            }
         }
     });
 }

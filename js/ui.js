@@ -30,6 +30,7 @@ export function modal({ titulo, cuerpo, acciones = [], tono = 'neutral' }) {
         overlay.innerHTML = `
             <div class="modal modal--${tono}" role="dialog" aria-modal="true"
                  aria-labelledby="modal-title">
+                <button class="modal__close" aria-label="Cerrar" data-close-x>×</button>
                 <h2 id="modal-title" class="modal__titulo">${titulo}</h2>
                 <div class="modal__cuerpo">${cuerpo}</div>
                 <div class="modal__acciones">
@@ -41,7 +42,13 @@ export function modal({ titulo, cuerpo, acciones = [], tono = 'neutral' }) {
         `;
         document.body.appendChild(overlay);
 
+        installModalBackButton(overlay, () => close(null));
+
+        let closed = false;
         function close(value) {
+            if (closed) return;
+            closed = true;
+            cleanupModalBackButton(overlay);
             overlay.remove();
             resolve(value);
         }
@@ -51,10 +58,58 @@ export function modal({ titulo, cuerpo, acciones = [], tono = 'neutral' }) {
                 close(acc?.value ?? null);
             });
         });
+        overlay.querySelector('[data-close-x]')
+               .addEventListener('click', () => close(null));
         overlay.addEventListener('click', e => {
             if (e.target === overlay) close(null);
         });
     });
+}
+
+/**
+ * Hace que un overlay-modal sea cerrable con el botón atrás del Android
+ * (y con ESC). Inyecta un history state único, escucha popstate y, al
+ * cerrar, sincroniza el historial sin loopear.
+ *
+ * Soporta modales anidados: cada uno guarda su key y sólo se cierra si
+ * su key ya no está al tope del historial.
+ *
+ * Uso:
+ *   installModalBackButton(overlay, () => actualCloseFn());
+ *   // en el close: cleanupModalBackButton(overlay);
+ */
+export function installModalBackButton(overlay, onClose) {
+    const key = `m${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    overlay.__pensandoteModalKey = key;
+    history.pushState({ pensandote_modal: key }, '');
+
+    function onPop() {
+        if (history.state?.pensandote_modal !== key) {
+            // Mi entry ya no está arriba: el usuario tocó atrás.
+            overlay.__pensandoteSkipHistoryBack = true;
+            onClose();
+        }
+    }
+    function onKey(e) {
+        if (e.key === 'Escape') onClose();
+    }
+    overlay.__pensandoteOnPop = onPop;
+    overlay.__pensandoteOnKey = onKey;
+    window.addEventListener('popstate', onPop);
+    document.addEventListener('keydown', onKey);
+}
+
+export function cleanupModalBackButton(overlay) {
+    const onPop = overlay.__pensandoteOnPop;
+    const onKey = overlay.__pensandoteOnKey;
+    const key   = overlay.__pensandoteModalKey;
+    if (onPop) window.removeEventListener('popstate', onPop);
+    if (onKey) document.removeEventListener('keydown', onKey);
+    // Si todavía estamos en mi entry (cierre programático, no por atrás),
+    // hacemos history.back() para limpiar la entry y no dejar basura.
+    if (!overlay.__pensandoteSkipHistoryBack && history.state?.pensandote_modal === key) {
+        history.back();
+    }
 }
 
 /** Text-to-speech en español argentino. Silencioso si no está soportado. */
