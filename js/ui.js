@@ -146,6 +146,59 @@ export function esEntornoDev() {
 }
 
 /**
+ * Pinta un error enriquecido DENTRO de un nodo (no en modal): Etapa,
+ * Mensaje, Code, Status, Details, Hint y un <details> con el JSON
+ * crudo de todas las propiedades del error (incluso non-enumerable, que
+ * el SDK suele usar). Una sola captura del usuario alcanza para
+ * diagnosticar.
+ */
+export function renderErrorEstructurado($cont, err, { titulo = 'Algo falló' } = {}) {
+    const d = err?.detalle || {};
+    const message = d.message ?? err?.message ?? String(err);
+    const code    = d.code    ?? err?.code;
+    const status  = d.status  ?? err?.status ?? err?.statusCode;
+    const details = d.details ?? err?.details;
+    const hint    = d.hint    ?? err?.hint;
+    const etapa   = d.etapa;
+
+    // JSON con TODAS las props (enumerable + non-enumerable). El SDK de
+    // Supabase a veces ata data en getters no-enumerable que se pierden
+    // con JSON.stringify normal.
+    let json;
+    try {
+        const flat = { ...d };
+        if (err && typeof err === 'object') {
+            for (const k of Object.getOwnPropertyNames(err)) {
+                if (!(k in flat)) {
+                    try { flat[k] = err[k]; } catch (_) {}
+                }
+            }
+            flat._toString    = String(err);
+            flat._constructor = err.constructor?.name;
+        }
+        json = JSON.stringify(flat, null, 2);
+    } catch (_) {
+        json = String(err);
+    }
+
+    $cont.innerHTML = `
+        <div class="error-estructurado">
+            <p><strong>⚠ ${h(titulo)}</strong></p>
+            ${etapa   ? `<p><strong>Etapa:</strong> ${h(etapa)}</p>` : ''}
+            <p><strong>Mensaje:</strong> ${h(message)}</p>
+            ${code    !== undefined ? `<p><strong>Code:</strong> <code>${h(code)}</code></p>` : ''}
+            ${status  !== undefined ? `<p><strong>Status:</strong> ${h(status)}</p>` : ''}
+            ${details ? `<p><strong>Details:</strong> ${h(details)}</p>` : ''}
+            ${hint    ? `<p><strong>Hint:</strong> ${h(hint)}</p>` : ''}
+            <details style="margin-top:0.6rem;font-size:0.85em;" open>
+                <summary>JSON crudo (clickeá para pegar de la captura)</summary>
+                <pre style="white-space:pre-wrap;background:#fff;border:1px solid #ccc;padding:0.6em;border-radius:6px;font-size:0.85em;line-height:1.35;">${h(json)}</pre>
+            </details>
+        </div>
+    `;
+}
+
+/**
  * Empaqueta un error de Supabase/fetch en un Error con .detalle
  * estructurado, para mostrar en la UI sin perder code/status/details/hint.
  */

@@ -65,9 +65,18 @@ export async function ultimaFotoDia(circleId) {
         .select('*').eq('circle_id', circleId)
         .order('created_at', { ascending: false })
         .limit(1).maybeSingle();
-    if (error) throw error;
+    if (error) {
+        console.error('[ultimaFotoDia] select fotos_dia', error);
+        throw enriquecer('select fotos_dia', error);
+    }
     if (!data) return null;
-    const url = await firmarUrl('fotos', data.storage_path);
+    let url;
+    try {
+        url = await firmarUrl('fotos', data.storage_path);
+    } catch (e) {
+        console.error('[ultimaFotoDia] createSignedUrl', e);
+        throw enriquecer('createSignedUrl fotos', e);
+    }
     return { ...data, url };
 }
 

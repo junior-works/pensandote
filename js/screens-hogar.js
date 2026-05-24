@@ -13,7 +13,7 @@ import { state, setModo, limpiarSesionReal } from './state.js';
 import { go } from './router.js';
 import { cerrarSesion } from './auth.js';
 import { miembrosDelCirculo } from './circles.js';
-import { h, modal, esEntornoDev } from './ui.js';
+import { h, modal, esEntornoDev, renderErrorEstructurado } from './ui.js';
 import { nuevaGrabacion } from './audio.js';
 import { abrirModalInvitacion } from './screens-real.js';
 import {
@@ -340,7 +340,8 @@ async function cargarFoto(c, $cont) {
             </figure>
         `;
     } catch (err) {
-        $cont.innerHTML = `<p class="muted">Error: ${h(err.message || err)}</p>`;
+        console.error('[cargarFoto]', err, err?.detalle);
+        renderErrorEstructurado($cont, err, { titulo: 'No pude cargar la foto del día' });
     }
 }
 
@@ -357,26 +358,9 @@ async function onSubirFoto(c, ev, $app) {
         cargarFoto(c, $cont);
     } catch (err) {
         console.error('[onSubirFoto]', err, err?.detalle);
-        const d = err?.detalle || {};
-        $cont.innerHTML = `
-            <p class="muted">No pude subir la foto.</p>
-            <details style="font-size:0.85em;">
-                <summary>Detalle técnico</summary>
-                <pre style="white-space:pre-wrap;background:#fff;border:2px solid #111;padding:0.5em;border-radius:6px;">${h(JSON.stringify(d, null, 2))}</pre>
-            </details>
-        `;
-        await modal({
-            titulo: 'No pude subir la foto',
-            cuerpo: `
-                <p><strong>Etapa:</strong> ${h(d.etapa || '?')}</p>
-                <p><strong>Mensaje:</strong> ${h(d.message || err?.message || err)}</p>
-                ${d.code     ? `<p><strong>Code:</strong> <code>${h(d.code)}</code></p>` : ''}
-                ${d.status   ? `<p><strong>Status:</strong> ${h(d.status)}</p>` : ''}
-                ${d.details  ? `<p><strong>Details:</strong> ${h(d.details)}</p>` : ''}
-                ${d.hint     ? `<p><strong>Hint:</strong> ${h(d.hint)}</p>` : ''}
-            `,
-            acciones: [{ label: 'OK', clase: 'btn--inicio', value: 'ok' }]
-        });
+        renderErrorEstructurado($cont, err, { titulo: 'No pude subir la foto' });
+        // El detalle ya queda visible inline; abrir el modal igualmente
+        // sería ruido. Si Charly cierra y mira la card, ya ve TODO.
     }
 }
 
