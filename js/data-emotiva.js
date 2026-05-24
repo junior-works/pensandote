@@ -295,6 +295,67 @@ export async function urlInteraccionAudio(storagePath) {
 // ---------------------------------------------------------------------
 // helpers
 // ---------------------------------------------------------------------
+// =====================================================================
+// Contactos del círculo (tabla public.contacts)
+// =====================================================================
+export async function listarContactos(circleId) {
+    const sb = await sbClient();
+    const { data, error } = await sb.from('contacts')
+        .select('*').eq('circle_id', circleId)
+        .order('es_emergencia', { ascending: true })
+        .order('orden', { ascending: true })
+        .order('nombre', { ascending: true });
+    if (error) throw enriquecer('select contacts', error);
+    return data || [];
+}
+
+export async function crearContacto({ circleId, nombre, parentesco, telefono, foto_url, es_emergencia, orden }) {
+    const sb = await sbClient();
+    const { error } = await sb.from('contacts').insert({
+        circle_id:     circleId,
+        nombre, parentesco, telefono, foto_url,
+        es_emergencia: !!es_emergencia,
+        orden:         Number(orden) || 0
+    });
+    if (error) throw enriquecer('insert contacts', error);
+}
+
+export async function actualizarContacto(id, datos) {
+    const sb = await sbClient();
+    const { error } = await sb.from('contacts').update({
+        ...datos,
+        es_emergencia: !!datos.es_emergencia,
+        orden:         Number(datos.orden) || 0
+    }).eq('id', id);
+    if (error) throw enriquecer('update contacts', error);
+}
+
+export async function borrarContacto(id) {
+    const sb = await sbClient();
+    const { error } = await sb.from('contacts').delete().eq('id', id);
+    if (error) throw enriquecer('delete contacts', error);
+}
+
+// =====================================================================
+// Datos médicos del círculo (tabla public.medical_info, 1:1)
+// =====================================================================
+export async function leerDatosMedicos(circleId) {
+    const sb = await sbClient();
+    const { data, error } = await sb.from('medical_info')
+        .select('*').eq('circle_id', circleId).maybeSingle();
+    if (error) throw enriquecer('select medical_info', error);
+    return data; // null si no existe
+}
+
+export async function guardarDatosMedicos(circleId, datos) {
+    const sb = await sbClient();
+    const { error } = await sb.from('medical_info').upsert({
+        circle_id: circleId,
+        ...datos
+    }, { onConflict: 'circle_id' });
+    if (error) throw enriquecer('upsert medical_info', error);
+}
+
 async function firmarUrl(bucket, path, expirySec = 3600) {
     const sb = await sbClient();
     const { data, error } = await sb.storage.from(bucket).createSignedUrl(path, expirySec);

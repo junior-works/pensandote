@@ -25,6 +25,7 @@ import * as Dashboard from './js/screens-dashboard.js';
 import * as V2        from './js/screens-v2.js';
 import * as Real      from './js/screens-real.js';
 import * as Hogar     from './js/screens-hogar.js';
+import * as Admin     from './js/screens-admin.js';
 
 const $app = document.getElementById('app');
 
@@ -115,8 +116,11 @@ function renderRouteReal(ruta) {
     if (ruta.name === 'cuenta') {
         return Real.renderCuenta($app);
     }
-    // Default con círculo activo: el hogar emotivo.
+    // Pantallas admin del círculo (requieren círculo activo).
     if (state.circuloActivoIdReal) {
+        if (ruta.name === 'contactos')     return Admin.renderContactosAdmin($app);
+        if (ruta.name === 'datos-medicos') return Admin.renderMedicoAdmin($app);
+        if (ruta.name === 'medico')        return Admin.renderMedicoSimpleReal($app);
         return Hogar.renderHogar($app);
     }
     return Real.renderCuenta($app);

@@ -71,7 +71,14 @@ export async function renderHogar($app) {
                 en un click.
             </p>
         </section>
-        ` : ''}
+        ` : `
+        <section class="card stack center">
+            <h2>🩺 Médico</h2>
+            <button class="btn btn--xl btn--medico btn--full" id="btn-ir-medico">
+                Ir a la pantalla del médico
+            </button>
+        </section>
+        `}
 
         <section class="card stack hogar-pense">
             <h2>💛 Pensé en vos</h2>
@@ -169,20 +176,12 @@ export async function renderHogar($app) {
             () => abrirModalInvitacion(c.id));
         $app.querySelector('#btn-miembros').addEventListener('click',
             () => go('#/cuenta'));
-        $app.querySelector('#btn-contactos').addEventListener('click', () => modal({
-            titulo: '📞 Contactos del círculo',
-            cuerpo: `<p>Esta sección todavía no está conectada en el modo real.
-                     Próximamente: CRUD de contactos (familia + emergencias)
-                     contra <code>public.contacts</code>.</p>`,
-            acciones: [{ label: 'Entendido', clase: 'btn--inicio', value: 'ok' }]
-        }));
-        $app.querySelector('#btn-medico').addEventListener('click', () => modal({
-            titulo: '🩺 Datos médicos',
-            cuerpo: `<p>Esta sección todavía no está conectada en el modo real.
-                     Próximamente: edición de <code>public.medical_info</code>
-                     (obra social, número de afiliado, médico, notas).</p>`,
-            acciones: [{ label: 'Entendido', clase: 'btn--inicio', value: 'ok' }]
-        }));
+        $app.querySelector('#btn-contactos').addEventListener('click', () => go('#/contactos'));
+        $app.querySelector('#btn-medico').addEventListener('click',    () => go('#/datos-medicos'));
+    } else {
+        // Simple: link a la pantalla Médico con dictado por voz.
+        const btnIrMed = $app.querySelector('#btn-ir-medico');
+        if (btnIrMed) btnIrMed.addEventListener('click', () => go('#/medico'));
     }
 
     if (puedeEscribir) {
