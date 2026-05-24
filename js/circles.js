@@ -21,10 +21,28 @@ export async function circulosDelUsuario(userId) {
     const sb = await sbClient();
     const { data, error } = await sb
         .from('circle_members')
-        .select('circle:circles ( id, nombre, owner_id, ntfy_topic )')
+        .select('circle:circles ( id, nombre, owner_id, ntfy_topic, legado_desbloqueado_at, legado_desbloqueado_por )')
         .eq('user_id', userId);
     if (error) throw error;
     return (data || []).map(r => r.circle).filter(Boolean);
+}
+
+/**
+ * RPC: abre el legado del círculo. Sólo admins (la RPC valida).
+ * Después, las historias con es_legado=true pasan a ser visibles
+ * para los oyentes según su visibilidad normal.
+ */
+export async function desbloquearLegado(circleId) {
+    const sb = await sbClient();
+    const { error } = await sb.rpc('desbloquear_legado', { p_circle: circleId });
+    if (error) throw enriquecer('rpc desbloquear_legado', error);
+}
+
+/** RPC: vuelve a bloquear el legado (reversible). Sólo admins. */
+export async function bloquearLegado(circleId) {
+    const sb = await sbClient();
+    const { error } = await sb.rpc('bloquear_legado', { p_circle: circleId });
+    if (error) throw enriquecer('rpc bloquear_legado', error);
 }
 
 /**

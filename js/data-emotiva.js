@@ -202,7 +202,8 @@ export async function urlHistoriaAudio(storagePath) {
  * visibilidad es 'especificas' crea las filas en historia_visibilidad.
  */
 export async function grabarHistoria({
-    circleId, narradorId, audioBlob, durSeg, visibilidad, personasEspecificas = [], titulo = null
+    circleId, narradorId, audioBlob, durSeg, visibilidad,
+    personasEspecificas = [], titulo = null, esLegado = false
 }) {
     const sb = await sbClient();
     const id  = crypto.randomUUID();
@@ -220,7 +221,8 @@ export async function grabarHistoria({
     const { error: e2 } = await sb.from('historias').insert({
         id, circle_id: circleId, narrador_id: narradorId,
         storage_path: path, duracion_seg: durSeg,
-        titulo, visibilidad
+        titulo, visibilidad,
+        es_legado: !!esLegado
     });
     if (e2) {
         // Insert falló después del upload OK → queda un objeto huérfano
@@ -240,6 +242,25 @@ export async function grabarHistoria({
         if (e3) throw e3;
     }
     return id;
+}
+
+/**
+ * Borra una historia (narrador only — la RLS lo enforcea). También
+ * intenta borrar el audio del bucket best-effort, y por cascade caen
+ * historia_visibilidad e historia_interacciones (FK on delete cascade).
+ */
+export async function borrarHistoria(id) {
+    const sb = await sbClient();
+    const { data: row, error: e0 } = await sb.from('historias')
+        .select('storage_path').eq('id', id).maybeSingle();
+    if (e0) throw enriquecer('select historia (para borrar)', e0);
+
+    const { error: e1 } = await sb.from('historias').delete().eq('id', id);
+    if (e1) throw enriquecer('delete historia', e1);
+
+    if (row?.storage_path) {
+        sb.storage.from('historias').remove([row.storage_path]).catch(() => {});
+    }
 }
 
 export async function visibilidadDetalle(historiaId) {
