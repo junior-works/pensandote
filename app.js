@@ -12,7 +12,7 @@
  * mover el estado, y el router re-renderiza.
  */
 
-import { onRouteChange, refresh as refreshRouter } from './js/router.js';
+import { onRouteChange, refresh as refreshRouter, currentRoute } from './js/router.js';
 import { state, onStateChange, miembroActivo, setSesionReal, setModo } from './js/state.js';
 import { montarDevPanel } from './js/dev-panel.js';
 
@@ -89,13 +89,16 @@ function renderRouteDemo(ruta) {
     }
 }
 
-function renderRouteReal(/* ruta */) {
-    // Modo real ignora la ruta hash: pasa secuencialmente por
-    //   login → sin círculos → cuenta. Los botones de cada pantalla
-    //   manejan transiciones internas.
+function renderRouteReal(ruta) {
+    // Caso especial: link de invitación. Cae acá venga o no con sesión.
+    if (ruta.name === 'invitacion' && ruta.params[0]) {
+        return Real.renderInvitacion($app, ruta.params[0]);
+    }
+    // Sin sesión: login.
     if (!state.usuarioReal) {
         return Real.renderLogin($app);
     }
+    // Sin círculos: pantalla "creá uno".
     if (!state.circulosReal.length) {
         return Real.renderSinCirculos($app);
     }
@@ -119,10 +122,20 @@ async function bootstrap() {
         }
 
         const usr = await usuarioActual();
-        if (usr) {
-            // Hay sesión: arrancamos en modo real y precargamos círculos.
+        const ruta = currentRoute();
+        const tieneInvitacionEnUrl = ruta.name === 'invitacion' && !!ruta.params[0];
+
+        if (usr || tieneInvitacionEnUrl) {
+            // Hay sesión, o vino con link de invitación: modo real.
             setModo('real');
+        }
+
+        if (usr) {
             try {
+                // Si quedó un token de invitación pendiente del magic-link
+                // round trip (caso B), procesarlo antes de cargar círculos.
+                await Real.procesarInvitacionPendiente();
+
                 const circulos = await circulosDelUsuario(usr.id);
                 let membresia = null;
                 let circuloActivoId = null;
@@ -138,8 +151,6 @@ async function bootstrap() {
                 });
             } catch (err) {
                 console.error('[bootstrap circles]', err);
-                // Falla suave: dejamos al usuario en la pantalla de cuenta
-                // con su sesión, sin círculos.
                 setSesionReal({ usuario: usr, circulos: [], circuloActivoId: null, membresia: null });
             }
         }

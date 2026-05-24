@@ -876,6 +876,16 @@ body[data-mode="simple"] .btn--mini { min-height: 44px; font-size: var(--fs-md);
     font-size: 0.7rem;
 }
 .dev-panel__shortcuts { display: flex; gap: 0.3rem; flex-wrap: wrap; }
+/* Inputs/selects de los forms del modo real */
+.input-real {
+    padding: 0.55em 0.7em;
+    background: #fff;
+    border: 2px solid var(--line);
+    border-radius: var(--r-sm);
+    font-size: 1.05rem;
+    width: 100%;
+}
+
 .dev-panel__real {
     background: #fff;
     border: 2px solid var(--line);
