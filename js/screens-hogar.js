@@ -107,13 +107,23 @@ export async function renderHogar($app) {
                 <details>
                     <summary class="btn btn--mini">➕ Agregar fecha</summary>
                     <form id="form-fecha" class="stack" style="margin-top:0.6rem;">
-                        <input name="titulo" class="input-real" required placeholder="Cumple de Sofi">
-                        <input name="fecha" class="input-real" required type="date">
-                        <select name="tipo" class="input-real">
-                            <option value="cumple">🎂 Cumpleaños</option>
-                            <option value="reencuentro">✈️ Reencuentro</option>
-                            <option value="otro">📌 Otro</option>
-                        </select>
+                        <label class="stack">
+                            <span>¿Qué tipo de fecha?</span>
+                            <select name="tipo" id="fecha-tipo" class="input-real">
+                                <option value="cumple">🎂 Cumpleaños</option>
+                                <option value="reencuentro">✈️ Reencuentro</option>
+                                <option value="otro">📌 Otro</option>
+                            </select>
+                        </label>
+                        <label class="stack">
+                            <span id="fecha-titulo-label">¿De quién es el cumpleaños?</span>
+                            <input name="titulo" id="fecha-titulo" class="input-real" required
+                                   placeholder="Cumple de Sofi">
+                        </label>
+                        <label class="stack">
+                            <span>¿Cuándo?</span>
+                            <input name="fecha" class="input-real" required type="date">
+                        </label>
                         <button class="btn btn--inicio" type="submit">Guardar</button>
                     </form>
                 </details>
@@ -178,6 +188,28 @@ export async function renderHogar($app) {
     if (puedeEscribir) {
         $app.querySelector('#foto-input').addEventListener('change', (e) => onSubirFoto(c, e, $app));
         $app.querySelector('#form-fecha').addEventListener('submit', (e) => onCrearFecha(c, e, $app));
+
+        // Prompt dinámico del campo "título" según el tipo elegido.
+        // Importante para 'otro': si no aclara, queda como "📌 Otro" sin
+        // info; el placeholder lo invita a escribir DE QUÉ se trata.
+        const $tipo  = $app.querySelector('#fecha-tipo');
+        const $lbl   = $app.querySelector('#fecha-titulo-label');
+        const $tit   = $app.querySelector('#fecha-titulo');
+        const PROMPTS = {
+            cumple:      { label: '¿De quién es el cumpleaños?',
+                           placeholder: 'Cumple de Sofi' },
+            reencuentro: { label: '¿Quién se reencuentra (o a dónde)?',
+                           placeholder: 'Charly vuelve de Mallorca' },
+            otro:        { label: '¿De qué se trata?',
+                           placeholder: 'Graduación de Sofi, aniversario de bodas…' }
+        };
+        function actualizarPrompt() {
+            const p = PROMPTS[$tipo.value] || PROMPTS.otro;
+            $lbl.textContent = p.label;
+            $tit.placeholder = p.placeholder;
+        }
+        $tipo.addEventListener('change', actualizarPrompt);
+        actualizarPrompt();
     }
 
     cargarFoto(c, $app.querySelector('#sec-foto'));
