@@ -222,7 +222,17 @@ export async function grabarHistoria({
         storage_path: path, duracion_seg: durSeg,
         titulo, visibilidad
     });
-    if (e2) throw e2;
+    if (e2) {
+        // Insert falló después del upload OK → queda un objeto huérfano
+        // en el bucket. Intentamos limpiarlo best-effort para no
+        // acumular basura en Storage. Ignoramos errores del remove
+        // (puede que la RLS de storage no nos deje si la insert también
+        // falló por RLS — en ese caso el objeto queda hasta que el
+        // narrador lo borre desde otra grabación o el admin haga
+        // limpieza manual).
+        sb.storage.from('historias').remove([path]).catch(() => {});
+        throw e2;
+    }
 
     if (visibilidad === 'especificas' && personasEspecificas.length) {
         const rows = personasEspecificas.map(uid => ({ historia_id: id, user_id: uid }));
