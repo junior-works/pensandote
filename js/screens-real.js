@@ -292,27 +292,27 @@ export async function abrirModalInvitacion(circleId) {
         btn.disabled = true; btn.textContent = 'Generando…';
 
         try {
-            const token = await crearInvitacion({ circleId, parentesco, interfaceMode, permission });
-            const link  = `${location.origin}${location.pathname}#/invitacion/${token}`;
-            const txt   = (interfaceMode === 'simple')
-                ? `Hola ${parentesco}! Te conecté a Pensándote. Tocá este link y entrás directo:\n${link}`
-                : `Hola! Te invité a Pensándote como ${parentesco}. Entrá con tu mail desde acá:\n${link}`;
-            const wa    = `https://wa.me/?text=${encodeURIComponent(txt)}`;
+            const token  = await crearInvitacion({ circleId, parentesco, interfaceMode, permission });
+            const link   = `${location.origin}${location.pathname}#/invitacion/${token}`;
+            const nombreCirculo = state.circulosReal.find(c => c.id === circleId)?.nombre || '';
+            const txt    = mensajeInvitacion({ interfaceMode, parentesco, link, nombreCirculo });
+            const wa     = `https://wa.me/?text=${encodeURIComponent(txt)}`;
 
             const $r = overlay.querySelector('#invitar-resultado');
             $r.style.display = 'block';
             $r.innerHTML = `
                 <p><strong>✓ Link generado.</strong> Vence en 7 días.</p>
-                <pre class="link-invitacion">${h(link)}</pre>
+                <p class="muted" style="font-size:0.9em;">Vista previa del mensaje:</p>
+                <pre class="link-invitacion" style="white-space:pre-wrap;">${h(txt)}</pre>
                 <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
                     <a class="btn btn--familia" href="${wa}" target="_blank" rel="noopener">
                         💬 Compartir por WhatsApp
                     </a>
-                    <button class="btn" id="btn-copiar">📋 Copiar link</button>
+                    <button class="btn" id="btn-copiar">📋 Copiar mensaje</button>
                 </div>
             `;
             $r.querySelector('#btn-copiar').addEventListener('click', () => {
-                navigator.clipboard?.writeText(link).catch(() => {});
+                navigator.clipboard?.writeText(txt).catch(() => {});
             });
             // Tapamos el form para no volver a generar sin querer.
             e.target.querySelectorAll('input,select,button[type=submit]').forEach(el => el.disabled = true);
@@ -536,4 +536,49 @@ export async function procesarInvitacionPendiente() {
     } finally {
         localStorage.removeItem(STORAGE_PENDING_INVITE);
     }
+}
+
+// =====================================================================
+// Mensaje de WhatsApp para la invitación (aprobado por Charly)
+// =====================================================================
+
+/**
+ * Saludo para invitaciones modo simple:
+ *   parentesco "Papá"/"Papi"/"Pap…" → "Hola, pa"
+ *   parentesco "Mamá"/"Mami"/"Mam…" → "Hola, ma"
+ *   cualquier otro (tutor, cuidador, abuelo, etc.) → "Hola"
+ */
+function saludoSimple(parentesco) {
+    const p = (parentesco || '').toLowerCase().trim();
+    if (/^pap/.test(p)) return 'Hola, pa';
+    if (/^mam/.test(p)) return 'Hola, ma';
+    return 'Hola';
+}
+
+/**
+ * Tratamiento del círculo para invitaciones modo dashboard.
+ *  - "Círculo de Carlitos"  → "al círculo de Carlitos"
+ *  - "Círculo Acevedo"      → "al círculo Acevedo"
+ *  - cualquier otro (o vacío) → "al círculo familiar"
+ *
+ * Mantenemos la regla simple a propósito: si el nombre del círculo no
+ * tiene la forma "Círculo …", caer al fallback es más natural que armar
+ * frases tipo "al círculo Familia Acevedo".
+ */
+function tratamientoCirculo(nombre) {
+    const n = (nombre || '').trim();
+    let m;
+    if ((m = n.match(/^c[íi]rculo de (.+)$/i))) return `al círculo de ${m[1]}`;
+    if ((m = n.match(/^c[íi]rculo (.+)$/i)))    return `al círculo ${m[1]}`;
+    return 'al círculo familiar';
+}
+
+/** Arma el texto completo del mensaje de invitación. */
+function mensajeInvitacion({ interfaceMode, parentesco, link, nombreCirculo }) {
+    if (interfaceMode === 'simple') {
+        const saludo = saludoSimple(parentesco);
+        return `${saludo} 💛 Te armé algo para que estemos más cerca todos los días, aunque estemos lejos. Es muy fácil: tocá este link y entrás directo, sin contraseñas ni vueltas. ${link}`;
+    }
+    // dashboard
+    return `Te sumo ${tratamientoCirculo(nombreCirculo)} en Pensándote 💛 Es una app para acompañarlo entre todos y estar más cerca. Entrá desde acá con tu mail: ${link}`;
 }
