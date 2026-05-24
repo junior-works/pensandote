@@ -893,6 +893,51 @@ body[data-mode="simple"] .btn--mini { min-height: 44px; font-size: var(--fs-md);
 .hogar-header__acciones { display: flex; gap: 0.4rem; flex-shrink: 0; }
 .hogar-pense { background: #ffe5d7; }
 
+/* Acciones del círculo (dashboard) */
+.hogar-acciones__grid {
+    display: grid; gap: 0.5rem;
+    grid-template-columns: 1fr;
+}
+@media (min-width: 520px) {
+    .hogar-acciones__grid {
+        grid-template-columns: 1fr 1fr;
+    }
+    .hogar-acciones__grid #btn-invitar-hogar { grid-column: 1 / -1; }
+}
+
+/* Pensé en vos — recibidos in-app */
+.pense-badge {
+    background: var(--accent-inicio);
+    border: 2px solid var(--line);
+    border-radius: var(--r-sm);
+    padding: 0.4em 0.7em;
+    font-weight: 700;
+    margin-bottom: 0.6rem;
+}
+.pense-lista {
+    list-style: none; padding: 0; margin: 0 0 1rem;
+    display: grid; gap: 0.4rem;
+}
+.pense-item {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    align-items: center; gap: 0.6rem;
+    background: #fff;
+    border: 2px solid var(--line);
+    border-radius: var(--r-sm);
+    padding: 0.5em 0.7em;
+}
+.pense-item.is-nuevo { background: #fff3cf; }
+.pense-item__emoji { font-size: 1.4rem; }
+.pense-item strong { display: block; line-height: 1.2; }
+.pense-item small { color: var(--ink-soft); }
+.pense-item__dot {
+    width: 12px; height: 12px;
+    background: var(--accent-pense);
+    border: 2px solid var(--line);
+    border-radius: 50%;
+}
+
 /* Inputs/selects de los forms del modo real */
 .input-real {
     padding: 0.55em 0.7em;

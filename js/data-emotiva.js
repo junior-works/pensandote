@@ -32,6 +32,16 @@ export async function ultimosPensamientos(circleId, limit = 10) {
     return data || [];
 }
 
+/** Pensamientos recibidos por el usuario (para_user_id = userId). */
+export async function pensamientosRecibidos(circleId, userId, limit = 15) {
+    const sb = await sbClient();
+    const { data, error } = await sb.from('pensamientos')
+        .select('*').eq('circle_id', circleId).eq('para_user_id', userId)
+        .order('created_at', { ascending: false }).limit(limit);
+    if (error) throw error;
+    return data || [];
+}
+
 /** Publica en ntfy.sh (topic público, sin auth). Best-effort. */
 export async function publicarNtfy(topic, mensaje) {
     try {

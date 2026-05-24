@@ -207,7 +207,7 @@ export function renderCuenta($app) {
 // =====================================================================
 // MODAL: GENERAR INVITACIÓN
 // =====================================================================
-async function abrirModalInvitacion(circleId) {
+export async function abrirModalInvitacion(circleId) {
     const overlay = document.createElement('div');
     overlay.className = 'modal-overlay';
     overlay.innerHTML = `

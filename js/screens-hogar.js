@@ -1,18 +1,12 @@
 /**
  * Pensándote — pantalla "Hogar del círculo" (modo real).
  *
- * Versión funcional de la capa emotiva contra Supabase real. Es el
- * destino post-login cuando hay un círculo activo. Reúne en una sola
- * pantalla los 5 ladrillos:
- *   - Pensé en vos (+ ntfy.sh).
- *   - Última foto del día (+ upload para admin/editor).
- *   - Calendario afectivo (lista con countdowns + CRUD admin/editor).
- *   - Última vez que hablamos (snapshot por miembro).
- *   - Historias / legado (grabación real con MediaRecorder, reproductor,
- *     favorita y repreguntar).
- *
- * La maqueta visual del modo demo (screens-simple/dashboard) sigue intacta.
- * La integración estética profunda llega cuando estabilicemos este flujo.
+ * Reúne los ladrillos de la capa emotiva contra Supabase:
+ *   - Pensé en vos (in-app, persona a persona, sin ntfy).
+ *   - Foto del día + Calendario afectivo + Última vez que hablamos.
+ *   - Historias / legado (audio real + favorita + repreguntar).
+ * En dashboard, además, un bloque "Acciones del círculo" con
+ * accesos visibles a Invitar / Miembros / Contactos / Datos médicos.
  */
 
 import { state, setModo, limpiarSesionReal } from './state.js';
@@ -21,8 +15,9 @@ import { cerrarSesion } from './auth.js';
 import { miembrosDelCirculo } from './circles.js';
 import { h, modal, esEntornoDev } from './ui.js';
 import { nuevaGrabacion } from './audio.js';
+import { abrirModalInvitacion } from './screens-real.js';
 import {
-    enviarPensamiento, publicarNtfy,
+    enviarPensamiento, pensamientosRecibidos,
     ultimaFotoDia, subirFotoDia,
     listarFechas, crearFecha, borrarFecha,
     listarContactosUltimo, marcarContacto,
@@ -30,6 +25,10 @@ import {
     listarInteracciones, toggleFavorita, repreguntarTexto, repreguntarAudio,
     urlInteraccionAudio
 } from './data-emotiva.js';
+
+// LocalStorage key para marcar pensamientos recibidos como "vistos".
+const LS_LAST_SEEN = (circleId, userId) =>
+    `pensandote.pensamientos.lastSeen.${circleId}.${userId}`;
 
 let _miembrosCache = null;
 
@@ -56,12 +55,37 @@ export async function renderHogar($app) {
             </div>
         </header>
 
-        <section class="card stack center hogar-pense">
+        ${!esSimple ? `
+        <section class="card stack hogar-acciones">
+            <h2>⚙️ Acciones del círculo</h2>
+            <div class="hogar-acciones__grid">
+                <button class="btn btn--xl btn--inicio" id="btn-invitar-hogar">
+                    ➕ Invitar a alguien
+                </button>
+                <button class="btn" id="btn-miembros">👥 Miembros</button>
+                <button class="btn" id="btn-contactos">📞 Contactos</button>
+                <button class="btn" id="btn-medico">🩺 Datos médicos</button>
+            </div>
+            <p class="muted" style="font-size:0.9em;">
+                Compartí el link de invitación por WhatsApp y se suma al círculo
+                en un click.
+            </p>
+        </section>
+        ` : ''}
+
+        <section class="card stack hogar-pense">
             <h2>💛 Pensé en vos</h2>
-            <button class="btn btn--xl btn--pense btn--full" id="btn-pense">
-                Mandá un pensé al círculo
-            </button>
-            <p class="muted">Los demás reciben un avisito por ntfy.</p>
+            <div id="sec-pense-recibidos">cargando…</div>
+            <div id="sec-pense-form">
+                <label for="pense-destinatario" class="muted">¿A quién?</label>
+                <select id="pense-destinatario" class="input-real"></select>
+                <button class="btn btn--xl btn--pense btn--full" id="btn-pense" style="margin-top:0.6rem;">
+                    Mandar pensé
+                </button>
+                <p class="muted" style="font-size:0.9em;">
+                    La persona elegida lo ve adentro de la app cuando la abra.
+                </p>
+            </div>
         </section>
 
         <section class="card stack">
@@ -124,7 +148,32 @@ export async function renderHogar($app) {
         await cerrarSesion(); limpiarSesionReal(); go('#/inicio');
     });
 
-    $app.querySelector('#btn-pense').addEventListener('click', () => onPense(c, $app));
+    // Sección pensé: populate destinatarios + handler
+    poblarDestinatariosPense(u);
+    $app.querySelector('#btn-pense').addEventListener('click', () => onPense(c, u, $app));
+    cargarPensRecibidos(c, u, $app.querySelector('#sec-pense-recibidos'));
+
+    // Sección "Acciones" (sólo dashboard)
+    if (!esSimple) {
+        $app.querySelector('#btn-invitar-hogar').addEventListener('click',
+            () => abrirModalInvitacion(c.id));
+        $app.querySelector('#btn-miembros').addEventListener('click',
+            () => go('#/cuenta'));
+        $app.querySelector('#btn-contactos').addEventListener('click', () => modal({
+            titulo: '📞 Contactos del círculo',
+            cuerpo: `<p>Esta sección todavía no está conectada en el modo real.
+                     Próximamente: CRUD de contactos (familia + emergencias)
+                     contra <code>public.contacts</code>.</p>`,
+            acciones: [{ label: 'Entendido', clase: 'btn--inicio', value: 'ok' }]
+        }));
+        $app.querySelector('#btn-medico').addEventListener('click', () => modal({
+            titulo: '🩺 Datos médicos',
+            cuerpo: `<p>Esta sección todavía no está conectada en el modo real.
+                     Próximamente: edición de <code>public.medical_info</code>
+                     (obra social, número de afiliado, médico, notas).</p>`,
+            acciones: [{ label: 'Entendido', clase: 'btn--inicio', value: 'ok' }]
+        }));
+    }
 
     if (puedeEscribir) {
         $app.querySelector('#foto-input').addEventListener('change', (e) => onSubirFoto(c, e, $app));
@@ -142,38 +191,103 @@ export async function renderHogar($app) {
 }
 
 // =====================================================================
-// Pensé en vos
+// Pensé en vos (in-app, persona a persona — sin ntfy)
 // =====================================================================
-async function onPense(c, $app) {
+function poblarDestinatariosPense(u) {
+    const sel = document.getElementById('pense-destinatario');
+    if (!sel) return;
+    const otros = (_miembrosCache || []).filter(m => m.user_id !== u.id);
+    if (!otros.length) {
+        sel.innerHTML = `<option value="">(sólo estás vos en el círculo)</option>`;
+        sel.disabled = true;
+        const btn = document.getElementById('btn-pense');
+        if (btn) btn.disabled = true;
+        return;
+    }
+    sel.innerHTML = otros.map(m => `
+        <option value="${h(m.user_id)}">${h(m.parentesco)}</option>
+    `).join('');
+}
+
+async function onPense(c, u, $app) {
+    const sel = $app.querySelector('#pense-destinatario');
+    const paraUserId = sel?.value;
+    if (!paraUserId) return;
+
+    const destinatario = (_miembrosCache || []).find(m => m.user_id === paraUserId);
+    const btn = $app.querySelector('#btn-pense');
+    if (btn) { btn.disabled = true; btn.textContent = 'Mandando…'; }
+
     try {
-        await enviarPensamiento({ circleId: c.id });
-        // Marcar contacto con todos los miembros (excepto yo)
-        const yo = state.usuarioReal.id;
-        for (const m of _miembrosCache || []) {
-            if (m.user_id !== yo) {
-                marcarContacto({ circleId: c.id, conUserId: m.user_id }).catch(() => {});
-            }
-        }
-        if (c.ntfy_topic) {
-            const quien = state.usuarioReal.email?.startsWith('simple+')
-                ? (state.membresiaReal?.parentesco || 'Alguien')
-                : (state.usuarioReal.email || 'Alguien');
-            publicarNtfy(c.ntfy_topic, `${quien} te está pensando 💛`);
-        }
+        await enviarPensamiento({ circleId: c.id, paraUserId });
+
+        // Actualizamos contactos_ultimo para ambos extremos: así "Hablaron
+        // hace X" queda consistente en las dos vistas.
+        marcarContacto({ circleId: c.id, conUserId: paraUserId }).catch(() => {});
+        marcarContacto({ circleId: c.id, conUserId: u.id }).catch(() => {});
+
         await modal({
             titulo: '💛 Mandado',
-            cuerpo: `<p>El círculo recibe el aviso ahora.</p>
-                     <p class="muted">Topic ntfy: <code>${h(c.ntfy_topic || '?')}</code></p>`,
+            cuerpo: `<p>${h(destinatario?.parentesco || 'La persona')} lo va a ver cuando abra la app.</p>`,
             acciones: [{ label: 'Listo', clase: 'btn--pense btn--full', value: 'ok' }],
             tono: 'ok'
         });
-        cargarContactosUltimo(c, state.usuarioReal, $app.querySelector('#sec-contactos'));
+        cargarContactosUltimo(c, u, $app.querySelector('#sec-contactos'));
     } catch (err) {
         await modal({
             titulo: 'No pude mandarlo',
             cuerpo: `<pre>${h(err.message || err)}</pre>`,
             acciones: [{ label: 'OK', clase: 'btn--inicio', value: 'ok' }]
         });
+    } finally {
+        if (btn) { btn.disabled = false; btn.textContent = 'Mandar pensé'; }
+    }
+}
+
+async function cargarPensRecibidos(c, u, $cont) {
+    try {
+        const lista = await pensamientosRecibidos(c.id, u.id, 15);
+        if (!lista.length) {
+            $cont.innerHTML = `<p class="muted">Todavía nadie te mandó un pensé acá.</p>`;
+            return;
+        }
+        const lsKey = LS_LAST_SEEN(c.id, u.id);
+        const lastSeen = Number(localStorage.getItem(lsKey) || 0);
+        const nuevos   = lista.filter(p => new Date(p.created_at).getTime() > lastSeen);
+
+        $cont.innerHTML = `
+            ${nuevos.length ? `
+                <div class="pense-badge">
+                    💛 Tenés ${nuevos.length} ${nuevos.length === 1 ? 'pensamiento nuevo' : 'pensamientos nuevos'}
+                </div>
+            ` : ''}
+            <ul class="pense-lista">
+                ${lista.map(p => {
+                    const autor = (_miembrosCache || []).find(m => m.user_id === p.de_user_id);
+                    const nombre = autor?.parentesco || 'Alguien';
+                    const cuando = formatearHace(Date.now() - new Date(p.created_at).getTime());
+                    const esNuevo = new Date(p.created_at).getTime() > lastSeen;
+                    return `
+                        <li class="pense-item ${esNuevo ? 'is-nuevo' : ''}">
+                            <span class="pense-item__emoji">💛</span>
+                            <div>
+                                <strong>Tu ${h(nombre)} te está pensando</strong>
+                                <small>${h(cuando)}</small>
+                            </div>
+                            ${esNuevo ? `<span class="pense-item__dot" aria-label="nuevo"></span>` : ''}
+                        </li>
+                    `;
+                }).join('')}
+            </ul>
+        `;
+        // Marcar todo como visto (al cierre de este render): los siguientes
+        // ingresos al Hogar ya no marcan estos como nuevos.
+        if (nuevos.length) {
+            const masReciente = Math.max(...lista.map(p => new Date(p.created_at).getTime()));
+            localStorage.setItem(lsKey, String(masReciente));
+        }
+    } catch (err) {
+        $cont.innerHTML = `<p class="muted">Error: ${h(err.message || err)}</p>`;
     }
 }
 
