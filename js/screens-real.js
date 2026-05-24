@@ -272,9 +272,23 @@ export async function abrirModalInvitacion(circleId) {
         e.preventDefault();
         const fd = new FormData(e.target);
         const parentesco    = String(fd.get('parentesco') || '').trim();
-        const interfaceMode = String(fd.get('modo')) === 'simple' ? 'simple' : 'dashboard';
-        const permission    = String(fd.get('permission') || 'editor');
+        const modoRaw       = String(fd.get('modo') || '');
+        const interfaceMode = modoRaw === 'simple' ? 'simple' : 'dashboard';
+        const permRaw       = String(fd.get('permission') || 'editor');
+        // Defensa: forzar el set permitido por el CHECK de la DB.
+        const permission    = ['admin','editor','solo_ver'].includes(permRaw) ? permRaw : 'editor';
         const btn = e.target.querySelector('button[type=submit]');
+
+        if (!parentesco) {
+            await modal({
+                titulo: 'Falta el parentesco',
+                cuerpo: `<p>Decile cómo lo conoce el invitado: "Hijo 2", "Cuidadora", "Vecina"…</p>`,
+                acciones: [{ label: 'OK', clase: 'btn--inicio', value: 'ok' }]
+            });
+            return;
+        }
+
+        console.info('[invitar] valores form:', { parentesco, interfaceMode, permission, circleId });
         btn.disabled = true; btn.textContent = 'Generando…';
 
         try {
@@ -303,10 +317,23 @@ export async function abrirModalInvitacion(circleId) {
             // Tapamos el form para no volver a generar sin querer.
             e.target.querySelectorAll('input,select,button[type=submit]').forEach(el => el.disabled = true);
         } catch (err) {
+            console.error('[invitar] catch', err, err?.detalle);
             btn.disabled = false; btn.textContent = '➕ Generar link de invitación';
+            const d = err?.detalle || {};
             await modal({
                 titulo: 'No pude generar el link',
-                cuerpo: `<pre>${h(err.message || err)}</pre>`,
+                cuerpo: `
+                    <p><strong>Etapa:</strong> ${h(d.etapa || 'rpc crear_invitacion')}</p>
+                    <p><strong>Mensaje:</strong> ${h(d.message || err?.message || String(err))}</p>
+                    ${d.code     ? `<p><strong>Code:</strong> <code>${h(d.code)}</code></p>` : ''}
+                    ${d.status   ? `<p><strong>Status:</strong> ${h(d.status)}</p>` : ''}
+                    ${d.details  ? `<p><strong>Details:</strong> ${h(d.details)}</p>` : ''}
+                    ${d.hint     ? `<p><strong>Hint:</strong> ${h(d.hint)}</p>` : ''}
+                    <details style="margin-top:0.6rem;font-size:0.85em;">
+                        <summary>JSON completo</summary>
+                        <pre style="white-space:pre-wrap;background:#fff;border:2px solid #111;padding:0.5em;border-radius:6px;">${h(JSON.stringify(d, null, 2))}</pre>
+                    </details>
+                `,
                 acciones: [{ label: 'OK', clase: 'btn--inicio', value: 'ok' }]
             });
         }

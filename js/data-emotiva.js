@@ -7,6 +7,7 @@
  */
 
 import { sbClient } from './auth.js';
+import { enriquecer } from './ui.js';
 
 // ---------------------------------------------------------------------
 // Pensamientos
@@ -115,23 +116,7 @@ export async function subirFotoDia({ circleId, file, epigrafe = null }) {
     return data;
 }
 
-/** Enriquece un error de Supabase con sus campos extra (code, status,
- *  details, hint) en una propiedad .detalle para mostrar en la UI sin
- *  perder estructura. */
-function enriquecer(etapa, err) {
-    const e = new Error(`[${etapa}] ${err?.message || err}`);
-    e.detalle = {
-        etapa,
-        message:    err?.message,
-        name:       err?.name,
-        code:       err?.code,
-        status:     err?.status ?? err?.statusCode,
-        details:    err?.details,
-        hint:       err?.hint,
-        error:      err?.error
-    };
-    return e;
-}
+// enriquecer() vive en ui.js para compartirlo con otras capas.
 
 // ---------------------------------------------------------------------
 // Fechas afectivas

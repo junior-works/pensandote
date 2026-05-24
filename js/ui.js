@@ -90,6 +90,25 @@ export function esEntornoDev() {
         || h.endsWith('.local');
 }
 
+/**
+ * Empaqueta un error de Supabase/fetch en un Error con .detalle
+ * estructurado, para mostrar en la UI sin perder code/status/details/hint.
+ */
+export function enriquecer(etapa, err) {
+    const e = new Error(`[${etapa}] ${err?.message || err}`);
+    e.detalle = {
+        etapa,
+        message: err?.message,
+        name:    err?.name,
+        code:    err?.code,
+        status:  err?.status ?? err?.statusCode,
+        details: err?.details,
+        hint:    err?.hint,
+        error:   err?.error
+    };
+    return e;
+}
+
 export const bannerV2 = `
     <div class="banner-v2" role="note">
         🚧 <strong>v2 — Próximamente.</strong> Vista previa de diseño.

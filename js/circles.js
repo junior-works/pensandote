@@ -7,6 +7,7 @@
  */
 
 import { sbClient } from './auth.js';
+import { enriquecer } from './ui.js';
 
 /**
  * Trae los círculos donde el usuario es miembro.
@@ -117,13 +118,18 @@ export async function crearCirculo(userId, nombre) {
  */
 export async function crearInvitacion({ circleId, parentesco, interfaceMode, permission }) {
     const sb = await sbClient();
-    const { data, error } = await sb.rpc('crear_invitacion', {
+    const payload = {
         p_circle:          circleId,
         p_parentesco:      parentesco,
         p_interface_mode:  interfaceMode,
         p_permission:      permission || 'editor'
-    });
-    if (error) throw error;
+    };
+    console.info('[crearInvitacion] rpc payload', payload);
+    const { data, error } = await sb.rpc('crear_invitacion', payload);
+    if (error) {
+        console.error('[crearInvitacion] rpc error', error);
+        throw enriquecer('rpc crear_invitacion', error);
+    }
     return data; // text
 }
 
