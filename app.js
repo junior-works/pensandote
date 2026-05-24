@@ -68,6 +68,10 @@ const RUTAS = {
 // ---------------------------------------------------------------------
 function renderRoute(ruta) {
     document.body.dataset.modoApp = state.modo;
+    // La barra sticky del círculo activo se evalúa en cada render —
+    // así también se desmonta limpia cuando se cambia a demo o se
+    // cierra sesión, no sólo cuando el flow entra a renderRouteReal.
+    actualizarBarraCirculo();
 
     if (state.modo === 'real') {
         return renderRouteReal(ruta);
@@ -148,6 +152,11 @@ function renderRouteReal(ruta) {
     // Setear body[data-mode] según la membresía real, para que la CSS
     // scopée los estilos (dashboard moderno / simple grande) correctamente.
     document.body.dataset.mode = state.membresiaReal?.interface_mode || 'dashboard';
+    // Barra sticky del círculo activo: actualizarBarraCirculo() ya
+    // se llama desde renderRoute, pero la re-llamamos acá por si la
+    // membresía cambió entre demo↔real sin un onStateChange intermedio
+    // (la función es idempotente).
+    actualizarBarraCirculo();
 
     // Caso especial: link de invitación. Cae acá venga o no con sesión.
     // Si el token llegó vacío (link mal copiado / parser comió el hash),
@@ -279,3 +288,56 @@ bootstrap().catch(err => {
     console.error('[bootstrap]', err);
     $app.innerHTML = `<section class="card"><h2>Algo salió mal</h2><pre>${(err && err.message) || err}</pre></section>`;
 });
+
+// ---------------------------------------------------------------------
+// Barra sticky con el círculo activo (sólo dashboard real)
+// ---------------------------------------------------------------------
+//
+// Vive fuera de #app (mismo patrón que el banner de preview) así
+// sobrevive a los innerHTML rewrites del router cuando el admin
+// navega entre contactos / médico / accesos / etc. Sticky top así
+// no pierde de vista contra qué círculo está cargando datos.
+function actualizarBarraCirculo() {
+    const debeMostrar =
+        state.modo === 'real' &&
+        !state.modoPreview &&
+        state.membresiaReal?.interface_mode === 'dashboard' &&
+        state.circuloActivoIdReal &&
+        state.circulosReal.length > 0;
+
+    if (!debeMostrar) { desmontarBarraCirculo(); return; }
+
+    const c = state.circulosReal.find(x => x.id === state.circuloActivoIdReal);
+    if (!c) { desmontarBarraCirculo(); return; }
+
+    let b = document.getElementById('circulo-bar');
+    if (!b) {
+        b = document.createElement('div');
+        b.id = 'circulo-bar';
+        // Antes de #app y DESPUÉS del install-banner / preview-banner
+        // si existen — así no le pisan el lugar.
+        document.body.insertBefore(b, document.getElementById('app'));
+    }
+    // Si el admin elige un nombre genérico ("Familia X") lo mostramos
+    // tal cual; si ya lo nombró con "Círculo de…" tampoco doble-prefijo.
+    const nombre = c.nombre || 'tu círculo';
+    const yaTienePrefijo = /^c[íi]rculo\b/i.test(nombre.trim());
+    const titulo = yaTienePrefijo ? nombre : `Círculo de ${nombre}`;
+    b.innerHTML = `
+        <div class="circulo-bar__inner">
+            <span class="circulo-bar__dot" aria-hidden="true"></span>
+            <span class="circulo-bar__txt">${escapeHtml(titulo)}</span>
+        </div>
+    `;
+}
+
+function desmontarBarraCirculo() {
+    const b = document.getElementById('circulo-bar');
+    if (b) b.remove();
+}
+
+function escapeHtml(s) {
+    return String(s ?? '')
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}

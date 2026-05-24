@@ -1694,6 +1694,42 @@ body[data-mode="dashboard"] .hogar-pense { background: #fff8f3; }
 #install-banner.is-ios .install-banner__txt small { font-size: 0.9em; }
 .is-grande.is-ios .install-banner__txt small { font-size: 1rem; }
 
+/* ---- Barra sticky del círculo activo (dashboard real) ----
+   Fina, discreta, pegada al tope mientras el admin scrollea por
+   contactos / datos médicos / accesos. Para no perder de vista
+   contra qué círculo está cargando datos. Mismo pattern que el
+   preview banner: mounted fuera de #app, sticky top. */
+#circulo-bar {
+    position: sticky;
+    top: 0;
+    z-index: 90;
+    background: #fff;
+    border-bottom: 1px solid var(--line-d, #d8d2c4);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+    padding: 0.4rem 1rem;
+}
+.circulo-bar__inner {
+    max-width: 1100px;
+    margin: 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    font-size: 0.92rem;
+    line-height: 1.2;
+    color: var(--ink);
+}
+.circulo-bar__dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--accent-familia, #5b8e8e);
+    flex-shrink: 0;
+}
+.circulo-bar__txt {
+    font-weight: 600;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
 /* ---- Vista previa "Ver como lo ve papá" (banner global) ---- */
 #preview-banner {
     background: #111;
