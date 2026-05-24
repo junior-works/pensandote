@@ -9,13 +9,16 @@
  * accesos visibles a Invitar / Miembros / Contactos / Datos médicos.
  */
 
-import { state, setModo, limpiarSesionReal } from './state.js';
-import { go } from './router.js';
+import { state, setModo, setSesionReal, limpiarSesionReal } from './state.js';
+import { go, refresh } from './router.js';
 import { cerrarSesion } from './auth.js';
-import { miembrosDelCirculo } from './circles.js';
+import {
+    miembrosDelCirculo, membresiaActiva,
+    crearCirculo, actualizarParentesco
+} from './circles.js';
 import { h, modal, esEntornoDev, renderErrorEstructurado } from './ui.js';
 import { nuevaGrabacion } from './audio.js';
-import { abrirModalInvitacion } from './screens-real.js';
+import { abrirModalInvitacion, pedirTexto, recargarSesion } from './screens-real.js';
 import {
     enviarPensamiento, pensamientosRecibidos,
     ultimaFotoDia, subirFotoDia,
@@ -80,6 +83,44 @@ export async function renderHogar($app) {
             <p class="muted" style="font-size:0.9em;">
                 Compartí el link de invitación por WhatsApp y se suma al círculo
                 en un click.
+            </p>
+        </section>
+
+        <section class="card stack hogar-circulos">
+            <h2>🔵 Tus círculos</h2>
+            <ul class="circulos-lista">
+                ${state.circulosReal.map(cc => {
+                    const esActivo = cc.id === state.circuloActivoIdReal;
+                    return `
+                        <li class="circulo-card">
+                            <div class="circulo-card__head">
+                                <h3 class="circulo-card__nombre">${h(cc.nombre)}</h3>
+                                ${esActivo
+                                    ? `<span class="circulo-card__chip circulo-card__chip--activo">● Activo</span>`
+                                    : `<button class="btn btn--mini" data-activar-circulo="${h(cc.id)}">Activar</button>`}
+                            </div>
+                            ${esActivo && m ? `
+                                <div class="circulo-card__chips">
+                                    <span class="circulo-card__chip">Parentesco: <strong>${h(m.parentesco)}</strong></span>
+                                    <span class="circulo-card__chip">Modo: <strong>${h(m.interface_mode)}</strong></span>
+                                    <span class="circulo-card__chip">Permiso: <strong>${h(m.permission_level)}</strong></span>
+                                </div>
+                                <div class="circulo-card__acciones">
+                                    <button class="btn btn--mini" id="btn-editar-parentesco-hogar">
+                                        ✏️ Editar mi parentesco
+                                    </button>
+                                </div>
+                            ` : ''}
+                        </li>
+                    `;
+                }).join('')}
+            </ul>
+            <button class="btn btn--familia" id="btn-crear-circulo-hogar">
+                ➕ Crear otro círculo
+            </button>
+            <p class="muted" style="font-size:0.9em;">
+                Un círculo por persona simple (papá, mamá, abuela). Cada uno
+                tiene sus contactos, fotos y miembros propios.
             </p>
         </section>
         ` : ''}
@@ -212,6 +253,106 @@ export async function renderHogar($app) {
                 btnVerComo.textContent = '👀 Ver como lo ve ' + (parentescoSimpleEnCirculo() || 'tu familiar');
             }
         });
+
+        // Activar otro círculo: refetch de membresía + setSesionReal con el
+        // nuevo activo + refresh del router (repinta el Hogar entero contra
+        // el círculo nuevo, así contactos/foto/historias salen del que toca).
+        $app.querySelectorAll('[data-activar-circulo]').forEach(btn => {
+            btn.addEventListener('click', async () => {
+                const cid = btn.dataset.activarCirculo;
+                btn.disabled = true;
+                btn.textContent = 'Activando…';
+                try {
+                    const memb = await membresiaActiva(u.id, cid);
+                    setSesionReal({
+                        usuario: u,
+                        circulos: state.circulosReal,
+                        circuloActivoId: cid,
+                        membresia: memb
+                    });
+                    refresh();
+                } catch (err) {
+                    btn.disabled = false;
+                    btn.textContent = 'Activar';
+                    await modal({
+                        titulo: 'No pude cambiar de círculo',
+                        cuerpo: `<pre>${h(err?.message || err)}</pre>`,
+                        acciones: [{ label: 'OK', value: 'ok' }]
+                    });
+                }
+            });
+        });
+
+        // Editar mi parentesco en el círculo activo. Misma idea que en
+        // renderCuenta — duplicamos el botón acá así Charly lo encuentra
+        // sin tener que ir a #/cuenta.
+        const btnEditPar = $app.querySelector('#btn-editar-parentesco-hogar');
+        if (btnEditPar) {
+            btnEditPar.addEventListener('click', async () => {
+                const actual = m?.parentesco || '';
+                const nuevo = await pedirTexto({
+                    titulo: 'Editar mi parentesco',
+                    label:  'Cómo te ven los demás del círculo',
+                    valor:  actual,
+                    placeholder: 'Hijo, Hija, Cuidadora, Tutor…'
+                });
+                if (!nuevo || nuevo === actual) return;
+                try {
+                    await actualizarParentesco(u.id, c.id, nuevo);
+                    await recargarSesion();
+                    refresh();
+                } catch (err) {
+                    await modal({
+                        titulo: 'No pude guardar',
+                        cuerpo: `<pre>${h(err?.message || err)}</pre>`,
+                        acciones: [{ label: 'OK', value: 'ok' }]
+                    });
+                }
+            });
+        }
+
+        // Crear OTRO círculo desde el panel. Mismo flujo que renderSinCirculos:
+        // pide nombre, llama crearCirculo (que ya hace owner + membresía
+        // dashboard/admin en una transacción client-side), recarga sesión y
+        // deja el nuevo como activo.
+        const btnCrearCirc = $app.querySelector('#btn-crear-circulo-hogar');
+        if (btnCrearCirc) {
+            btnCrearCirc.addEventListener('click', async () => {
+                const nombre = await pedirTexto({
+                    titulo: 'Crear otro círculo',
+                    label:  '¿Cómo se va a llamar?',
+                    placeholder: 'Círculo de mamá'
+                });
+                if (!nombre) return;
+                try {
+                    const nuevo = await crearCirculo(u.id, nombre);
+                    await recargarSesion();
+                    // recargarSesion mantiene el activo previo si sigue
+                    // siendo miembro — forzamos al nuevo a quedar activo.
+                    const memb = await membresiaActiva(u.id, nuevo.id);
+                    setSesionReal({
+                        usuario: u,
+                        circulos: state.circulosReal,
+                        circuloActivoId: nuevo.id,
+                        membresia: memb
+                    });
+                    await modal({
+                        titulo: '✅ Círculo creado',
+                        cuerpo: `<p>Listo. Estás como <strong>admin</strong> de <em>${h(nuevo.nombre)}</em>.</p>
+                                 <p class="muted">Ahora podés invitar a quien corresponda.</p>`,
+                        acciones: [{ label: 'Listo', clase: 'btn--familia btn--full', value: 'ok' }],
+                        tono: 'ok'
+                    });
+                    refresh();
+                } catch (err) {
+                    await modal({
+                        titulo: 'No pude crearlo',
+                        cuerpo: `<pre>${h(err?.message || err)}</pre>`,
+                        acciones: [{ label: 'OK', value: 'ok' }]
+                    });
+                }
+            });
+        }
     }
     // Nota: en modo real simple no se llega acá (el routing manda al
     // Simple.renderInicio con tarjetones); no hace falta wirear botones

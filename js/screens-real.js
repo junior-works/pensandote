@@ -656,7 +656,7 @@ export function renderErrorConexion($app, err) {
 // =====================================================================
 // helpers
 // =====================================================================
-async function recargarSesion() {
+export async function recargarSesion() {
     // Defensivo: si state.usuarioReal todavía no fue cargado (típico
     // del primer login en este browser, vía verifyOtp), lo leemos del
     // SDK antes de seguir. Antes hacíamos un early-return acá y la
@@ -731,10 +731,11 @@ function tratamientoCirculo(nombre) {
 }
 
 /**
- * Modalcito para pedir un texto corto (ej: editar parentesco). Resuelve
- * el string capturado o `null` si se canceló.
+ * Modalcito para pedir un texto corto (ej: editar parentesco, nombre de
+ * un nuevo círculo). Resuelve el string capturado o `null` si se canceló.
+ * Exportado porque también lo reusa screens-hogar.js.
  */
-function pedirTexto({ titulo, label, valor = '', placeholder = '' }) {
+export function pedirTexto({ titulo, label, valor = '', placeholder = '' }) {
     return new Promise((resolve) => {
         const overlay = document.createElement('div');
         overlay.className = 'modal-overlay';
