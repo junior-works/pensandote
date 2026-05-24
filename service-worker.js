@@ -8,14 +8,18 @@
  * Cuando rompamos algo del shell, BUMPEAR CACHE_NAME (sufijo de versión).
  */
 
-const CACHE_NAME = 'pensandote-shell-v0.2.0';
+const CACHE_NAME = 'pensandote-shell-v0.3.0';
 
+// Todo path relativo: el sitio se sirve tanto en local como bajo el
+// subpath /pensandote/ de GitHub Pages, y el scope del SW respeta la
+// ubicación del archivo.
 const SHELL_FILES = [
     './',
     './index.html',
     './styles.css',
     './manifest.json',
     './app.js',
+    './config.js',
     './js/mocks.js',
     './js/state.js',
     './js/router.js',
@@ -23,7 +27,13 @@ const SHELL_FILES = [
     './js/dev-panel.js',
     './js/screens-simple.js',
     './js/screens-dashboard.js',
-    './js/screens-v2.js'
+    './js/screens-v2.js',
+    './js/screens-real.js',
+    './js/screens-hogar.js',
+    './js/data-emotiva.js',
+    './js/audio.js',
+    './js/auth.js',
+    './js/circles.js'
 ];
 
 self.addEventListener('install', (event) => {

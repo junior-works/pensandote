@@ -1,7 +1,9 @@
 # --- Pensándote ---
 
-# Credenciales locales (la plantilla viva es config.example.js)
-config.js
+# config.js SÍ se commitea desde la v0.3 (deploy a GitHub Pages).
+# SUPABASE_URL + anon/publishable key son PÚBLICAS por diseño: el control
+# real lo hace RLS. La service_role NUNCA va al front. config.example.js
+# queda como referencia.
 
 # OS / editor
 .DS_Store
