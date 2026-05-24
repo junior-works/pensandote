@@ -72,22 +72,65 @@ export async function ultimaFotoDia(circleId) {
 
 export async function subirFotoDia({ circleId, file, epigrafe = null }) {
     const sb = await sbClient();
-    const { data: { user } } = await sb.auth.getUser();
+
+    // 1) Sesión + perfil (FK target de subida_por).
+    const { data: authData, error: errAuth } = await sb.auth.getUser();
+    if (errAuth || !authData?.user) {
+        console.error('[subirFotoDia] auth', errAuth);
+        throw enriquecer('auth', errAuth || new Error('sin sesion'));
+    }
+    const user = authData.user;
+
+    const { error: errProf } = await sb.from('users')
+        .upsert({ id: user.id }, { onConflict: 'id' });
+    if (errProf) {
+        console.warn('[subirFotoDia] users upsert (no bloqueante)', errProf);
+    }
+
+    // 2) Upload a storage.
     const safe = file.name.replace(/[^a-zA-Z0-9._-]+/g, '_');
     const path = `${circleId}/${Date.now()}-${safe}`;
-    const { error: e1 } = await sb.storage.from('fotos').upload(path, file, {
-        contentType: file.type, upsert: false
-    });
-    if (e1) throw e1;
+    console.info('[subirFotoDia] upload', { path, type: file.type, size: file.size });
 
-    const { data, error: e2 } = await sb.from('fotos_dia').insert({
+    const { data: upData, error: errUp } = await sb.storage
+        .from('fotos')
+        .upload(path, file, { contentType: file.type, upsert: false });
+    if (errUp) {
+        console.error('[subirFotoDia] storage.upload', errUp);
+        throw enriquecer('storage', errUp);
+    }
+    console.info('[subirFotoDia] storage OK', upData);
+
+    // 3) Insert en fotos_dia.
+    const { data, error: errIns } = await sb.from('fotos_dia').insert({
         circle_id:    circleId,
         subida_por:   user.id,
         storage_path: path,
         epigrafe
     }).select().single();
-    if (e2) throw e2;
+    if (errIns) {
+        console.error('[subirFotoDia] insert fotos_dia', errIns);
+        throw enriquecer('insert fotos_dia', errIns);
+    }
     return data;
+}
+
+/** Enriquece un error de Supabase con sus campos extra (code, status,
+ *  details, hint) en una propiedad .detalle para mostrar en la UI sin
+ *  perder estructura. */
+function enriquecer(etapa, err) {
+    const e = new Error(`[${etapa}] ${err?.message || err}`);
+    e.detalle = {
+        etapa,
+        message:    err?.message,
+        name:       err?.name,
+        code:       err?.code,
+        status:     err?.status ?? err?.statusCode,
+        details:    err?.details,
+        hint:       err?.hint,
+        error:      err?.error
+    };
+    return e;
 }
 
 // ---------------------------------------------------------------------
