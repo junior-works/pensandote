@@ -76,6 +76,20 @@ export function stopSpeak() {
     if ('speechSynthesis' in window) window.speechSynthesis.cancel();
 }
 
+/**
+ * ¿Estamos corriendo en un entorno de desarrollo?
+ * Solo true cuando el hostname es localhost / 127.0.0.1 / *.local.
+ * Sirve para gateado del dev-panel y de los botones "Ver maqueta demo":
+ * en producción (Pages, dominio) no se renderizan.
+ */
+export function esEntornoDev() {
+    const h = (typeof window !== 'undefined' && window.location?.hostname) || '';
+    return h === 'localhost'
+        || h === '127.0.0.1'
+        || h === '0.0.0.0'
+        || h.endsWith('.local');
+}
+
 export const bannerV2 = `
     <div class="banner-v2" role="note">
         🚧 <strong>v2 — Próximamente.</strong> Vista previa de diseño.

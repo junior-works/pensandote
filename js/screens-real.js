@@ -15,7 +15,7 @@ import {
 } from './circles.js';
 import { state, setSesionReal, setModo, limpiarSesionReal } from './state.js';
 import { go, refresh } from './router.js';
-import { h, modal } from './ui.js';
+import { h, modal, esEntornoDev } from './ui.js';
 
 const STORAGE_PENDING_INVITE = 'pensandote.pending_invite';
 
@@ -41,15 +41,16 @@ export function renderLogin($app, msg = '') {
 
             ${msg ? `<p class="center">${h(msg)}</p>` : ''}
 
-            <p class="center muted" style="margin-top:1.5rem;">
-                ¿Sólo querés ver el diseño?
-                <button class="btn btn--mini" id="btn-demo">Entrar al modo demo</button>
-            </p>
+            ${esEntornoDev() ? `
+                <p class="center muted" style="margin-top:1.5rem;">
+                    ¿Sólo querés ver el diseño?
+                    <button class="btn btn--mini" id="btn-demo">Entrar al modo demo</button>
+                </p>
+            ` : ''}
         </section>
     `;
-    document.getElementById('btn-demo').addEventListener('click', () => {
-        setModo('demo'); go('#/inicio');
-    });
+    const _btnDemo = document.getElementById('btn-demo');
+    if (_btnDemo) _btnDemo.addEventListener('click', () => { setModo('demo'); go('#/inicio'); });
     document.getElementById('form-login').addEventListener('submit', async (e) => {
         e.preventDefault();
         const email = document.getElementById('email').value.trim();
@@ -88,13 +89,12 @@ export function renderSinCirculos($app) {
             </form>
 
             <hr>
-            <button class="btn btn--mini" id="btn-demo">Ver maqueta demo</button>
+            ${esEntornoDev() ? `<button class="btn btn--mini" id="btn-demo">Ver maqueta demo</button>` : ''}
             <button class="btn btn--mini btn--danger" id="btn-logout">Cerrar sesión</button>
         </section>
     `;
-    document.getElementById('btn-demo').addEventListener('click', () => {
-        setModo('demo'); go('#/inicio');
-    });
+    const _btnDemo = document.getElementById('btn-demo');
+    if (_btnDemo) _btnDemo.addEventListener('click', () => { setModo('demo'); go('#/inicio'); });
     document.getElementById('btn-logout').addEventListener('click', async () => {
         await cerrarSesion(); limpiarSesionReal(); renderLogin($app);
     });
@@ -169,7 +169,7 @@ export function renderCuenta($app) {
 
             <hr>
             <button class="btn btn--familia" id="btn-hogar">🏠 Volver al hogar del círculo</button>
-            <button class="btn btn--mini" id="btn-demo">Ver maqueta demo</button>
+            ${esEntornoDev() ? `<button class="btn btn--mini" id="btn-demo">Ver maqueta demo</button>` : ''}
             <button class="btn btn--mini btn--danger" id="btn-logout">Cerrar sesión</button>
         </section>
     `;
@@ -195,9 +195,8 @@ export function renderCuenta($app) {
         btnInvitar.addEventListener('click', () => abrirModalInvitacion(state.circuloActivoIdReal));
     }
 
-    document.getElementById('btn-demo').addEventListener('click', () => {
-        setModo('demo'); go('#/inicio');
-    });
+    const _btnDemo = document.getElementById('btn-demo');
+    if (_btnDemo) _btnDemo.addEventListener('click', () => { setModo('demo'); go('#/inicio'); });
     document.getElementById('btn-logout').addEventListener('click', async () => {
         await cerrarSesion(); limpiarSesionReal(); renderLogin($app);
     });
@@ -452,12 +451,11 @@ function pintarError($app, titulo, detalle = '') {
         <section class="card stack" style="margin-top:2rem;">
             <h1>${h(titulo)}</h1>
             ${detalle ? `<p class="muted">${h(detalle)}</p>` : ''}
-            <button class="btn btn--inicio" id="btn-demo">Ver maqueta demo</button>
+            ${esEntornoDev() ? `<button class="btn btn--inicio" id="btn-demo">Ver maqueta demo</button>` : ''}
         </section>
     `;
-    document.getElementById('btn-demo').addEventListener('click', () => {
-        setModo('demo'); go('#/inicio');
-    });
+    const _btnDemo = document.getElementById('btn-demo');
+    if (_btnDemo) _btnDemo.addEventListener('click', () => { setModo('demo'); go('#/inicio'); });
 }
 
 // =====================================================================
@@ -468,12 +466,11 @@ export function renderErrorConexion($app, err) {
         <section class="card stack" style="margin-top: 2rem;">
             <h1>No pude conectar</h1>
             <pre>${h(err?.message || err)}</pre>
-            <button class="btn btn--inicio" id="btn-demo">Seguir en modo demo</button>
+            ${esEntornoDev() ? `<button class="btn btn--inicio" id="btn-demo">Seguir en modo demo</button>` : ''}
         </section>
     `;
-    document.getElementById('btn-demo').addEventListener('click', () => {
-        setModo('demo'); go('#/inicio');
-    });
+    const _btnDemo = document.getElementById('btn-demo');
+    if (_btnDemo) _btnDemo.addEventListener('click', () => { setModo('demo'); go('#/inicio'); });
 }
 
 // =====================================================================

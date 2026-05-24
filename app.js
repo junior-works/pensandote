@@ -15,6 +15,7 @@
 import { onRouteChange, refresh as refreshRouter, currentRoute } from './js/router.js';
 import { state, onStateChange, miembroActivo, setSesionReal, setModo } from './js/state.js';
 import { montarDevPanel } from './js/dev-panel.js';
+import { esEntornoDev } from './js/ui.js';
 
 import { configEsReal, usuarioActual, procesarCallback } from './js/auth.js';
 import { circulosDelUsuario, membresiaActiva } from './js/circles.js';
@@ -118,7 +119,10 @@ function renderRouteReal(ruta) {
 // Bootstrap
 // ---------------------------------------------------------------------
 async function bootstrap() {
-    montarDevPanel();
+    // El panel de dev y los botones "Ver maqueta demo" sólo aparecen en
+    // localhost. En producción (Pages, dominio) la app va directo al modo
+    // real sin opciones de demo para no confundir al usuario.
+    if (esEntornoDev()) montarDevPanel();
     onStateChange(() => refreshRouter());
 
     if (configEsReal()) {

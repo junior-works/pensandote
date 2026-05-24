@@ -19,7 +19,7 @@ import { state, setModo, limpiarSesionReal } from './state.js';
 import { go } from './router.js';
 import { cerrarSesion } from './auth.js';
 import { miembrosDelCirculo } from './circles.js';
-import { h, modal } from './ui.js';
+import { h, modal, esEntornoDev } from './ui.js';
 import { nuevaGrabacion } from './audio.js';
 import {
     enviarPensamiento, publicarNtfy,
@@ -51,7 +51,7 @@ export async function renderHogar($app) {
                 <small class="muted">${h(m?.parentesco || '')} · ${h(m?.interface_mode || '')}</small>
             </div>
             <div class="hogar-header__acciones">
-                <button class="btn btn--mini" id="btn-demo">🎭 Demo</button>
+                ${esEntornoDev() ? `<button class="btn btn--mini" id="btn-demo">🎭 Demo</button>` : ''}
                 <button class="btn btn--mini btn--danger" id="btn-logout">Salir</button>
             </div>
         </header>
@@ -118,7 +118,8 @@ export async function renderHogar($app) {
         </section>
     `;
 
-    $app.querySelector('#btn-demo').addEventListener('click',  () => { setModo('demo'); go('#/inicio'); });
+    const btnDemoHogar = $app.querySelector('#btn-demo');
+    if (btnDemoHogar) btnDemoHogar.addEventListener('click', () => { setModo('demo'); go('#/inicio'); });
     $app.querySelector('#btn-logout').addEventListener('click', async () => {
         await cerrarSesion(); limpiarSesionReal(); go('#/inicio');
     });
