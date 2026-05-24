@@ -23,6 +23,7 @@ import * as Simple    from './js/screens-simple.js';
 import * as Dashboard from './js/screens-dashboard.js';
 import * as V2        from './js/screens-v2.js';
 import * as Real      from './js/screens-real.js';
+import * as Hogar     from './js/screens-hogar.js';
 
 const $app = document.getElementById('app');
 
@@ -101,6 +102,14 @@ function renderRouteReal(ruta) {
     // Sin círculos: pantalla "creá uno".
     if (!state.circulosReal.length) {
         return Real.renderSinCirculos($app);
+    }
+    // Si pidieron explícitamente #/cuenta, mostrar la cuenta.
+    if (ruta.name === 'cuenta') {
+        return Real.renderCuenta($app);
+    }
+    // Default con círculo activo: el hogar emotivo.
+    if (state.circuloActivoIdReal) {
+        return Hogar.renderHogar($app);
     }
     return Real.renderCuenta($app);
 }

@@ -168,6 +168,7 @@ export function renderCuenta($app) {
             ` : ''}
 
             <hr>
+            <button class="btn btn--familia" id="btn-hogar">🏠 Volver al hogar del círculo</button>
             <button class="btn btn--mini" id="btn-demo">Ver maqueta demo</button>
             <button class="btn btn--mini btn--danger" id="btn-logout">Cerrar sesión</button>
         </section>
@@ -200,6 +201,8 @@ export function renderCuenta($app) {
     document.getElementById('btn-logout').addEventListener('click', async () => {
         await cerrarSesion(); limpiarSesionReal(); renderLogin($app);
     });
+    const btnHogar = document.getElementById('btn-hogar');
+    if (btnHogar) btnHogar.addEventListener('click', () => go('#/inicio'));
 }
 
 // =====================================================================

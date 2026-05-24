@@ -876,6 +876,23 @@ body[data-mode="simple"] .btn--mini { min-height: 44px; font-size: var(--fs-md);
     font-size: 0.7rem;
 }
 .dev-panel__shortcuts { display: flex; gap: 0.3rem; flex-wrap: wrap; }
+/* Hogar (modo real) */
+.hogar-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    margin-top: 1rem;
+    margin-bottom: 1rem;
+}
+.hogar-header__nombre {
+    margin: 0;
+    font-size: var(--fs-lg);
+    line-height: 1.1;
+}
+.hogar-header__acciones { display: flex; gap: 0.4rem; flex-shrink: 0; }
+.hogar-pense { background: #ffe5d7; }
+
 /* Inputs/selects de los forms del modo real */
 .input-real {
     padding: 0.55em 0.7em;
