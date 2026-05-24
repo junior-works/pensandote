@@ -26,3 +26,9 @@ dist/
 .supabase/
 supabase/.branches
 supabase/.temp
+
+# Scripts de diagnóstico locales (usan service_role o cosas sensibles)
+_test_*.mjs
+_test_*.js
+_diag_*.mjs
+_diag_*.js
