@@ -26,7 +26,8 @@ import {
     listarContactosUltimo, marcarContacto,
     listarHistorias, urlHistoriaAudio, grabarHistoria,
     listarInteracciones, toggleFavorita, repreguntarTexto, repreguntarAudio,
-    urlInteraccionAudio
+    urlInteraccionAudio,
+    listarPuntas, crearPunta, borrarPunta
 } from './data-emotiva.js';
 import { entrarPreviewVerComoPapa } from './preview.js';
 
@@ -50,6 +51,10 @@ export async function renderHogar($app) {
     _miembrosCache = await miembrosDelCirculo(c.id).catch(() => []);
     const esSimple    = m?.interface_mode === 'simple';
     const puedeEscribir = ['admin','editor'].includes(m?.permission_level);
+    // Narrador del círculo = primer miembro modo simple (papá / mamá).
+    // Lo usamos para personalizar el copy de "Ideas para contar".
+    const narradorParentesco = (_miembrosCache.find(x => x.interface_mode === 'simple')?.parentesco || '')
+        .trim().toLowerCase() || null;
 
     $app.innerHTML = `
         <header class="hogar-header card">
@@ -191,6 +196,28 @@ export async function renderHogar($app) {
             <p class="muted">Se actualiza solo cuando alguien te manda un pensé.</p>
         </section>
 
+        ${!esSimple ? `
+        <section class="card stack hogar-puntas">
+            <h2>💡 Ideas para contar</h2>
+            <p class="muted">
+                Mandale ${narradorParentesco
+                    ? `a tu <strong>${h(narradorParentesco)}</strong>`
+                    : 'al narrador'} una pregunta o disparador concreto.
+                En su pantalla aparece <strong>una sola por día</strong>,
+                como tarjeta grande. Cuando graba esa historia, pasa a la
+                siguiente.
+            </p>
+            <form id="form-punta" class="form-punta">
+                <textarea id="punta-texto" class="input-real" rows="3" required
+                          placeholder="${narradorParentesco
+                            ? `${h(narradorParentesco)}, contame cuándo empezaste a trabajar en la verdulería en la villa…`
+                            : 'Contame cuándo empezaste a trabajar en la verdulería…'}"></textarea>
+                <button type="submit" class="btn btn--inicio">📤 Mandar idea</button>
+            </form>
+            <div id="sec-puntas-cola"><p class="muted">Cargando cola…</p></div>
+        </section>
+        ` : ''}
+
         <section class="card stack">
             <h2>📖 Historias</h2>
             ${esSimple ? `
@@ -309,6 +336,34 @@ export async function renderHogar($app) {
                     });
                 }
             });
+        }
+
+        // Sección "Ideas para contar" — wire form + cargar cola inicial.
+        const $formPunta = $app.querySelector('#form-punta');
+        const $listaPuntas = $app.querySelector('#sec-puntas-cola');
+        if ($formPunta && $listaPuntas) {
+            $formPunta.addEventListener('submit', async (ev) => {
+                ev.preventDefault();
+                const $txt = $app.querySelector('#punta-texto');
+                const texto = ($txt.value || '').trim();
+                if (!texto) return;
+                const btn = ev.target.querySelector('button[type="submit"]');
+                btn.disabled = true; btn.textContent = 'Mandando…';
+                try {
+                    await crearPunta(c.id, texto);
+                    $txt.value = '';
+                    await cargarPuntasCola(c, u, $listaPuntas);
+                } catch (err) {
+                    await modal({
+                        titulo: 'No pude mandarla',
+                        cuerpo: `<pre>${h(err?.message || err)}</pre>`,
+                        acciones: [{ label: 'OK', clase: 'btn--inicio', value: 'ok' }]
+                    });
+                } finally {
+                    btn.disabled = false; btn.textContent = '📤 Mandar idea';
+                }
+            });
+            cargarPuntasCola(c, u, $listaPuntas);
         }
 
         // Crear OTRO círculo desde el panel. Mismo flujo que renderSinCirculos:
@@ -986,6 +1041,68 @@ function pedirVisibilidad(narradorId) {
             }
         });
     });
+}
+
+// =====================================================================
+// Cola de puntas (admin dashboard)
+// =====================================================================
+async function cargarPuntasCola(c, u, $cont) {
+    try {
+        const puntas = await listarPuntas(c.id);
+        if (!puntas.length) {
+            $cont.innerHTML = `<p class="muted">Todavía no mandaron ninguna idea. Probá con algo concreto y chiquito.</p>`;
+            return;
+        }
+        // Pendientes primero (más vieja arriba — es la próxima que va a
+        // ver el papá), después las ya usadas.
+        const pend = puntas.filter(p => !p.usada_at);
+        const usadas = puntas.filter(p =>  p.usada_at);
+        const ordered = [...pend, ...usadas];
+        $cont.innerHTML = `
+            <h3 style="margin: 0.8rem 0 0.4rem; font-size: 0.95em;">Cola (${pend.length} sin usar)</h3>
+            <ul class="puntas-cola">
+                ${ordered.map((p, i) => {
+                    const usada = !!p.usada_at;
+                    const mia   = p.de_user_id === u.id;
+                    const proxima = !usada && i === 0;
+                    return `
+                        <li class="puntas-cola__item ${usada ? 'is-usada' : ''}">
+                            <span class="puntas-cola__texto">
+                                ${proxima ? '<strong>👉 La próxima:</strong> ' : ''}${h(p.texto)}
+                            </span>
+                            <span class="puntas-cola__chip ${usada ? 'puntas-cola__chip--usada' : ''}">
+                                ${usada
+                                    ? `✓ contada ${new Date(p.usada_at).toLocaleDateString('es-AR')}`
+                                    : 'pendiente'}
+                            </span>
+                            ${mia
+                                ? `<button class="btn btn--mini btn--danger" data-borrar-punta="${h(p.id)}" title="Borrar">×</button>`
+                                : '<span></span>'}
+                        </li>
+                    `;
+                }).join('')}
+            </ul>
+        `;
+        $cont.querySelectorAll('[data-borrar-punta]').forEach(btn => {
+            btn.addEventListener('click', async () => {
+                const id = btn.dataset.borrarPunta;
+                btn.disabled = true;
+                try {
+                    await borrarPunta(id);
+                    await cargarPuntasCola(c, u, $cont);
+                } catch (err) {
+                    btn.disabled = false;
+                    await modal({
+                        titulo: 'No pude borrarla',
+                        cuerpo: `<pre>${h(err?.message || err)}</pre>`,
+                        acciones: [{ label: 'OK', value: 'ok' }]
+                    });
+                }
+            });
+        });
+    } catch (err) {
+        $cont.innerHTML = `<p class="muted">Error cargando la cola: ${h(err?.message || err)}</p>`;
+    }
 }
 
 /** Devuelve el parentesco del primer miembro modo simple del círculo

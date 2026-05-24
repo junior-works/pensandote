@@ -20,11 +20,16 @@ import { nuevaGrabacion } from './audio.js';
 import {
     enviarPensamiento, pensamientosRecibidos, marcarContacto,
     listarHistorias, urlHistoriaAudio, grabarHistoria, borrarHistoria,
-    listarInteracciones, toggleFavorita, repreguntarTexto, repreguntarAudio
+    listarInteracciones, toggleFavorita, repreguntarTexto, repreguntarAudio,
+    marcarPuntaUsada
 } from './data-emotiva.js';
-import { esPreview, avisarPreview, getMiembroVisto } from './preview.js';
+import { esPreview, avisarPreview, getMiembroVisto, getPuntasPendientes } from './preview.js';
 
 const LS_LAST_SEEN = (cId, uId) => `pensandote.pensamientos.lastSeen.${cId}.${uId}`;
+// Cadencia ~una punta por día: si la usaron hoy, ocultamos la sección
+// hasta mañana. ISO local (es-AR / America/Argentina/Buenos_Aires).
+const LS_PUNTA_USADA = (cId, uId) => `pensandote.punta.usadaHoy.${cId}.${uId}`;
+function hoyLocal() { return new Date().toLocaleDateString('en-CA'); } // YYYY-MM-DD
 
 // =====================================================================
 // PENSÉ EN VOS (funcional)
@@ -214,7 +219,38 @@ function vistaActiva() {
 
 // -------------------- TAB: Historias (común) --------------------
 function renderTabNormal($cont, c, u, miembros, esNarrador) {
+    // Idea para contar: UNA punta por vez, la más vieja sin usar, con
+    // gating de "una por día" via localStorage. Sólo para narrador.
+    let puntaActual = null;
+    if (esNarrador) {
+        const usadaHoy = localStorage.getItem(LS_PUNTA_USADA(c.id, u.id));
+        if (usadaHoy !== hoyLocal()) {
+            const pend = getPuntasPendientes();
+            if (pend.length) puntaActual = pend[0];
+        }
+    }
+    // Autor de la punta = un miembro del círculo. Si tiene parentesco,
+    // armamos un copy cálido tipo "tu hija te dejó esta idea".
+    const autor = puntaActual
+        ? miembros.find(m => m.user_id === puntaActual.de_user_id)
+        : null;
+    const autorLabel = autor?.parentesco ? autor.parentesco.toLowerCase() : null;
+
     $cont.innerHTML = `
+        ${puntaActual ? `
+            <article class="punta-card">
+                <p class="punta-card__quien">
+                    💡 ${autorLabel
+                        ? `Tu <strong>${h(autorLabel)}</strong> te dejó esta idea para contar`
+                        : 'Te dejaron una idea para contar'}
+                </p>
+                <p class="punta-card__texto">${h(puntaActual.texto)}</p>
+                <button class="btn btn--xl btn--anecdota punta-card__btn" id="btn-contar-punta">
+                    🎙 Contar esto
+                </button>
+            </article>
+        ` : ''}
+
         ${esNarrador ? `
             <button class="btn btn--xl btn--anecdota btn--full" id="btn-grabar-h">
                 🔴 Contar una anécdota
@@ -237,6 +273,23 @@ function renderTabNormal($cont, c, u, miembros, esNarrador) {
             }
             onGrabarHistoria(c, u, miembros, $cont, false);
         });
+        const $btnPunta = $cont.querySelector('#btn-contar-punta');
+        if ($btnPunta && puntaActual) {
+            $btnPunta.addEventListener('click', () => {
+                if (esPreview()) {
+                    avisarPreview('👀 Vista previa',
+                        'En la app real esto abre la grabación y al guardar marca la idea como contada. Acá no se ejecuta.');
+                    return;
+                }
+                // Pasamos texto como título sugerido y puntaId para que
+                // al guardar la historia, marquemos la punta como usada
+                // y activemos el gating "una por día".
+                onGrabarHistoria(c, u, miembros, $cont, false, {
+                    titulo: puntaActual.texto,
+                    puntaId: puntaActual.id
+                });
+            });
+        }
     }
     cargarYRenderizarHistorias({
         $cont: $cont.querySelector('#sec-historias-list'),
@@ -600,7 +653,13 @@ async function onRepAudio(historiaId, c) {
 // =====================================================================
 // Grabar historia + selector de visibilidad
 // =====================================================================
-async function onGrabarHistoria(c, u, miembros, $cont, esLegado = false) {
+async function onGrabarHistoria(c, u, miembros, $cont, esLegado = false, opts = {}) {
+    // opts: { titulo?: string, puntaId?: uuid }
+    //   - titulo: si vino de una punta, lo usamos como título de la historia.
+    //   - puntaId: al guardar la historia, marcamos la punta como usada
+    //     y guardamos hoy en localStorage para no mostrar otra hasta mañana.
+    const { titulo: tituloSugerido = null, puntaId = null } = opts;
+
     let rec;
     try { rec = await nuevaGrabacion(); }
     catch (err) {
@@ -615,6 +674,12 @@ async function onGrabarHistoria(c, u, miembros, $cont, esLegado = false) {
     const decision = await modal({
         titulo: esLegado ? '💛 Grabando para el legado' : '🔴 Contando una anécdota',
         cuerpo: `
+            ${tituloSugerido ? `
+                <p class="muted">Sobre la idea:</p>
+                <p style="font-size:1.05em; line-height:1.45; font-weight:600;">
+                    "${h(tituloSugerido)}"
+                </p>
+            ` : ''}
             <p>Hablá tranquilo. Cuando termines, tocá <strong>Listo</strong>.</p>
             ${esLegado ? `
                 <p class="muted">Después vas a elegir quién la podrá escuchar más adelante.</p>
@@ -651,8 +716,24 @@ async function onGrabarHistoria(c, u, miembros, $cont, esLegado = false) {
             durSeg:    duracion,
             visibilidad: vis.tipo,
             personasEspecificas: vis.personas || [],
-            esLegado
+            esLegado,
+            titulo: tituloSugerido
         });
+        // Marcar la punta como usada (best-effort, no rompe el flujo si
+        // falla) y guardar hoy en localStorage para que la sección
+        // quede oculta hasta mañana — UNA idea por día.
+        if (puntaId) {
+            try { await marcarPuntaUsada(puntaId); } catch (e) { console.warn('[marcarPuntaUsada]', e); }
+            localStorage.setItem(LS_PUNTA_USADA(c.id, u.id), hoyLocal());
+            // Sacar la punta de state.datosReales así si vuelven a esta
+            // pantalla sin recargar (raro pero posible), la siguiente
+            // pendiente aparece bien la próxima vez.
+            const arr = state.datosReales?.puntas;
+            if (arr) {
+                const i = arr.findIndex(p => p.id === puntaId);
+                if (i >= 0) arr[i] = { ...arr[i], usada_at: new Date().toISOString() };
+            }
+        }
         await modal({
             titulo: '✅ Guardada',
             cuerpo: esLegado
@@ -662,11 +743,19 @@ async function onGrabarHistoria(c, u, miembros, $cont, esLegado = false) {
             acciones: [{ label: 'Listo', clase: 'btn--pense btn--full', value: 'ok' }],
             tono: 'ok'
         });
-        // Recargar la lista que corresponda según la tab activa.
-        cargarYRenderizarHistorias({
-            $cont: $cont.querySelector(esLegado ? '#sec-legado-list' : '#sec-historias-list'),
-            c, u, miembros, soloLegado: esLegado, permitirBorrar: true
-        });
+        // Si la historia venía de una punta, repintamos toda la pantalla
+        // de Historias así la tarjeta "Ideas para contar" desaparece
+        // (localStorage ya dice "usada hoy"). Si no, refrescamos solo
+        // la lista correspondiente para no perder scroll/tab activa.
+        if (puntaId) {
+            const $app = document.getElementById('app');
+            renderHistoriasSimpleReal($app);
+        } else {
+            cargarYRenderizarHistorias({
+                $cont: $cont.querySelector(esLegado ? '#sec-legado-list' : '#sec-historias-list'),
+                c, u, miembros, soloLegado: esLegado, permitirBorrar: true
+            });
+        }
     } catch (err) {
         await modal({
             titulo: 'No pude guardarla',

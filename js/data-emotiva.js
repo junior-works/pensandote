@@ -367,6 +367,53 @@ export async function urlInteraccionAudio(storagePath) {
 // "Cómo hago" con IA — edge function como-hago-ia
 // =====================================================================
 // ---------------------------------------------------------------------
+// Puntas / Ideas para contar
+// ---------------------------------------------------------------------
+//
+// La familia carga "disparadores" para que el narrador (papá) tenga
+// algo concreto que contar ("contame cuándo empezaste a trabajar en
+// la verdulería"). La tabla `puntas_historia` ya está creada con RLS
+// (select=es_miembro; insert=es_miembro + de_user_id=auth.uid();
+// update/delete=autor o admin). Order asc por created_at: el papá ve
+// PRIMERO la más vieja sin usar.
+export async function listarPuntas(circleId) {
+    const sb = await sbClient();
+    const { data, error } = await sb.from('puntas_historia')
+        .select('id, circle_id, de_user_id, texto, usada_at, created_at')
+        .eq('circle_id', circleId)
+        .order('created_at', { ascending: true });
+    if (error) throw enriquecer('listarPuntas', error);
+    return data || [];
+}
+
+export async function crearPunta(circleId, texto) {
+    const sb = await sbClient();
+    // RLS exige de_user_id = auth.uid(); lo tomamos de la sesión actual.
+    const { data: { user } } = await sb.auth.getUser();
+    if (!user) throw new Error('sin sesión');
+    const { error } = await sb.from('puntas_historia').insert({
+        circle_id: circleId,
+        de_user_id: user.id,
+        texto: String(texto || '').trim()
+    });
+    if (error) throw enriquecer('crearPunta', error);
+}
+
+export async function marcarPuntaUsada(id) {
+    const sb = await sbClient();
+    const { error } = await sb.from('puntas_historia')
+        .update({ usada_at: new Date().toISOString() })
+        .eq('id', id);
+    if (error) throw enriquecer('marcarPuntaUsada', error);
+}
+
+export async function borrarPunta(id) {
+    const sb = await sbClient();
+    const { error } = await sb.from('puntas_historia').delete().eq('id', id);
+    if (error) throw enriquecer('borrarPunta', error);
+}
+
+// ---------------------------------------------------------------------
 // Tutoriales (contenido editorial global — sin circle_id, RLS: select libre)
 // ---------------------------------------------------------------------
 //

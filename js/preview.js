@@ -29,7 +29,7 @@ import { h, modal } from './ui.js';
 import {
     listarContactos, leerDatosMedicos, ultimaFotoDia, ultimasFotosDia,
     pensamientosRecibidos, listarHistorias, listarFechas,
-    listarAccesos
+    listarAccesos, listarPuntas
 } from './data-emotiva.js';
 import { miembrosDelCirculo } from './circles.js';
 import {
@@ -89,6 +89,14 @@ export function getAccesos() {
     if (state.modoPreview) return state.previewData?.accesos || [];
     if (state.datosReales) return state.datosReales.accesos || [];
     return [];
+}
+
+/** Puntas / ideas para contar pendientes (oldest-first sin usar). */
+export function getPuntasPendientes() {
+    const lista = state.modoPreview
+        ? (state.previewData?.puntas || [])
+        : (state.datosReales?.puntas || []);
+    return lista.filter(p => !p.usada_at);
 }
 
 export function getMiembrosReales() {
@@ -172,16 +180,17 @@ export async function entrarPreviewVerComoPapa(circleId, miembros) {
 
     let data;
     try {
-        const [contactos, medico, fotos, pensamientos, historias, fechas, accesos] = await Promise.all([
+        const [contactos, medico, fotos, pensamientos, historias, fechas, accesos, puntas] = await Promise.all([
             listarContactos(circleId).catch(e => { console.warn('[preview] contactos', e); return []; }),
             leerDatosMedicos(circleId).catch(e => { console.warn('[preview] medico', e); return null; }),
             ultimasFotosDia(circleId, 10).catch(e => { console.warn('[preview] fotos', e); return []; }),
             pensamientosRecibidos(circleId, papa.user_id).catch(e => { console.warn('[preview] pensé', e); return []; }),
             listarHistorias(circleId).catch(e => { console.warn('[preview] historias', e); return []; }),
             listarFechas(circleId).catch(e => { console.warn('[preview] fechas', e); return []; }),
-            listarAccesos(circleId).catch(e => { console.warn('[preview] accesos', e); return []; })
+            listarAccesos(circleId).catch(e => { console.warn('[preview] accesos', e); return []; }),
+            listarPuntas(circleId).catch(e => { console.warn('[preview] puntas', e); return []; })
         ]);
-        data = { contactos, medico, fotos, pensamientos, historias, fechas, miembros, accesos };
+        data = { contactos, medico, fotos, pensamientos, historias, fechas, miembros, accesos, puntas };
     } catch (err) {
         console.error('[preview] load', err);
         await modal({
@@ -354,17 +363,18 @@ function hace(ms) {
 export async function prepararDatosReales(circleId, userId) {
     if (!circleId || !userId) return;
     try {
-        const [contactos, medico, fotos, pensamientos, miembros, accesos] = await Promise.all([
+        const [contactos, medico, fotos, pensamientos, miembros, accesos, puntas] = await Promise.all([
             listarContactos(circleId).catch(e => { console.warn('[datosReales] contactos', e); return []; }),
             leerDatosMedicos(circleId).catch(e => { console.warn('[datosReales] medico', e); return null; }),
             ultimasFotosDia(circleId, 10).catch(e => { console.warn('[datosReales] fotos', e); return []; }),
             pensamientosRecibidos(circleId, userId).catch(e => { console.warn('[datosReales] pensé', e); return []; }),
             miembrosDelCirculo(circleId).catch(e => { console.warn('[datosReales] miembros', e); return []; }),
-            listarAccesos(circleId).catch(e => { console.warn('[datosReales] accesos', e); return []; })
+            listarAccesos(circleId).catch(e => { console.warn('[datosReales] accesos', e); return []; }),
+            listarPuntas(circleId).catch(e => { console.warn('[datosReales] puntas', e); return []; })
         ]);
         // Liberar blob URLs viejas antes de pisar el cache.
         revocarFotos(state.datosReales?.fotos);
-        state.datosReales = { contactos, medico, fotos, pensamientos, miembros, accesos };
+        state.datosReales = { contactos, medico, fotos, pensamientos, miembros, accesos, puntas };
     } catch (err) {
         console.error('[prepararDatosReales]', err);
     }
