@@ -287,9 +287,14 @@ body[data-mode="simple"] .btn--mini { min-height: 44px; font-size: var(--fs-md);
 
 /* ---------------- Tarjetones (simple) ---------------- */
 .simple-grid {
-    display: grid; gap: 1rem;
+    display: grid;
+    /* Aire generoso entre TODOS los tarjetones (Emergencias / Familia /
+       Médico / Cómo hago). row-gap y column-gap iguales: el grid 2x2
+       respira igual entre filas y entre columnas, en mobile (1 col)
+       el espacio vertical entre cada par también queda parejo. */
+    gap: 1.5rem;
     grid-template-columns: repeat(2, 1fr);
-    margin: 1rem 0;
+    margin: 1rem 0 1.5rem;
 }
 .tarjeton {
     display: flex; flex-direction: column;
