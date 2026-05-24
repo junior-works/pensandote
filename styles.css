@@ -99,6 +99,130 @@ body[data-mode="dashboard"] #app { max-width: 1100px; }
 .btn:disabled:hover { transform: none; box-shadow: var(--shadow); }
 
 body[data-mode="simple"] .btn { min-height: 80px; font-size: var(--fs-lg); }
+
+/* ===================================================================
+   SKIN SIMPLE — suavizado, cálido, accesible.
+   -------------------------------------------------------------------
+   Charly: "linda pero fácil de usar, no tan tosca como la original".
+   Mantenemos: botones y texto GRANDES, alto contraste, claridad.
+   Cambiamos: borde 3px negro → 2px ink-soft, sombra dura 4px 4px 0 #111
+   → 4px desplazado con rgba (mantiene el "stamp" neobruta pero más
+   cálido), esquinas más redondeadas (18-26px), focus ring suave.
+   =================================================================== */
+body[data-mode="simple"] {
+    --line-s:       rgba(42, 30, 18, 0.88);  /* ink cálido, no negro puro */
+    --sh-s:         4px 4px 0 rgba(42, 30, 18, 0.85);
+    --sh-s-sm:      2px 2px 0 rgba(42, 30, 18, 0.85);
+    --sh-s-lg:      6px 6px 0 rgba(42, 30, 18, 0.85);
+    --bw-s:         2px;
+    --r-s-sm:       12px;
+    --r-s-md:       18px;
+    --r-s-lg:       24px;
+}
+
+/* Botones del modo simple — base */
+body[data-mode="simple"] .btn {
+    border-width: var(--bw-s);
+    border-color: var(--line-s);
+    border-radius: var(--r-s-md);
+    box-shadow:   var(--sh-s);
+    font-weight:  700;
+    transition:   transform 100ms ease, box-shadow 100ms ease;
+}
+body[data-mode="simple"] .btn:hover {
+    transform:  translate(1px, 1px);
+    box-shadow: var(--sh-s-sm);
+}
+body[data-mode="simple"] .btn:active {
+    transform:  translate(3px, 3px);
+    box-shadow: 0 0 0 var(--line-s);
+}
+body[data-mode="simple"] .btn--xl { min-height: 92px; border-radius: var(--r-s-md); }
+body[data-mode="simple"] .btn--mini {
+    min-height: 44px;
+    border-radius: var(--r-s-sm);
+    box-shadow:   var(--sh-s-sm);
+}
+
+/* Cards, tarjetones, barra-volver, contacto-card, tutorial-paso, foto-carousel */
+body[data-mode="simple"] .card,
+body[data-mode="simple"] .tarjeton,
+body[data-mode="simple"] .barra-volver,
+body[data-mode="simple"] .contacto-card,
+body[data-mode="simple"] .tutorial-paso,
+body[data-mode="simple"] .foto-carousel,
+body[data-mode="simple"] .foto-del-dia--placeholder {
+    border-width: var(--bw-s);
+    border-color: var(--line-s);
+    border-radius: var(--r-s-lg);
+    box-shadow:   var(--sh-s);
+}
+body[data-mode="simple"] .barra-volver,
+body[data-mode="simple"] .barra-volver__btn,
+body[data-mode="simple"] .contacto-card {
+    border-radius: var(--r-s-md);
+}
+body[data-mode="simple"] .barra-volver__btn {
+    border-width: var(--bw-s);
+    border-color: var(--line-s);
+    box-shadow:   var(--sh-s-sm);
+}
+body[data-mode="simple"] .tarjeton:hover {
+    transform:  translate(2px, 2px);
+    box-shadow: var(--sh-s-sm);
+}
+
+/* Foto carousel + tutorial paso quedan con borde fino e imagen redondeada */
+body[data-mode="simple"] .foto-carousel__img,
+body[data-mode="simple"] .contacto-card__foto {
+    border-width: var(--bw-s);
+    border-color: var(--line-s);
+    border-radius: var(--r-s-sm);
+}
+
+/* Inputs / textarea — focus ring cálido en vez de outline duro */
+body[data-mode="simple"] .input-real,
+body[data-mode="simple"] input[type="text"],
+body[data-mode="simple"] input[type="email"],
+body[data-mode="simple"] input[type="date"],
+body[data-mode="simple"] textarea,
+body[data-mode="simple"] select {
+    border: var(--bw-s) solid var(--line-s);
+    border-radius: var(--r-s-md);
+    padding: 0.7em 0.9em;
+    background: #fff;
+    font-size: 1.1rem;
+}
+body[data-mode="simple"] .input-real:focus,
+body[data-mode="simple"] input:focus,
+body[data-mode="simple"] textarea:focus,
+body[data-mode="simple"] select:focus {
+    outline: none;
+    box-shadow: 0 0 0 4px rgba(228, 138, 70, 0.25);
+    border-color: var(--accent-pense);
+}
+
+/* Modal en modo simple — sombra cálida (no negra dura) */
+body[data-mode="simple"] .modal {
+    border-width: var(--bw-s);
+    border-color: var(--line-s);
+    border-radius: var(--r-s-lg);
+    box-shadow: 8px 8px 0 rgba(42, 30, 18, 0.45);
+}
+body[data-mode="simple"] .modal__close {
+    border-width: var(--bw-s);
+    border-color: var(--line-s);
+}
+
+/* Focus visible global en modo simple — no el outline 3px negro */
+body[data-mode="simple"] :focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 4px rgba(228, 138, 70, 0.35);
+    border-radius: var(--r-s-sm);
+}
+
+/* Header de inicio del simple: saludo grande, fecha calmita */
+body[data-mode="simple"] .simple-saludo { font-weight: 700; }
 .btn--xl    { min-height: 96px; font-size: var(--fs-lg); padding: 1em 1.5em; }
 .btn--full  { width: 100%; }
 .btn--mini  { min-height: 36px; padding: 0.3em 0.7em; font-size: var(--fs-sm); box-shadow: var(--shadow-sm); }
