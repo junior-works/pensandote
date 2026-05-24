@@ -66,47 +66,59 @@ Deno.serve(async (req) => {
         if (new Date(inv.expires_at).getTime() < Date.now())
             return json({ error: "invitacion_vencida" }, 410);
 
-        if (inv.claimed_at)
-            return json({ error: "invitacion_ya_reclamada" }, 409);
-
         if (inv.interface_mode_sugerido !== "simple")
             return json({ error: "no_es_modo_simple" }, 400);
 
         // -----------------------------------------------------------
-        // 2) Crear (o reusar) el auth.user sintético.
-        //    Email determinístico a partir del token, así un mismo
-        //    token siempre apunta al mismo usuario aunque haya reintentos.
+        // 2) Resolver el auth.user sintético.
+        //    Email determinístico a partir del token: un mismo token
+        //    SIEMPRE apunta al mismo usuario sintético. Por eso el link
+        //    es reutilizable — si el papá pierde la sesión (clear data,
+        //    cambio de celu), reabrir el link lo loguea de nuevo en el
+        //    mismo usuario en lugar de "quemarse".
         // -----------------------------------------------------------
         const syntheticEmail = `simple+${token.toLowerCase()}@pensandote.app`;
 
+        // Buscamos primero si ya existe (caso reuso). Si la invitación
+        // está claimed, el usuario tiene que existir; si no, lo creamos.
         let userId: string | null = null;
-        const { data: createdUser, error: errCreate } = await sb.auth.admin.createUser({
-            email: syntheticEmail,
-            email_confirm: true,        // saltea verificación de email
-            user_metadata: {
-                pensandote_kind: "simple",
-                circle_id:       inv.circle_id,
-                parentesco:      inv.parentesco_sugerido,
-                invited_by:      inv.invited_by,
-            },
-        });
-
-        if (errCreate) {
-            // Probablemente "email already registered" → buscamos al usuario.
-            // listUsers pagina; con perPage alto cubrimos proyectos chicos.
-            // TODO: cuando crezca, usar getUserByEmail si Supabase lo expone.
+        {
             const { data: list, error: errList } =
                 await sb.auth.admin.listUsers({ perPage: 200 });
-            if (errList) throw errCreate; // mejor devolver el original
-            const existing = list.users.find((u) => u.email === syntheticEmail);
-            if (!existing) throw errCreate;
-            userId = existing.id;
-        } else {
-            userId = createdUser.user!.id;
+            if (!errList) {
+                const existing = list.users.find((u) => u.email === syntheticEmail);
+                if (existing) userId = existing.id;
+            }
+        }
+
+        if (!userId) {
+            const { data: createdUser, error: errCreate } =
+                await sb.auth.admin.createUser({
+                    email: syntheticEmail,
+                    email_confirm: true,
+                    user_metadata: {
+                        pensandote_kind: "simple",
+                        circle_id:       inv.circle_id,
+                        parentesco:      inv.parentesco_sugerido,
+                        invited_by:      inv.invited_by,
+                    },
+                });
+            if (errCreate) {
+                // Carrera muy improbable: alguien lo creó entre el listUsers
+                // y acá. Reintentamos la búsqueda.
+                const { data: list2 } =
+                    await sb.auth.admin.listUsers({ perPage: 200 });
+                const existing = list2?.users.find((u) => u.email === syntheticEmail);
+                if (!existing) throw errCreate;
+                userId = existing.id;
+            } else {
+                userId = createdUser.user!.id;
+            }
         }
 
         // -----------------------------------------------------------
-        // 3) Perfil + membresía (upsert para idempotencia).
+        // 3) Perfil + membresía (upsert para idempotencia — funciona
+        //    tanto en primer reclamo como en reuso).
         // -----------------------------------------------------------
         const { error: errProfile } = await sb
             .from("users")
@@ -128,16 +140,19 @@ Deno.serve(async (req) => {
         if (errMember) throw errMember;
 
         // -----------------------------------------------------------
-        // 4) Marcar invitación reclamada.
+        // 4) Marcar invitación reclamada (idempotente).
+        //    Sólo seteamos claimed_at si todavía no estaba claimed.
         // -----------------------------------------------------------
-        const { error: errClaim } = await sb
-            .from("invitations")
-            .update({
-                claimed_at:         new Date().toISOString(),
-                claimed_by_user_id: userId,
-            })
-            .eq("token", token);
-        if (errClaim) throw errClaim;
+        if (!inv.claimed_at) {
+            const { error: errClaim } = await sb
+                .from("invitations")
+                .update({
+                    claimed_at:         new Date().toISOString(),
+                    claimed_by_user_id: userId,
+                })
+                .eq("token", token);
+            if (errClaim) throw errClaim;
+        }
 
         // -----------------------------------------------------------
         // 5) Generar un magic link y devolver el token_hash.

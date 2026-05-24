@@ -7,7 +7,7 @@
  *   - Invitación (router #/invitacion/<token>): caso A simple o B dashboard.
  */
 
-import { enviarMagicLink, cerrarSesion, sbClient } from './auth.js';
+import { enviarMagicLink, cerrarSesion, sbClient, usuarioActual } from './auth.js';
 import {
     circulosDelUsuario, membresiaActiva, crearCirculo,
     crearInvitacion, infoInvitacion,
@@ -16,7 +16,7 @@ import {
 } from './circles.js';
 import { state, setSesionReal, setModo, limpiarSesionReal } from './state.js';
 import { go, refresh } from './router.js';
-import { h, modal, esEntornoDev, installModalBackButton, cleanupModalBackButton } from './ui.js';
+import { h, modal, esEntornoDev, installModalBackButton, cleanupModalBackButton, renderErrorEstructurado } from './ui.js';
 
 const STORAGE_PENDING_INVITE = 'pensandote.pending_invite';
 
@@ -474,27 +474,54 @@ function renderInvitacionSimple($app, token, inv) {
     document.getElementById('btn-sosvos').addEventListener('click', async (ev) => {
         const btn = ev.currentTarget;
         btn.disabled = true; btn.textContent = 'Entrando…';
+        const $app = document.getElementById('app');
         try {
+            console.info('[invitacion simple] llamando edge function');
             const r = await aceptarInvitacionSimple(token);
+            console.info('[invitacion simple] edge function OK', { user_id: r.user_id, type: r.verification_type, hasHash: !!r.token_hash });
+            if (!r.token_hash) {
+                throw new Error('La función no devolvió token_hash — no puedo crear la sesión.');
+            }
+
             // Cambiar el hashed_token por una sesión real.
             const sb = await sbClient();
-            const { error } = await sb.auth.verifyOtp({
+            const { data: vData, error: vErr } = await sb.auth.verifyOtp({
                 token_hash: r.token_hash,
                 type:       'magiclink'
             });
-            if (error) throw error;
+            console.info('[invitacion simple] verifyOtp', { error: vErr, hasSession: !!vData?.session, hasUser: !!vData?.user });
+            if (vErr) throw vErr;
+            if (!vData?.session) {
+                throw new Error('verifyOtp no devolvió session — el token_hash no creó sesión.');
+            }
 
-            // Limpiar el hash de invitación y arrancar el modo real desde 0.
+            // CLAVE: cargar state.usuarioReal desde la SDK. Sin esto el
+            // router no sabe que hay sesión y cae a renderLogin aunque
+            // el SDK tenga el JWT seteado.
+            const u = await usuarioActual();
+            if (!u) {
+                throw new Error('Hay sesión en el SDK pero no pude leer al usuario.');
+            }
+            // Cargar círculos + membresía y armar la sesión completa.
+            let circulos = [];
+            try { circulos = await circulosDelUsuario(u.id); }
+            catch (e) { console.warn('[invitacion simple] circulos', e); }
+            let circuloActivoId = null;
+            let membresia = null;
+            if (circulos.length) {
+                circuloActivoId = circulos[0].id;
+                try { membresia = await membresiaActiva(u.id, circuloActivoId); }
+                catch (e) { console.warn('[invitacion simple] membresía', e); }
+            }
+            setSesionReal({ usuario: u, circulos, circuloActivoId, membresia });
+
+            // Limpiamos la URL y entramos al hogar.
             history.replaceState(null, '', location.pathname + location.search);
-            await recargarSesion();
             go('#/inicio');
         } catch (err) {
+            console.error('[invitacion simple]', err, err?.detalle);
             btn.disabled = false; btn.textContent = 'Sí, soy yo';
-            await modal({
-                titulo: 'No pude entrarte',
-                cuerpo: `<pre>${h(err.message || err)}</pre>`,
-                acciones: [{ label: 'OK', clase: 'btn--inicio', value: 'ok' }]
-            });
+            renderErrorEstructurado($app, err, { titulo: 'No pude entrarte' });
         }
     });
 }
@@ -598,8 +625,16 @@ export function renderErrorConexion($app, err) {
 // helpers
 // =====================================================================
 async function recargarSesion() {
-    const u = state.usuarioReal;
-    if (!u) return;
+    // Defensivo: si state.usuarioReal todavía no fue cargado (típico
+    // del primer login en este browser, vía verifyOtp), lo leemos del
+    // SDK antes de seguir. Antes hacíamos un early-return acá y la
+    // sesión quedaba "huérfana" — la SDK tenía el JWT pero el state
+    // no, y el router caía a renderLogin.
+    let u = state.usuarioReal;
+    if (!u) {
+        u = await usuarioActual();
+        if (!u) return;
+    }
     const circulos = await circulosDelUsuario(u.id);
     let membresia = null;
     let circuloActivoId = state.circuloActivoIdReal;
