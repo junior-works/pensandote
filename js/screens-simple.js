@@ -17,6 +17,7 @@ import {
     getMiembroVisto, getAccesos, esPreview, avisarPreview
 } from './preview.js';
 import { dispararPanico } from './utils/panico.js';
+import { crearDictado } from './utils/dictado.js';
 
 // =====================================================================
 // INICIO
@@ -745,88 +746,18 @@ export function renderComoHagoIA($app) {
     const $btnPreg  = $app.querySelector('#btn-preguntar');
     const $res      = $app.querySelector('#ia-resultado');
 
-    // Dictado por voz (mismo patrón que el dictado del mail al médico).
-    //
-    // Bug previo: el `onresult` arrancaba en `final = acumulado` y sumaba
-    // desde `e.resultIndex`. Chrome (sobre todo en Android) re-emite el
-    // MISMO resultado final con `resultIndex` apuntando al mismo índice
-    // que ya habíamos consumido → cada onresult sumaba "hola" sobre el
-    // "hola" anterior y el texto se hacía bola.
-    //
-    // Fix: en cada `onresult` ITERAR DESDE 0 sobre `e.results` y
-    // RECONSTRUIR el texto desde cero (baseText + finales + interim).
-    // Como `results[]` representa el estado completo de la sesión, el
-    // output es idempotente: si Chrome lo emite 2 veces no duplica nada.
-    let recognizer = null;
-    let grabando   = false;
-    let baseText   = '';  // lo que había en el textarea antes de grabar
+    // Dictado por voz — toggle, idempotente, con auto-restart silencioso
+    // si Chrome corta por silencio (Android). Lógica en utils/dictado.js
+    // para no duplicar entre este y el mail al médico.
+    const dictado = crearDictado({
+        $textarea: $texto,
+        $btnMic:   $mic,
+        $estado:   $estado
+    });
 
-    function detenerDictado() {
-        if (!recognizer) { grabando = false; return; }
-        // Nuleamos handlers antes de stop() para evitar onresult/onend
-        // tardíos que vengan a escribir en un DOM ya desmontado.
-        try { recognizer.onresult = null; } catch (_) {}
-        try { recognizer.onerror  = null; } catch (_) {}
-        try { recognizer.onend    = null; } catch (_) {}
-        try { recognizer.stop();  } catch (_) {}
-        try { recognizer.abort(); } catch (_) {}
-        recognizer = null;
-        grabando = false;
-        if ($mic) $mic.textContent = '🎤 Hablar';
-        if ($estado) $estado.textContent = '';
-    }
-
-    if (speechOK && $mic) {
-        $mic.addEventListener('click', () => {
-            if (grabando) { detenerDictado(); return; }
-
-            // Garantiza single-instance: si quedó alguno (no debería),
-            // se tira a la basura ahora.
-            detenerDictado();
-
-            baseText = $texto.value ? $texto.value.trim() + ' ' : '';
-            const r = new SR();
-            r.lang = 'es-AR';
-            r.continuous = true;
-            r.interimResults = true;
-            r.onresult = (e) => {
-                let final = '';
-                let interim = '';
-                for (let i = 0; i < e.results.length; i++) {
-                    const t = e.results[i][0].transcript;
-                    if (e.results[i].isFinal) final += t + ' ';
-                    else interim += t;
-                }
-                $texto.value = (baseText + final + interim).trim();
-            };
-            r.onerror = (ev) => {
-                grabando = false;
-                $mic.textContent = '🎤 Hablar';
-                $estado.textContent = `No pude grabar (${ev.error || 'error'}). Probá escribir.`;
-            };
-            r.onend = () => {
-                grabando = false;
-                $mic.textContent = '🎤 Hablar de nuevo';
-                $estado.textContent = '';
-                recognizer = null;
-            };
-            recognizer = r;
-            try {
-                r.start();
-                grabando = true;
-                $mic.textContent = '⏹ Parar';
-                $estado.textContent = 'Te escucho…';
-            } catch (_) {
-                $estado.textContent = 'No pude empezar a grabar.';
-                detenerDictado();
-            }
-        });
-    }
-
-    // Si el papá toca "Volver" mientras dicta, el recognizer quedaría
-    // escribiendo en un textarea que ya no está en el DOM. Listener
-    // `once: true` así se limpia solo en el primer hashchange.
-    window.addEventListener('hashchange', detenerDictado, { once: true });
+    // Cleanup al cambiar de pantalla — el recognizer no debe sobrevivir
+    // a la salida de #/como-hago-ia.
+    window.addEventListener('hashchange', () => dictado.destroy(), { once: true });
 
     $btnPreg.addEventListener('click', async () => {
         const pregunta = $texto.value.trim();
@@ -835,7 +766,9 @@ export function renderComoHagoIA($app) {
             $texto.focus();
             return;
         }
-        if (grabando) detenerDictado();
+        // Si estaba dictando, terminamos el dictado antes de mandar la
+        // pregunta a la IA. destroy() es idempotente.
+        dictado.destroy();
 
         const origLabel = $btnPreg.textContent;
         $btnPreg.disabled = true;

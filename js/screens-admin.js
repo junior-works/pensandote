@@ -18,6 +18,7 @@ import {
     installModalBackButton, cleanupModalBackButton
 } from './ui.js';
 import { esPreview, getAccesos, avisarPreview } from './preview.js';
+import { crearDictado } from './utils/dictado.js';
 import {
     listarContactos, crearContacto, actualizarContacto, borrarContacto,
     leerDatosMedicos, guardarDatosMedicos,
@@ -470,29 +471,21 @@ function abrirDictadoMail(datos) {
     `;
     document.body.appendChild(overlay);
 
-    // Ver comentario de bug+fix en screens-simple.js#renderComoHagoIA.
-    // Misma idea: iterar `e.results` desde 0 y rebuildear el texto, así
-    // Chrome re-emitiendo finales no duplica nada.
+    const $texto  = overlay.querySelector('#dictado-texto');
+    const $estado = overlay.querySelector('#mic-estado');
+    const $mic    = overlay.querySelector('#btn-mic');
+
+    // Dictado por voz — toggle, idempotente, con auto-restart silencioso
+    // si Chrome corta por silencio. La lógica vive en utils/dictado.js.
+    const dictado = supported
+        ? crearDictado({ $textarea: $texto, $btnMic: $mic, $estado })
+        : { soportado: false, destroy: () => {} };
+
     let cerrado = false;
-    let recognizer = null;
-    let grabando = false;
-    let baseText = '';
-
-    function detenerDictado() {
-        if (!recognizer) { grabando = false; return; }
-        try { recognizer.onresult = null; } catch (_) {}
-        try { recognizer.onerror  = null; } catch (_) {}
-        try { recognizer.onend    = null; } catch (_) {}
-        try { recognizer.stop();  } catch (_) {}
-        try { recognizer.abort(); } catch (_) {}
-        recognizer = null;
-        grabando = false;
-    }
-
     function cerrar() {
         if (cerrado) return;
         cerrado = true;
-        detenerDictado();
+        dictado.destroy();
         cleanupModalBackButton(overlay);
         overlay.remove();
     }
@@ -500,53 +493,6 @@ function abrirDictadoMail(datos) {
     overlay.querySelector('[data-close-x]').addEventListener('click', cerrar);
     overlay.querySelector('[data-cancel]').addEventListener('click', cerrar);
     overlay.addEventListener('click', e => { if (e.target === overlay) cerrar(); });
-
-    const $texto  = overlay.querySelector('#dictado-texto');
-    const $estado = overlay.querySelector('#mic-estado');
-    const $mic    = overlay.querySelector('#btn-mic');
-
-    if (supported && $mic) {
-        $mic.addEventListener('click', () => {
-            if (grabando) { detenerDictado(); $mic.textContent = '🎤 Hablar'; $estado.textContent = ''; return; }
-            detenerDictado();  // garantiza single-instance
-            baseText = $texto.value ? $texto.value.trim() + ' ' : '';
-            const r = new SR();
-            r.lang = 'es-AR';
-            r.continuous = true;
-            r.interimResults = true;
-            r.onresult = (e) => {
-                let final = '';
-                let interim = '';
-                for (let i = 0; i < e.results.length; i++) {
-                    const t = e.results[i][0].transcript;
-                    if (e.results[i].isFinal) final += t + ' ';
-                    else interim += t;
-                }
-                $texto.value = (baseText + final + interim).trim();
-            };
-            r.onerror = (ev) => {
-                grabando = false;
-                $mic.textContent = '🎤 Hablar';
-                $estado.textContent = `No pude grabar (${ev.error || 'error'}). Probá escribir.`;
-            };
-            r.onend = () => {
-                grabando = false;
-                $mic.textContent = '🎤 Hablar de nuevo';
-                $estado.textContent = '';
-                recognizer = null;
-            };
-            recognizer = r;
-            try {
-                r.start();
-                grabando = true;
-                $mic.textContent = '⏹ Parar';
-                $estado.textContent = 'Te escucho…';
-            } catch (err) {
-                $estado.textContent = 'No pude empezar a grabar.';
-                detenerDictado();
-            }
-        });
-    }
 
     overlay.querySelector('#btn-enviar-mail').addEventListener('click', () => {
         const cuerpo = $texto.value.trim();
