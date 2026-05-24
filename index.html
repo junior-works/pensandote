@@ -24,12 +24,16 @@
 
     <link rel="stylesheet" href="./styles.css">
 
-    <!-- Config opcional (anon key Supabase, etc). NO va al repo y NO es
-         requerido por la maqueta navegable v0.2 — los datos vienen de
-         js/mocks.js. Se reactiva cuando volvamos a Supabase real. -->
+    <!-- Config local (SUPABASE_URL + anon/publishable key). NO va al repo.
+         Si el archivo no existe, el stub deja la app en "modo demo"
+         con los mocks de js/mocks.js. -->
+    <script src="./config.js" onerror="this.dataset.missing=1"></script>
     <script>
-        // Stub para no romper si auth.js futuro lo busca.
-        window.PENSANDOTE_CONFIG = window.PENSANDOTE_CONFIG || { _maqueta: true };
+        // Si config.js faltó o no definió la URL, dejamos el flag para
+        // que app.js arranque en modo demo.
+        if (!window.PENSANDOTE_CONFIG || !window.PENSANDOTE_CONFIG.SUPABASE_URL) {
+            window.PENSANDOTE_CONFIG = { _demo: true };
+        }
     </script>
 </head>
 <body>

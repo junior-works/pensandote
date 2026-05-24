@@ -1,9 +1,16 @@
 /**
- * Pensándote — estado en memoria de la maqueta.
+ * Pensándote — estado en memoria.
  *
- * Quién está "logueado" (cuál de los 4 miembros está activo) y un par de
- * helpers para escuchar cambios. Nada de esto persiste (de momento) —
- * recargar la página te devuelve a Roberto.
+ * Hay dos modos:
+ *   - 'demo' (default): el usuario "activo" es uno de los 4 miembros
+ *      mock; el dev-panel los alterna sin login.
+ *   - 'real' : hay sesión Supabase. state.usuarioReal trae el user y
+ *      state.circulosReal / state.membresiaReal traen lo que devolvió
+ *      circles.js.
+ *
+ * El bootstrap de app.js decide en qué modo arrancar mirando config +
+ * sesión. Después, el dev-panel y la pantalla de cuenta pueden mover
+ * entre modos durante la sesión.
  */
 
 import { MIEMBROS, CIRCULO } from './mocks.js';
@@ -11,24 +18,62 @@ import { MIEMBROS, CIRCULO } from './mocks.js';
 const _listeners = new Set();
 
 export const state = {
+    // --- Modo ---
+    modo: 'demo',                  // 'demo' | 'real'
+
+    // --- Modo demo ---
     circulo: CIRCULO,
     miembros: MIEMBROS,
-    /** id del miembro activo (el "logueado" simulado). */
-    miembroActivoId: MIEMBROS[0].id  // arranca como Roberto (simple)
+    miembroActivoId: MIEMBROS[0].id,
+
+    // --- Modo real ---
+    usuarioReal: null,             // auth.User | null
+    circulosReal: [],              // [{id, nombre, owner_id}]
+    circuloActivoIdReal: null,
+    membresiaReal: null            // {interface_mode, parentesco, permission_level}
 };
 
-/** Miembro actualmente activo (el que define qué UI se renderiza). */
+// =====================================================================
+// Modo demo
+// =====================================================================
 export function miembroActivo() {
     return state.miembros.find(m => m.id === state.miembroActivoId) || state.miembros[0];
 }
 
-/** Cambia el miembro activo y notifica a los listeners. */
 export function setMiembroActivo(id) {
     if (!state.miembros.some(m => m.id === id)) return;
     state.miembroActivoId = id;
     _emit();
 }
 
+// =====================================================================
+// Modo real
+// =====================================================================
+export function setModo(modo) {
+    if (modo !== 'demo' && modo !== 'real') return;
+    state.modo = modo;
+    _emit();
+}
+
+export function setSesionReal({ usuario, circulos, circuloActivoId, membresia }) {
+    state.usuarioReal       = usuario || null;
+    state.circulosReal      = circulos || [];
+    state.circuloActivoIdReal = circuloActivoId || null;
+    state.membresiaReal     = membresia || null;
+    _emit();
+}
+
+export function limpiarSesionReal() {
+    state.usuarioReal = null;
+    state.circulosReal = [];
+    state.circuloActivoIdReal = null;
+    state.membresiaReal = null;
+    _emit();
+}
+
+// =====================================================================
+// Listeners
+// =====================================================================
 export function onStateChange(fn) {
     _listeners.add(fn);
     return () => _listeners.delete(fn);

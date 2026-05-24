@@ -1,59 +1,66 @@
 /**
- * Pensándote — capa de círculos y membresías.
+ * Pensándote — capa de círculos y membresías (Supabase real).
  *
- * Estado actual: MOCKS. Las funciones devuelven datos hardcoded para que
- * el flujo de UI sea probable sin Supabase. Los TODOs marcan dónde
- * conectamos la base.
+ * Las firmas se mantienen iguales a la versión mock, así app.js puede
+ * pasar de demo a real sin tocar más nada. Las RLS del proyecto se
+ * encargan de filtrar por auth.uid().
  */
 
 import { sbClient } from './auth.js';
 
 /**
- * Devuelve los círculos donde el usuario es miembro.
+ * Trae los círculos donde el usuario es miembro.
+ * Devuelve [] si no hay ninguno (la UI muestra el fallback "todavía
+ * no perteneces a ningún círculo").
+ *
  * @param {string} userId
- * @returns {Promise<Array<{id:string,nombre:string}>>}
+ * @returns {Promise<Array<{id:string,nombre:string,owner_id:string}>>}
  */
 export async function circulosDelUsuario(userId) {
-    // TODO: reemplazar por
-    // const sb = await sbClient();
-    // const { data, error } = await sb
-    //     .from('circle_members')
-    //     .select('circle:circles(id, nombre)')
-    //     .eq('user_id', userId);
-    // if (error) throw error;
-    // return data.map(r => r.circle);
-
-    return [
-        { id: 'mock-circle-1', nombre: 'Familia de Mamá Ana' }
-    ];
+    const sb = await sbClient();
+    const { data, error } = await sb
+        .from('circle_members')
+        .select('circle:circles ( id, nombre, owner_id )')
+        .eq('user_id', userId);
+    if (error) throw error;
+    return (data || []).map(r => r.circle).filter(Boolean);
 }
 
 /**
- * Devuelve la membresía del usuario en un círculo concreto.
+ * Trae la membresía del usuario en un círculo concreto.
+ * Lanza si no existe (eso sólo pasaría si se pasa un circleId del que
+ * el usuario no es miembro: la RLS bloquearía el select).
+ *
  * @param {string} userId
  * @param {string} circleId
  * @returns {Promise<{interface_mode:'simple'|'dashboard', parentesco:string, permission_level:string}>}
  */
 export async function membresiaActiva(userId, circleId) {
-    // TODO: reemplazar por
-    // const sb = await sbClient();
-    // const { data, error } = await sb
-    //     .from('circle_members')
-    //     .select('interface_mode, parentesco, permission_level')
-    //     .eq('user_id', userId)
-    //     .eq('circle_id', circleId)
-    //     .single();
-    // if (error) throw error;
-    // return data;
-
-    return {
-        interface_mode: 'dashboard',   // cambiar a 'simple' para probar UI de adulto mayor
-        parentesco: 'Hija',
-        permission_level: 'admin'
-    };
+    const sb = await sbClient();
+    const { data, error } = await sb
+        .from('circle_members')
+        .select('interface_mode, parentesco, permission_level')
+        .eq('user_id', userId)
+        .eq('circle_id', circleId)
+        .single();
+    if (error) throw error;
+    return data;
 }
 
 /**
- * TODO: crearCirculo(nombre) -> insert en circles + crear membresía admin.
- * TODO: aceptarInvitacion(token) -> RPC security definer.
+ * Trae todos los miembros de un círculo (para listas en dashboard).
+ *
+ * @param {string} circleId
  */
+export async function miembrosDelCirculo(circleId) {
+    const sb = await sbClient();
+    const { data, error } = await sb
+        .from('circle_members')
+        .select('id, user_id, interface_mode, parentesco, permission_level, user:users(nombre_completo, foto_url, telefono)')
+        .eq('circle_id', circleId);
+    if (error) throw error;
+    return data || [];
+}
+
+// TODO crear círculo (insert en circles + insert membresía admin)
+// TODO aceptar invitación (RPC security definer reclama el token)

@@ -1,45 +1,43 @@
 /**
- * Pensándote — bootstrap de la MAQUETA NAVEGABLE (v0.2)
+ * Pensándote — bootstrap (v0.3).
  * ---------------------------------------------------------------------
- * Estado actual:
- *  - SIN Supabase. Todos los datos vienen de js/mocks.js.
- *  - SIN login. Hay un "miembro activo" en memoria que se cambia desde
- *    el panel de dev de arriba a la derecha.
- *  - Routing por hash (#/inicio, #/familia, #/v2/pense, etc.).
+ * Dos modos:
+ *   - 'real' : hay config.js + sesión Supabase (o callback en la URL).
+ *              Auth, círculos y membresía vienen del backend.
+ *   - 'demo' : sin config válida o usuario sin loguear, con dev-panel
+ *              activo para alternar entre los 4 miembros mock.
  *
- * Cuando volvamos a conectar Supabase:
- *  - sustituir el bootstrap por el del esqueleto v0.1 (auth.js + circles.js).
- *  - reemplazar js/mocks.js por queries reales.
- *  - bajar la cortina del dev-panel detrás de una flag (`?dev=1`).
+ * El modo se decide en bootstrap mirando config + sesión. Después
+ * cualquier botón "Iniciar sesión" / "Ver demo" / "Cerrar sesión" puede
+ * mover el estado, y el router re-renderiza.
  */
 
 import { onRouteChange, refresh as refreshRouter } from './js/router.js';
-import { onStateChange, miembroActivo } from './js/state.js';
+import { state, onStateChange, miembroActivo, setSesionReal, setModo } from './js/state.js';
 import { montarDevPanel } from './js/dev-panel.js';
+
+import { configEsReal, usuarioActual, procesarCallback } from './js/auth.js';
+import { circulosDelUsuario, membresiaActiva } from './js/circles.js';
 
 import * as Simple    from './js/screens-simple.js';
 import * as Dashboard from './js/screens-dashboard.js';
 import * as V2        from './js/screens-v2.js';
+import * as Real      from './js/screens-real.js';
 
 const $app = document.getElementById('app');
 
-// Tabla de rutas. Cada entrada conoce qué interface_mode acepta:
-//   - 'simple'   : sólo modo simple
-//   - 'dashboard': sólo modo dashboard
-//   - 'both'     : ambos (típicamente las v2)
+// ---------------------------------------------------------------------
+// Tabla de rutas (modo demo)
+// ---------------------------------------------------------------------
 const RUTAS = {
-    // simple
     'inicio':       { simple: Simple.renderInicio,       dashboard: Dashboard.renderInicio },
     'emergencias':  { simple: Simple.renderEmergencias },
     'familia':      { simple: Simple.renderFamilia },
     'medico':       { simple: Simple.renderMedico },
     'como-hago':    { simple: Simple.renderComoHago },
     'tutorial':     { simple: Simple.renderTutorial },
-
-    // dashboard
     'config':       { dashboard: Dashboard.renderConfig },
 
-    // v2 (accesibles desde ambos modos)
     'v2': {
         both: (app, ruta) => {
             const sub = ruta.params[0] || 'pense';
@@ -51,63 +49,106 @@ const RUTAS = {
                 'calendario':     V2.renderCalendario,
                 'historias-tab':  V2.renderHistoriasTab
             };
-            // ajustamos la ruta para que la pantalla vea sub-params correctos
             const rutaInterna = { ...ruta, params: ruta.params.slice(1) };
             (map[sub] || V2.renderPense)(app, rutaInterna);
         }
     }
 };
 
-// ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------
 // Render por ruta
-// ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------
 function renderRoute(ruta) {
-    const yo = miembroActivo();
-    const def = RUTAS[ruta.name] || RUTAS['inicio'];
+    document.body.dataset.modoApp = state.modo;
 
-    // marca al body con el modo activo (para que CSS pueda diferenciarlos)
+    if (state.modo === 'real') {
+        return renderRouteReal(ruta);
+    }
+    return renderRouteDemo(ruta);
+}
+
+function renderRouteDemo(ruta) {
+    const yo = miembroActivo();
     document.body.dataset.mode = yo.interface_mode;
     document.body.dataset.miembro = yo.id;
 
+    const def = RUTAS[ruta.name] || RUTAS['inicio'];
     let handler = def[yo.interface_mode] || def.both;
 
-    // Si la ruta no aplica para este modo (ej: 'config' en modo simple),
-    // caemos elegantemente al inicio.
     if (!handler) {
-        // intentamos con el inicio del modo activo
         handler = RUTAS.inicio[yo.interface_mode];
         ruta = { name: 'inicio', params: [], query: {}, raw: '/inicio' };
     }
 
     try {
         handler($app, ruta);
-        // scroll arriba al cambiar de pantalla
         window.scrollTo({ top: 0 });
     } catch (err) {
-        console.error('[render]', err);
-        $app.innerHTML = `
-            <section class="card">
-                <h2>Ups</h2>
-                <p>Algo salió mal renderizando la pantalla.</p>
-                <pre>${(err && err.message) || err}</pre>
-            </section>
-        `;
+        console.error('[render demo]', err);
+        $app.innerHTML = `<section class="card"><h2>Ups</h2><pre>${(err && err.message) || err}</pre></section>`;
     }
 }
 
-// ---------------------------------------------------------------------------
-// Bootstrap
-// ---------------------------------------------------------------------------
-function bootstrap() {
-    montarDevPanel();
+function renderRouteReal(/* ruta */) {
+    // Modo real ignora la ruta hash: pasa secuencialmente por
+    //   login → sin círculos → cuenta. Los botones de cada pantalla
+    //   manejan transiciones internas.
+    if (!state.usuarioReal) {
+        return Real.renderLogin($app);
+    }
+    if (!state.circulosReal.length) {
+        return Real.renderSinCirculos($app);
+    }
+    return Real.renderCuenta($app);
+}
 
-    // Si cambia el miembro activo (desde el dev-panel), re-renderizamos
-    // la ruta para que se cuelguen los handlers del nuevo modo.
+// ---------------------------------------------------------------------
+// Bootstrap
+// ---------------------------------------------------------------------
+async function bootstrap() {
+    montarDevPanel();
     onStateChange(() => refreshRouter());
 
-    // El router dispara una primera vez al registrarse, así que no hace
-    // falta navegar a mano.
+    if (configEsReal()) {
+        // Procesar el callback si la URL trae tokens del magic link.
+        // (Si falla, asumimos sin sesión y caemos a demo.)
+        try {
+            await procesarCallback();
+        } catch (err) {
+            console.warn('[auth callback]', err);
+        }
+
+        const usr = await usuarioActual();
+        if (usr) {
+            // Hay sesión: arrancamos en modo real y precargamos círculos.
+            setModo('real');
+            try {
+                const circulos = await circulosDelUsuario(usr.id);
+                let membresia = null;
+                let circuloActivoId = null;
+                if (circulos.length) {
+                    circuloActivoId = circulos[0].id;
+                    membresia = await membresiaActiva(usr.id, circuloActivoId);
+                }
+                setSesionReal({
+                    usuario: usr,
+                    circulos,
+                    circuloActivoId,
+                    membresia
+                });
+            } catch (err) {
+                console.error('[bootstrap circles]', err);
+                // Falla suave: dejamos al usuario en la pantalla de cuenta
+                // con su sesión, sin círculos.
+                setSesionReal({ usuario: usr, circulos: [], circuloActivoId: null, membresia: null });
+            }
+        }
+    }
+
     onRouteChange(renderRoute);
 }
 
-bootstrap();
+bootstrap().catch(err => {
+    console.error('[bootstrap]', err);
+    $app.innerHTML = `<section class="card"><h2>Algo salió mal</h2><pre>${(err && err.message) || err}</pre></section>`;
+});

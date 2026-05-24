@@ -876,6 +876,14 @@ body[data-mode="simple"] .btn--mini { min-height: 44px; font-size: var(--fs-md);
     font-size: 0.7rem;
 }
 .dev-panel__shortcuts { display: flex; gap: 0.3rem; flex-wrap: wrap; }
+.dev-panel__real {
+    background: #fff;
+    border: 2px solid var(--line);
+    border-radius: var(--r-sm);
+    padding: 0.4rem 0.6rem;
+    margin-bottom: 0.3rem;
+    word-break: break-all;
+}
 .dev-panel__shortcuts button {
     background: #fff;
     border: 2px solid var(--line);
