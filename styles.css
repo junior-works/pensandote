@@ -326,6 +326,141 @@ body[data-mode="simple"] .btn--mini { min-height: 44px; font-size: var(--fs-md);
 .foto-cabecera {
     margin: 0 0 0.5rem 0;
 }
+
+/* ---- Galería deslizable de fotos del día (cabecera home simple) ---- */
+.galeria-fotos {
+    margin: 0 0 0.6rem 0;
+}
+.galeria__track {
+    display: flex;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    scroll-behavior: smooth;
+    -webkit-overflow-scrolling: touch;
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+    gap: 0;
+}
+.galeria__track::-webkit-scrollbar { display: none; }
+.galeria__slide {
+    flex: 0 0 100%;
+    scroll-snap-align: start;
+    margin: 0;
+    cursor: pointer;
+    padding: 0 0.2rem;
+    box-sizing: border-box;
+}
+.galeria__img {
+    width: 100%;
+    aspect-ratio: 4 / 3;
+    object-fit: cover;
+    border: 2px solid rgba(42, 30, 18, 0.88);
+    border-radius: 24px;
+    background: #f0e9da;
+    display: block;
+}
+.galeria__slide figcaption {
+    text-align: center;
+    margin-top: 0.5rem;
+    font-size: var(--fs-lg);
+    color: var(--ink);
+    padding: 0 0.5rem;
+}
+.galeria__dots {
+    display: flex;
+    justify-content: center;
+    gap: 0.5rem;
+    margin-top: 0.6rem;
+}
+.galeria__dot {
+    width: 12px; height: 12px;
+    border-radius: 50%;
+    background: rgba(42, 30, 18, 0.22);
+    transition: background 120ms ease, transform 120ms ease;
+}
+.galeria__dot.is-active {
+    background: var(--accent-pense);
+    transform: scale(1.15);
+}
+
+/* ---- Lightbox: foto a pantalla completa con swipe ---- */
+.lightbox-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.94);
+    z-index: 2000;
+    display: flex;
+    align-items: stretch;
+    justify-content: stretch;
+}
+.lightbox__close {
+    position: absolute;
+    top: max(env(safe-area-inset-top, 0px), 1rem);
+    right: 1rem;
+    width: 56px; height: 56px;
+    border-radius: 50%;
+    background: #fff;
+    color: #111;
+    border: 2px solid #111;
+    font-size: 1.6rem;
+    font-weight: 700;
+    cursor: pointer;
+    z-index: 10;
+    display: grid;
+    place-items: center;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.35);
+}
+.lightbox__counter {
+    position: absolute;
+    top: max(env(safe-area-inset-top, 0px), 1.2rem);
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(255, 255, 255, 0.95);
+    border: 2px solid #111;
+    border-radius: 999px;
+    padding: 0.35em 0.95em;
+    font-weight: 700;
+    font-size: 0.95rem;
+    z-index: 10;
+}
+.lightbox__track {
+    display: flex;
+    width: 100vw;
+    height: 100dvh;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    scroll-behavior: smooth;
+    -webkit-overflow-scrolling: touch;
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+}
+.lightbox__track::-webkit-scrollbar { display: none; }
+.lightbox__slide {
+    flex: 0 0 100vw;
+    scroll-snap-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    margin: 0;
+    padding: 4rem 1rem 2rem;
+    box-sizing: border-box;
+}
+.lightbox__slide img {
+    max-width: 100%;
+    max-height: 72dvh;
+    object-fit: contain;
+    border-radius: 8px;
+}
+.lightbox__slide figcaption {
+    color: #fff;
+    margin-top: 1.2rem;
+    font-family: var(--font-emocional);
+    font-size: 1.6rem;
+    text-align: center;
+    padding: 0 1rem;
+    line-height: 1.3;
+}
 /* Saludo más compacto cuando va DEBAJO de la foto cabecera. */
 .simple-header--abajo-foto {
     margin: 0.3rem 0 1rem;

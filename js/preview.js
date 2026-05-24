@@ -27,7 +27,7 @@ import { state, miembroActivo } from './state.js';
 import { go } from './router.js';
 import { h, modal } from './ui.js';
 import {
-    listarContactos, leerDatosMedicos, ultimaFotoDia,
+    listarContactos, leerDatosMedicos, ultimaFotoDia, ultimasFotosDia,
     pensamientosRecibidos, listarHistorias, listarFechas,
     listarAccesos
 } from './data-emotiva.js';
@@ -62,10 +62,17 @@ export function getTutoriales() {
     return TUTORIALES;
 }
 
+/** Última foto (compat, usada por screens que muestran sólo una). */
 export function getFotoDelDia() {
-    if (state.modoPreview) return state.previewData?.foto || null;
-    if (state.datosReales) return state.datosReales.foto || null;
-    return null;
+    const lista = getFotosDia();
+    return lista.length ? lista[0] : null;
+}
+
+/** Galería de fotos (las últimas N, con blob URL cada una). */
+export function getFotosDia() {
+    if (state.modoPreview) return state.previewData?.fotos || [];
+    if (state.datosReales) return state.datosReales.fotos || [];
+    return [];
 }
 
 export function getPensamientosRecibidos() {
@@ -165,16 +172,16 @@ export async function entrarPreviewVerComoPapa(circleId, miembros) {
 
     let data;
     try {
-        const [contactos, medico, foto, pensamientos, historias, fechas, accesos] = await Promise.all([
+        const [contactos, medico, fotos, pensamientos, historias, fechas, accesos] = await Promise.all([
             listarContactos(circleId).catch(e => { console.warn('[preview] contactos', e); return []; }),
             leerDatosMedicos(circleId).catch(e => { console.warn('[preview] medico', e); return null; }),
-            ultimaFotoDia(circleId).catch(e => { console.warn('[preview] foto', e); return null; }),
+            ultimasFotosDia(circleId, 10).catch(e => { console.warn('[preview] fotos', e); return []; }),
             pensamientosRecibidos(circleId, papa.user_id).catch(e => { console.warn('[preview] pensé', e); return []; }),
             listarHistorias(circleId).catch(e => { console.warn('[preview] historias', e); return []; }),
             listarFechas(circleId).catch(e => { console.warn('[preview] fechas', e); return []; }),
             listarAccesos(circleId).catch(e => { console.warn('[preview] accesos', e); return []; })
         ]);
-        data = { contactos, medico, foto, pensamientos, historias, fechas, miembros, accesos };
+        data = { contactos, medico, fotos, pensamientos, historias, fechas, miembros, accesos };
     } catch (err) {
         console.error('[preview] load', err);
         await modal({
@@ -192,14 +199,19 @@ export async function entrarPreviewVerComoPapa(circleId, miembros) {
 }
 
 export function salirPreview() {
-    // Revocar blob URL de la foto del día (si la cargamos como objectURL).
-    const u = state.previewData?.foto?.url;
-    if (u && typeof u === 'string' && u.startsWith('blob:')) {
-        try { URL.revokeObjectURL(u); } catch (_) {}
-    }
+    // Revocar blob URLs de la galería antes de soltar el cache.
+    revocarFotos(state.previewData?.fotos);
     state.modoPreview   = false;
     state.previewData   = null;
     state.previewPapaId = null;
+}
+
+function revocarFotos(arr) {
+    (arr || []).forEach(f => {
+        if (f?.url && typeof f.url === 'string' && f.url.startsWith('blob:')) {
+            try { URL.revokeObjectURL(f.url); } catch (_) {}
+        }
+    });
 }
 
 // =========================================================================
@@ -342,29 +354,23 @@ function hace(ms) {
 export async function prepararDatosReales(circleId, userId) {
     if (!circleId || !userId) return;
     try {
-        const [contactos, medico, foto, pensamientos, miembros, accesos] = await Promise.all([
+        const [contactos, medico, fotos, pensamientos, miembros, accesos] = await Promise.all([
             listarContactos(circleId).catch(e => { console.warn('[datosReales] contactos', e); return []; }),
             leerDatosMedicos(circleId).catch(e => { console.warn('[datosReales] medico', e); return null; }),
-            ultimaFotoDia(circleId).catch(e => { console.warn('[datosReales] foto', e); return null; }),
+            ultimasFotosDia(circleId, 10).catch(e => { console.warn('[datosReales] fotos', e); return []; }),
             pensamientosRecibidos(circleId, userId).catch(e => { console.warn('[datosReales] pensé', e); return []; }),
             miembrosDelCirculo(circleId).catch(e => { console.warn('[datosReales] miembros', e); return []; }),
             listarAccesos(circleId).catch(e => { console.warn('[datosReales] accesos', e); return []; })
         ]);
-        // Liberar blob URL viejo si había foto previa cacheada.
-        const urlVieja = state.datosReales?.foto?.url;
-        if (urlVieja && typeof urlVieja === 'string' && urlVieja.startsWith('blob:')) {
-            try { URL.revokeObjectURL(urlVieja); } catch (_) {}
-        }
-        state.datosReales = { contactos, medico, foto, pensamientos, miembros, accesos };
+        // Liberar blob URLs viejas antes de pisar el cache.
+        revocarFotos(state.datosReales?.fotos);
+        state.datosReales = { contactos, medico, fotos, pensamientos, miembros, accesos };
     } catch (err) {
         console.error('[prepararDatosReales]', err);
     }
 }
 
 export function limpiarDatosReales() {
-    const u = state.datosReales?.foto?.url;
-    if (u && typeof u === 'string' && u.startsWith('blob:')) {
-        try { URL.revokeObjectURL(u); } catch (_) {}
-    }
+    revocarFotos(state.datosReales?.fotos);
     state.datosReales = null;
 }

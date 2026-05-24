@@ -59,6 +59,34 @@ export async function publicarNtfy(topic, mensaje) {
 // ---------------------------------------------------------------------
 // Foto del día
 // ---------------------------------------------------------------------
+/**
+ * Trae las últimas N fotos del día del círculo, cada una con su blob
+ * URL ya generada (bajada vía storage.download). El caller es
+ * responsable de revocar las URLs cuando deje de usarlas.
+ */
+export async function ultimasFotosDia(circleId, limit = 10) {
+    const sb = await sbClient();
+    const { data, error } = await sb.from('fotos_dia')
+        .select('*').eq('circle_id', circleId)
+        .order('created_at', { ascending: false })
+        .limit(limit);
+    if (error) {
+        console.error('[ultimasFotosDia] select', error);
+        throw enriquecer('select fotos_dia', error);
+    }
+    if (!data?.length) return [];
+    const fotos = await Promise.all(data.map(async (row) => {
+        try {
+            const url = await descargarComoObjectURL('fotos', row.storage_path);
+            return { ...row, url };
+        } catch (e) {
+            console.warn('[ultimasFotosDia] download', row.storage_path, e);
+            return null;
+        }
+    }));
+    return fotos.filter(Boolean);
+}
+
 export async function ultimaFotoDia(circleId) {
     const sb = await sbClient();
     const { data, error } = await sb.from('fotos_dia')

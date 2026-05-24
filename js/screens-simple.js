@@ -11,7 +11,7 @@ import { go, goReplace } from './router.js';
 import { h, modal, speakES, stopSpeak, renderErrorEstructurado } from './ui.js';
 import { preguntarComoHagoIA } from './data-emotiva.js';
 import {
-    getContactos, getMedico, getTutoriales, getFotoDelDia,
+    getContactos, getMedico, getTutoriales, getFotoDelDia, getFotosDia,
     getMiembroVisto, getAccesos, esPreview, avisarPreview
 } from './preview.js';
 
@@ -20,7 +20,7 @@ import {
 // =====================================================================
 export function renderInicio($app) {
     const yo = getMiembroVisto();
-    const foto = getFotoDelDia();
+    const fotos = getFotosDia();
     const horaSaludo = (() => {
         const hr = new Date().getHours();
         if (hr < 12) return 'Buenos días';
@@ -29,17 +29,27 @@ export function renderInicio($app) {
     })();
 
     $app.innerHTML = `
-        ${foto && foto.url ? `
-            <figure class="foto-carousel foto-cabecera">
-                <img class="foto-carousel__img" src="${h(foto.url)}" alt="${h(foto.epigrafe || 'Foto del día')}">
-                ${foto.epigrafe ? `<figcaption><strong class="t-emocional">${h(foto.epigrafe)}</strong></figcaption>` : ''}
-            </figure>
+        ${fotos.length ? `
+            <section class="galeria-fotos foto-cabecera">
+                <div class="galeria__track" id="galeria-track">
+                    ${fotos.map((f, i) => `
+                        <figure class="galeria__slide" data-idx="${i}">
+                            <img class="galeria__img" src="${h(f.url)}" alt="${h(f.epigrafe || 'Foto')}">
+                            ${f.epigrafe ? `<figcaption class="t-emocional">${h(f.epigrafe)}</figcaption>` : ''}
+                        </figure>
+                    `).join('')}
+                </div>
+                ${fotos.length > 1 ? `
+                    <div class="galeria__dots" id="galeria-dots">
+                        ${fotos.map((_, i) => `<span class="galeria__dot${i === 0 ? ' is-active' : ''}"></span>`).join('')}
+                    </div>
+                ` : ''}
+            </section>
         ` : `
             <article class="foto-del-dia foto-del-dia--placeholder foto-cabecera">
-                <span class="badge-v2">v2 · Próximamente</span>
                 <div class="foto-del-dia__cuerpo">
                     <span class="foto-del-dia__emoji">📷</span>
-                    <p>Acá vas a ver la foto del día que te mandan tus seres queridos.</p>
+                    <p>Acá vas a ver las fotos del día que te manda tu familia.</p>
                 </div>
             </article>
         `}
@@ -96,6 +106,74 @@ export function renderInicio($app) {
     `;
     wireNav($app);
     wireAccesos($app);
+    wireGaleria($app, fotos);
+}
+
+/** Activa el sync scroll → dots + tap → lightbox de la galería. */
+function wireGaleria($app, fotos) {
+    if (!fotos || !fotos.length) return;
+    const $track = $app.querySelector('#galeria-track');
+    const $dots  = $app.querySelectorAll('#galeria-dots .galeria__dot');
+    if ($track && $dots.length > 1) {
+        $track.addEventListener('scroll', () => {
+            const idx = Math.round($track.scrollLeft / $track.clientWidth);
+            $dots.forEach((d, i) => d.classList.toggle('is-active', i === idx));
+        });
+    }
+    $app.querySelectorAll('.galeria__slide').forEach(slide => {
+        slide.addEventListener('click', () => {
+            abrirLightboxFotos(fotos, Number(slide.dataset.idx) || 0);
+        });
+    });
+}
+
+/** Lightbox a pantalla completa con swipe horizontal entre fotos. */
+function abrirLightboxFotos(fotos, startIdx = 0) {
+    const overlay = document.createElement('div');
+    overlay.className = 'lightbox-overlay';
+    overlay.innerHTML = `
+        <button class="lightbox__close" aria-label="Cerrar">✕</button>
+        <div class="lightbox__counter" id="lb-counter">${startIdx + 1} de ${fotos.length}</div>
+        <div class="lightbox__track" id="lb-track">
+            ${fotos.map(f => `
+                <figure class="lightbox__slide">
+                    <img src="${h(f.url)}" alt="${h(f.epigrafe || 'Foto')}">
+                    ${f.epigrafe ? `<figcaption>${h(f.epigrafe)}</figcaption>` : ''}
+                </figure>
+            `).join('')}
+        </div>
+    `;
+    document.body.appendChild(overlay);
+
+    const $track   = overlay.querySelector('#lb-track');
+    const $counter = overlay.querySelector('#lb-counter');
+
+    // Posicionar en la foto que tocó.
+    requestAnimationFrame(() => {
+        $track.scrollLeft = startIdx * $track.clientWidth;
+    });
+
+    $track.addEventListener('scroll', () => {
+        const idx = Math.round($track.scrollLeft / $track.clientWidth);
+        if (idx >= 0 && idx < fotos.length) {
+            $counter.textContent = `${idx + 1} de ${fotos.length}`;
+        }
+    });
+
+    function cerrar() {
+        overlay.remove();
+        document.removeEventListener('keydown', onKey);
+        // NO revocamos los blob URLs — siguen en uso en la galería de
+        // atrás (mismas URLs en state.datosReales.fotos).
+    }
+    function onKey(e) {
+        if (e.key === 'Escape')     cerrar();
+        if (e.key === 'ArrowRight') $track.scrollBy({ left: $track.clientWidth, behavior: 'smooth' });
+        if (e.key === 'ArrowLeft')  $track.scrollBy({ left: -$track.clientWidth, behavior: 'smooth' });
+    }
+    document.addEventListener('keydown', onKey);
+    overlay.querySelector('.lightbox__close').addEventListener('click', cerrar);
+    // No cerrar al tocar el track — eso es para hacer swipe.
 }
 
 /** Botón grande para un acceso (llamar o abrir link). */
