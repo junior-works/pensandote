@@ -1673,6 +1673,36 @@ body[data-mode="dashboard"] .hogar-pense { background: #fff8f3; }
 .contacto-admin-row__info small { color: var(--ink-soft); word-break: break-all; }
 .contacto-admin-row__acc { display: flex; gap: 0.3rem; flex-wrap: wrap; }
 
+/* ---- Guía rápida del admin (tutorial paso a paso con TTS) ---- */
+.guia-progreso {
+    display: flex; gap: 0.3rem;
+    margin: 0.3rem 0 1rem;
+}
+.guia-progreso__dot {
+    flex: 1;
+    height: 6px;
+    background: rgba(17, 17, 17, 0.12);
+    border-radius: 999px;
+    transition: background 120ms ease;
+}
+.guia-progreso__dot.is-done {
+    background: var(--accent-inicio);
+}
+.guia-paso__texto {
+    font-size: 1.05rem;
+    line-height: 1.55;
+    color: var(--ink);
+    margin: 0;
+}
+.guia-nav {
+    display: flex; gap: 0.6rem;
+    justify-content: space-between;
+    align-items: stretch;
+    margin-top: 1rem;
+}
+.guia-nav .btn { flex: 1; }
+.guia-nav > span { flex: 1; }  /* spacer cuando no hay 'Anterior' */
+
 /* ---- Accesos / Trámites (admin) ---- */
 .accesos-admin-lista { list-style: none; padding: 0; margin: 0; display: grid; gap: 0.5rem; }
 .acceso-admin-row {

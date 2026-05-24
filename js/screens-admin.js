@@ -12,9 +12,9 @@
  */
 
 import { state } from './state.js';
-import { go } from './router.js';
+import { go, goReplace } from './router.js';
 import {
-    h, modal,
+    h, modal, speakES, stopSpeak,
     installModalBackButton, cleanupModalBackButton
 } from './ui.js';
 import { esPreview, getAccesos, avisarPreview } from './preview.js';
@@ -764,5 +764,133 @@ function abrirFormAcceso(circleId, acceso, onSaved) {
         } finally {
             btn.disabled = false; btn.textContent = orig;
         }
+    });
+}
+
+// =====================================================================
+// GUÍA RÁPIDA DEL ADMIN — tutorial paso a paso con TTS
+// =====================================================================
+//
+// Contenido editorial pensado para alguien que sabe usar el celular
+// pero recién entra al panel de Pensándote. Voseo argentino, claro y
+// cálido. Si Charly comparte el link de su admin con la familia, esta
+// guía les explica todo lo que tienen para usar.
+//
+const PASOS_GUIA_ADMIN = [
+    {
+        titulo: '¡Hola!',
+        texto: 'Bienvenida al panel de Pensándote. Desde acá vas a acompañar a tu ser querido sin que él tenga que configurar nada en su teléfono. Vos cargás todo desde tu cuenta y él lo ve listo del otro lado.'
+    },
+    {
+        titulo: 'El círculo',
+        texto: 'Un "círculo" es la familia que se organiza alrededor de una persona. Puede haber varios círculos (por ejemplo, el de tu papá y el de tu suegro), y vos podés pertenecer a varios al mismo tiempo. Cada círculo es independiente: contactos, datos, fotos y permisos viven sólo en el suyo.'
+    },
+    {
+        titulo: 'Invitar gente',
+        texto: 'En "Acciones del círculo" tenés "Invitar a alguien". Elegís el parentesco (Hijo, Hija, Cuidadora, Vecina, etc.) y el modo. Importante: si invitás a tu papá o mamá, elegí modo "simple" — el link funciona de un solo toque, sin pedir mail ni contraseña. Si invitás a hermanos o familiares que van a ayudarte a gestionar, modo "dashboard" — entran con su propio mail por link mágico.'
+    },
+    {
+        titulo: 'Permisos',
+        texto: 'Hay tres niveles. "Admin" puede invitar gente, cambiar todo y abrir el legado. "Editor" puede cargar contactos, datos médicos y accesos pero no invita ni gestiona miembros. "Sólo ver" entra a mirar y nada más. Lo usual: uno o dos hijos admin, el resto editor.'
+    },
+    {
+        titulo: 'Contactos',
+        texto: 'En "Contactos del círculo" cargás a los familiares más cercanos y los números de emergencia. Cada contacto tiene nombre, parentesco, teléfono y una casilla "de emergencia". Los que marqués así (médicos de confianza, vecinos, etc.) aparecen en la pantalla de Emergencias de tu papá, además del 911, SAME y Bomberos que ya vienen fijos.'
+    },
+    {
+        titulo: 'Datos médicos',
+        texto: 'En "Datos médicos" cargás la obra social, número de afiliado, plan, médico de cabecera con su mail y teléfono, y notas (alergias, medicación). Cuando esto está cargado, tu papá ve en su pantalla "Médico" los botones "Mandar mail al médico" (con dictado por voz, no tiene que escribir) y "Llamar al consultorio". Sin esos datos, esos botones no aparecen.'
+    },
+    {
+        titulo: 'Accesos y trámites',
+        texto: 'En "Accesos / Trámites" creás botones grandes que aparecen en la app de tu papá. Por ejemplo "Pedir turno PAMI" (que abre una web) o "Llamar a tu hermana" (que disca un número). Cada acceso es de tipo "llamar" o "link", y puede ser categoría "General" (aparece en su pantalla de inicio) o "Médico" (aparece dentro de la pantalla Médico, al lado de los botones de mandar mail y llamar al consultorio).'
+    },
+    {
+        titulo: 'Calendario afectivo',
+        texto: 'Acá cargás cumpleaños, reencuentros y otras fechas importantes del círculo. Ayuda a recordar y a planificar. Las ves desde el panel; a medida que sumemos funciones también vamos a recordárselas a él.'
+    },
+    {
+        titulo: 'Foto del día',
+        texto: 'Subís fotos desde el panel y aparecen en la cabecera de la app de tu papá como una galería deslizable. Una foto por día de la familia es un cariño chiquito que arma rutina. Subí cinco o diez — él las va pasando con el dedo y al tocarlas se ven en grande.'
+    },
+    {
+        titulo: 'Pensé en vos',
+        texto: 'Es el gesto más simple. Tocás "Pensé en vos", elegís a quién, y a esa persona le aparece adentro de la app un cariño tuyo. No es un mensaje y no se contesta — es presencia. Él también te puede mandar un pensé desde su lado.'
+    },
+    {
+        titulo: 'Historias y Legado',
+        texto: 'Tu papá puede grabar anécdotas con su voz desde su app. Hay dos pestañas: "Historias" comparte lo que él quiera con quien él elija (todos del círculo, sólo hijos, o personas específicas); y "Legado" queda guardado privado para él, hasta que vos como admin lo abrís. El Legado es una acción delicada: el botón para abrirlo está al final del todo, separado, y pide confirmación. Solo abrilo cuando corresponda. Se puede volver a cerrar.'
+    },
+    {
+        titulo: 'Ver como lo ve papá',
+        texto: 'En "Acciones del círculo" hay un botón "Ver como lo ve…" que te muestra la pantalla que tiene él, exactamente como la ve, con los datos reales del círculo. Sirve para entender qué está mirando, o para ayudarlo por teléfono ("apretá ese botón verde de arriba"). No cambia tu sesión: tocás "Salir" y volvés a tu panel.'
+    },
+    {
+        titulo: 'Editar tu parentesco',
+        texto: 'Cuando creaste el círculo quedaste como "Familiar" por defecto. En "Mi cuenta" tenés un botón "Editar mi parentesco" — cambialo a "Hijo", "Hija", "Nieta", lo que corresponda. Así él te ve por tu rol y no como un genérico.'
+    },
+    {
+        titulo: 'Listo',
+        texto: 'Esto es lo importante para arrancar. La app va a ir creciendo; cualquier duda, podés volver a esta guía cuando quieras desde el botón "Guía rápida" del panel. Gracias por estar.'
+    }
+];
+
+export function renderGuiaAdmin($app, ruta) {
+    const total  = PASOS_GUIA_ADMIN.length;
+    const idx    = Math.max(0, Math.min(Number(ruta?.query?.p ?? 0), total - 1));
+    const paso   = PASOS_GUIA_ADMIN[idx];
+    const esUltimo = idx === total - 1;
+
+    $app.innerHTML = `
+        <header class="admin-pantalla__head">
+            <button class="btn btn--mini" id="btn-salir-guia">← Volver al hogar</button>
+            <h1>❔ Guía rápida</h1>
+        </header>
+
+        <p class="muted" style="margin: 0.3rem 0 0.4rem;">Paso ${idx + 1} de ${total}</p>
+        <div class="guia-progreso">
+            ${PASOS_GUIA_ADMIN.map((_, i) => `
+                <span class="guia-progreso__dot${i <= idx ? ' is-done' : ''}"></span>
+            `).join('')}
+        </div>
+
+        <section class="card stack">
+            <h2 style="margin-top:0;">${h(paso.titulo)}</h2>
+            <p class="guia-paso__texto">${h(paso.texto)}</p>
+            <button class="btn" id="btn-leer-guia">🔊 Leer en voz alta</button>
+        </section>
+
+        <div class="guia-nav">
+            ${idx > 0
+                ? `<button class="btn" id="btn-prev-guia">← Anterior</button>`
+                : `<span></span>`}
+            ${!esUltimo
+                ? `<button class="btn btn--inicio" id="btn-sig-guia">Siguiente →</button>`
+                : `<button class="btn btn--familia" id="btn-fin-guia">✅ Listo, gracias</button>`}
+        </div>
+    `;
+
+    $app.querySelector('#btn-leer-guia').addEventListener('click', () => speakES(paso.texto));
+    $app.querySelector('#btn-salir-guia').addEventListener('click', () => {
+        stopSpeak();
+        go('#/inicio');
+    });
+    // goReplace para no acumular un entry de history por cada paso —
+    // así el botón atrás del Android vuelve al hogar de una sola vez
+    // y no retrocede paso a paso.
+    const sig = $app.querySelector('#btn-sig-guia');
+    if (sig) sig.addEventListener('click', () => {
+        stopSpeak();
+        goReplace(`#/guia-admin?p=${idx + 1}`);
+    });
+    const prev = $app.querySelector('#btn-prev-guia');
+    if (prev) prev.addEventListener('click', () => {
+        stopSpeak();
+        goReplace(`#/guia-admin?p=${idx - 1}`);
+    });
+    const fin = $app.querySelector('#btn-fin-guia');
+    if (fin) fin.addEventListener('click', () => {
+        stopSpeak();
+        go('#/inicio');
     });
 }

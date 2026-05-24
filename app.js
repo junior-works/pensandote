@@ -173,6 +173,7 @@ function renderRouteReal(ruta) {
         if (ruta.name === 'contactos')      return Admin.renderContactosAdmin($app);
         if (ruta.name === 'datos-medicos')  return Admin.renderMedicoAdmin($app);
         if (ruta.name === 'accesos-admin')  return Admin.renderAccesosAdmin($app);
+        if (ruta.name === 'guia-admin')     return Admin.renderGuiaAdmin($app, ruta);
         if (ruta.name === 'medico')         return Admin.renderMedicoSimpleReal($app);
         // Cómo hago + IA — funcional en uso real (la edge function
         // requiere JWT, que tenemos por la sesión).
