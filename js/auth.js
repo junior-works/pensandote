@@ -28,7 +28,9 @@ async function client() {
     }
     const cfg = window.PENSANDOTE_CONFIG;
 
-    _clientPromise = import('https://esm.sh/@supabase/supabase-js@2.45.4')
+    // Pineado a 2.106.x: el pin viejo (2.45.4) traía storage-js antiguo que
+    // tiraba "The database schema is invalid or incompatible" al subir fotos.
+    _clientPromise = import('https://esm.sh/@supabase/supabase-js@2.106.1')
         .then(mod => {
             _client = mod.createClient(cfg.SUPABASE_URL, cfg.SUPABASE_ANON_KEY, {
                 auth: {

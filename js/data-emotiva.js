@@ -91,13 +91,19 @@ export async function subirFotoDia({ circleId, file, epigrafe = null }) {
     // 2) Upload a storage.
     const safe = file.name.replace(/[^a-zA-Z0-9._-]+/g, '_');
     const path = `${circleId}/${Date.now()}-${safe}`;
-    console.info('[subirFotoDia] upload', { path, type: file.type, size: file.size });
+    // Algunas galerías de Android entregan File con file.type vacío:
+    // sin contentType el upload puede romper o quedar como octet-stream.
+    // Adivinamos por extensión como fallback.
+    const contentType = file.type || guessImageMime(file.name) || 'application/octet-stream';
+    console.info('[subirFotoDia] upload', { path, type: contentType, fileType: file.type, size: file.size, name: file.name });
 
     const { data: upData, error: errUp } = await sb.storage
         .from('fotos')
-        .upload(path, file, { contentType: file.type, upsert: false });
+        .upload(path, file, { contentType, upsert: false });
     if (errUp) {
-        console.error('[subirFotoDia] storage.upload', errUp);
+        // storage-js a veces deja info útil en .error, .__isStorageError, etc.
+        console.error('[subirFotoDia] storage.upload', errUp,
+            'JSON:', JSON.stringify(errUp, Object.getOwnPropertyNames(errUp)));
         throw enriquecer('storage', errUp);
     }
     console.info('[subirFotoDia] storage OK', upData);
@@ -294,4 +300,16 @@ async function firmarUrl(bucket, path, expirySec = 3600) {
     const { data, error } = await sb.storage.from(bucket).createSignedUrl(path, expirySec);
     if (error) throw error;
     return data.signedUrl;
+}
+
+/** Adivina MIME por extensión cuando File.type viene vacío (Android galería). */
+function guessImageMime(filename) {
+    const n = (filename || '').toLowerCase();
+    if (/\.(jpg|jpeg)$/.test(n)) return 'image/jpeg';
+    if (/\.png$/.test(n))        return 'image/png';
+    if (/\.webp$/.test(n))       return 'image/webp';
+    if (/\.gif$/.test(n))        return 'image/gif';
+    if (/\.heic$/.test(n))       return 'image/heic';
+    if (/\.heif$/.test(n))       return 'image/heif';
+    return null;
 }
