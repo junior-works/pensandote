@@ -345,24 +345,47 @@ export async function abrirModalInvitacion(circleId) {
 // =====================================================================
 export async function renderInvitacion($app, token) {
     $app.innerHTML = `<section class="card stack" style="margin-top:2rem;"><p>Abriendo invitación…</p></section>`;
+    console.info('[renderInvitacion] token=%s', token);
+
+    // Token cortado o ausente (ej: link mal copiado / parser que comió el hash).
+    if (!token || token.length < 8) {
+        return pintarError($app, 'Link incompleto',
+            'El link de invitación está cortado o le falta el código. Pedile a la familia que te lo mande de nuevo.');
+    }
+
     let inv;
     try {
         inv = await infoInvitacion(token);
     } catch (err) {
-        return pintarError($app, 'No pude leer la invitación', err.message || err);
+        console.error('[renderInvitacion] info_invitacion', err);
+        return pintarError($app, 'No pude leer la invitación', err?.message || String(err));
     }
-    if (!inv)              return pintarError($app, 'Invitación no encontrada');
-    if (inv.claimed)       return pintarError($app, 'Esta invitación ya fue usada',
-        'Si sos vos y necesitás volver a entrar, pedile a la familia que te genere una nueva.');
-    if (new Date(inv.expires_at) < new Date())
-        return pintarError($app, 'Esta invitación venció',
-            'Pasaron más de 7 días desde que se generó.');
+    console.info('[renderInvitacion] inv=%o', inv);
 
-    if (inv.interface_mode_sugerido === 'simple') {
-        renderInvitacionSimple($app, token, inv);
-    } else {
-        renderInvitacionDashboard($app, token, inv);
+    if (!inv) {
+        return pintarError($app, 'Invitación no encontrada',
+            'Puede que el link esté mal copiado. Pedí uno nuevo.');
     }
+    if (inv.claimed) {
+        return pintarError($app, 'Este link ya fue usado',
+            'Si sos vos y necesitás volver a entrar, pedí un link nuevo.');
+    }
+    if (inv.expires_at && new Date(inv.expires_at) < new Date()) {
+        return pintarError($app, 'Este link venció',
+            'Pedí uno nuevo.');
+    }
+
+    // Matching estricto + normalización defensiva.
+    const modo = String(inv.interface_mode_sugerido ?? '').toLowerCase().trim();
+    if (modo === 'simple')    return renderInvitacionSimple($app, token, inv);
+    if (modo === 'dashboard') return renderInvitacionDashboard($app, token, inv);
+
+    // Si el modo no es ninguno de los dos (null, '', valor raro), NO caemos
+    // silenciosamente a dashboard — eso le mostraba el form de email a un
+    // invitado simple. Mejor error claro para regenerar.
+    console.warn('[renderInvitacion] interface_mode desconocido:', inv.interface_mode_sugerido);
+    return pintarError($app, 'Invitación incompleta',
+        'La invitación no especifica si es modo simple o dashboard. Pedile a quien te invitó que la regenere.');
 }
 
 function renderInvitacionSimple($app, token, inv) {

@@ -93,8 +93,11 @@ function renderRouteDemo(ruta) {
 
 function renderRouteReal(ruta) {
     // Caso especial: link de invitación. Cae acá venga o no con sesión.
-    if (ruta.name === 'invitacion' && ruta.params[0]) {
-        return Real.renderInvitacion($app, ruta.params[0]);
+    // Si el token llegó vacío (link mal copiado / parser comió el hash),
+    // renderInvitacion muestra un error claro en vez de silenciosamente
+    // tirar al usuario al form de email.
+    if (ruta.name === 'invitacion') {
+        return Real.renderInvitacion($app, ruta.params[0] || '');
     }
     // Sin sesión: login.
     if (!state.usuarioReal) {

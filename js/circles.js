@@ -139,8 +139,14 @@ export async function crearInvitacion({ circleId, parentesco, interfaceMode, per
 export async function infoInvitacion(token) {
     const sb = await sbClient();
     const { data, error } = await sb.rpc('info_invitacion', { p_token: token });
-    if (error) throw error;
-    return (data && data.length) ? data[0] : null;
+    if (error) {
+        console.error('[infoInvitacion] rpc error', error);
+        throw error;
+    }
+    console.info('[infoInvitacion] token=%s data=%o', token, data);
+    return (Array.isArray(data) && data.length) ? data[0]
+         : (data && typeof data === 'object' && !Array.isArray(data)) ? data
+         : null;
 }
 
 /**
