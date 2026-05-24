@@ -22,7 +22,8 @@ import { crearDictado } from './utils/dictado.js';
 import {
     listarContactos, crearContacto, actualizarContacto, borrarContacto,
     leerDatosMedicos, guardarDatosMedicos,
-    listarAccesos, crearAcceso, actualizarAcceso, borrarAcceso
+    listarAccesos, crearAcceso, actualizarAcceso, borrarAcceso,
+    listarDocumentos, subirDocumento, borrarDocumento
 } from './data-emotiva.js';
 
 // =====================================================================
@@ -264,8 +265,43 @@ export async function renderMedicoAdmin($app) {
                 <span>Notas (alergias, medicación, lo que sea útil)</span>
                 <textarea name="notas" class="input-real" rows="4">${h(datos.notas || '')}</textarea>
             </label>
+
+            <fieldset class="stack" style="border:none; padding:0; margin-top:0.4rem;">
+                <legend style="font-weight:600; padding:0; margin-bottom:0.4rem;">✉️ Plantilla del mail al médico</legend>
+                <p class="muted" style="font-size:0.88em; margin: 0 0 0.5rem;">
+                    Lo que tu familiar va a usar como base cuando toque "Mandar mail al médico"
+                    desde su pantalla. Puede editarlo antes de enviar.
+                </p>
+                <label class="stack">
+                    <span>Asunto</span>
+                    <input name="mail_asunto" class="input-real"
+                           value="${h(datos.mail_asunto || '')}"
+                           placeholder="Consulta — solicitud de turno">
+                </label>
+                <label class="stack">
+                    <span>Cuerpo del mail</span>
+                    <textarea name="mail_cuerpo" class="input-real" rows="5"
+                              placeholder="Hola Dr./Dra., quisiera solicitar un turno. Adjunto DNI y carnet de PAMI. Gracias.">${h(datos.mail_cuerpo || '')}</textarea>
+                </label>
+            </fieldset>
+
             <button type="submit" class="btn btn--inicio">💾 Guardar</button>
         </form>
+
+        <section class="card stack" style="margin-top:1rem;">
+            <h2 style="margin:0;">📎 Documentos</h2>
+            <p class="muted" style="font-size:0.9em; margin:0;">
+                Subí los documentos de tu familiar (DNI, carnet PAMI, estudios, etc.).
+                Cuando mande mail al médico desde su pantalla se van a adjuntar
+                automáticamente (próximamente — por ahora quedan guardados acá).
+            </p>
+            <label class="btn btn--inicio" style="cursor:pointer;">
+                📤 Subir documento
+                <input id="doc-input" type="file" style="display:none"
+                       accept=".pdf,.jpg,.jpeg,.png,.webp,application/pdf,image/*">
+            </label>
+            <div id="sec-docs"><p class="muted">Cargando…</p></div>
+        </section>
     `;
     $app.querySelector('#btn-volver').addEventListener('click', () => go('#/inicio'));
     $app.querySelector('#form-medico-admin').addEventListener('submit', async (e) => {
@@ -278,7 +314,9 @@ export async function renderMedicoAdmin($app) {
             medico_nombre:   String(fd.get('medico_nombre') || '').trim()   || null,
             medico_email:    String(fd.get('medico_email') || '').trim()    || null,
             medico_telefono: String(fd.get('medico_telefono') || '').trim() || null,
-            notas:           String(fd.get('notas') || '').trim()           || null
+            notas:           String(fd.get('notas') || '').trim()           || null,
+            mail_asunto:     String(fd.get('mail_asunto') || '').trim()     || null,
+            mail_cuerpo:     String(fd.get('mail_cuerpo') || '').trim()     || null
         };
         const btn = e.target.querySelector('button[type=submit]');
         btn.disabled = true; btn.textContent = 'Guardando…';
@@ -296,6 +334,65 @@ export async function renderMedicoAdmin($app) {
             btn.disabled = false; btn.textContent = '💾 Guardar';
         }
     });
+
+    // Documentos: upload + listado + borrar.
+    const $docInput = $app.querySelector('#doc-input');
+    const $docs     = $app.querySelector('#sec-docs');
+    $docInput.addEventListener('change', async (ev) => {
+        const file = ev.target.files?.[0];
+        if (!file) return;
+        $docs.innerHTML = `<p class="muted">Subiendo "${h(file.name)}"…</p>`;
+        try {
+            await subirDocumento({ circleId: c.id, file });
+            ev.target.value = '';
+            await cargarDocumentos(c.id, $docs);
+        } catch (err) {
+            await mostrarErrorEstructurado(err, 'No pude subir el documento');
+            cargarDocumentos(c.id, $docs);
+        }
+    });
+    cargarDocumentos(c.id, $docs);
+}
+
+async function cargarDocumentos(circleId, $cont) {
+    try {
+        const docs = await listarDocumentos(circleId);
+        if (!docs.length) {
+            $cont.innerHTML = `<p class="muted">Todavía no cargaste ningún documento.</p>`;
+            return;
+        }
+        $cont.innerHTML = `
+            <ul class="docs-lista">
+                ${docs.map(d => `
+                    <li class="docs-lista__item">
+                        <span class="docs-lista__icon" aria-hidden="true">📎</span>
+                        <span class="docs-lista__nombre">${h(d.nombre)}</span>
+                        <button class="btn btn--mini btn--danger"
+                                data-borrar-doc="${h(d.id)}" title="Borrar">×</button>
+                    </li>
+                `).join('')}
+            </ul>
+        `;
+        $cont.querySelectorAll('[data-borrar-doc]').forEach(btn => {
+            btn.addEventListener('click', async () => {
+                const id = btn.dataset.borrarDoc;
+                btn.disabled = true;
+                try {
+                    await borrarDocumento(id);
+                    await cargarDocumentos(circleId, $cont);
+                } catch (err) {
+                    btn.disabled = false;
+                    await modal({
+                        titulo: 'No pude borrarlo',
+                        cuerpo: `<pre>${h(err?.message || err)}</pre>`,
+                        acciones: [{ label: 'OK', value: 'ok' }]
+                    });
+                }
+            });
+        });
+    } catch (err) {
+        $cont.innerHTML = `<p class="muted">Error: ${h(err?.message || err)}</p>`;
+    }
 }
 
 // =====================================================================
@@ -411,10 +508,9 @@ function cuerpoConDatos(d, accesosMed) {
                 <button class="btn btn--xl btn--medico btn--full" id="btn-mail">
                     ✉️ Mandar mail al médico
                 </button>` : ''}
-            ${d.medico_telefono ? `
-                <a class="btn btn--xl btn--medico btn--full" href="tel:${h(d.medico_telefono)}">
-                    📞 Llamar al consultorio
-                </a>` : ''}
+            <!-- "Llamar al consultorio" oculto a pedido de Charly: no llaman.
+                 El teléfono del médico queda igual en los datos por si
+                 lo necesitan ver, sólo no exponemos el botón. -->
 
             ${accesosMed.map(a => {
                 const emoji = a.emoji || (a.tipo === 'llamar' ? '📞' : '🔗');
@@ -458,9 +554,13 @@ function abrirDictadoMail(datos) {
             ` : ''}
             <label class="stack">
                 <span>Mensaje</span>
-                <textarea id="dictado-texto" class="input-real" rows="5"
-                          placeholder="Lo que querés contarle al médico…"></textarea>
+                <textarea id="dictado-texto" class="input-real" rows="6"
+                          placeholder="Lo que querés contarle al médico…">${h(datos.mail_cuerpo || '')}</textarea>
             </label>
+            <p class="muted" style="font-size:0.82em; margin: 0.4rem 0 0;">
+                📎 Los documentos cargados por tu familia (DNI, carnet PAMI, etc.)
+                se van a adjuntar automáticamente <em>(próximamente)</em>.
+            </p>
             <div class="modal__acciones modal__acciones--stack">
                 <button class="btn btn--xl btn--medico" id="btn-enviar-mail">
                     ✉️ Mandar el mail
@@ -509,7 +609,7 @@ function abrirDictadoMail(datos) {
             });
             return;
         }
-        const subj = encodeURIComponent('Consulta');
+        const subj = encodeURIComponent(datos.mail_asunto || 'Consulta');
         const body = encodeURIComponent(cuerpo);
         // mailto: dispara el cliente de mail del teléfono.
         window.location.href = `mailto:${datos.medico_email}?subject=${subj}&body=${body}`;

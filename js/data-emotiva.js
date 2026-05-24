@@ -569,6 +569,64 @@ export async function guardarDatosMedicos(circleId, datos) {
     if (error) throw enriquecer('upsert medical_info', error);
 }
 
+// =====================================================================
+// Documentos del círculo (DNI, carnet PAMI, etc.) — bucket privado
+// =====================================================================
+//
+// La idea: el admin sube los PDFs / fotos de los documentos una vez,
+// y cuando el papá mande mail al médico se adjuntan automáticamente
+// (esto último depende de una edge function con Resend; por ahora
+// sólo el upload/list/delete).
+export async function listarDocumentos(circleId) {
+    const sb = await sbClient();
+    const { data, error } = await sb.from('documentos')
+        .select('id, circle_id, nombre, storage_path, created_at')
+        .eq('circle_id', circleId)
+        .order('created_at', { ascending: false });
+    if (error) throw enriquecer('select documentos', error);
+    return data || [];
+}
+
+export async function subirDocumento({ circleId, file }) {
+    if (!file) throw new Error('sin archivo');
+    const sb = await sbClient();
+    const safe = file.name.replace(/[^a-zA-Z0-9._-]+/g, '_');
+    const path = `${circleId}/${Date.now()}-${safe}`;
+    const contentType = file.type || 'application/octet-stream';
+
+    const { error: errUp } = await sb.storage
+        .from('documentos')
+        .upload(path, file, { contentType, upsert: false });
+    if (errUp) throw enriquecer('storage documentos', errUp);
+
+    const { data, error: errIns } = await sb.from('documentos').insert({
+        circle_id:    circleId,
+        nombre:       file.name,
+        storage_path: path
+    }).select().single();
+    if (errIns) {
+        // Limpieza best-effort si la insert falla después del upload OK.
+        sb.storage.from('documentos').remove([path]).catch(() => {});
+        throw enriquecer('insert documentos', errIns);
+    }
+    return data;
+}
+
+export async function borrarDocumento(id) {
+    const sb = await sbClient();
+    // Levantamos primero el path para limpiar el bucket después.
+    const { data: row, error: e0 } = await sb.from('documentos')
+        .select('storage_path').eq('id', id).maybeSingle();
+    if (e0) throw enriquecer('select documento (para borrar)', e0);
+
+    const { error: e1 } = await sb.from('documentos').delete().eq('id', id);
+    if (e1) throw enriquecer('delete documento', e1);
+
+    if (row?.storage_path) {
+        sb.storage.from('documentos').remove([row.storage_path]).catch(() => {});
+    }
+}
+
 /**
  * Descarga el objeto del bucket privado y lo expone como blob: URL
  * usable en <img src> / <audio src>. Reemplaza createSignedUrl porque
