@@ -309,32 +309,40 @@ export function renderFamilia($app) {
     $app.innerHTML = `
         ${barraVolver('Familia', 'familia')}
 
-        <ul class="contactos-lista">
-            ${familia.map(c => {
-                // Contactos reales: pueden NO tener foto_url ni un campo
-                // whatsapp aparte (usamos teléfono). Defensa para que la
-                // preview no rompa con filas más simples.
-                const tel = (c.telefono || '').replace(/\D/g, '');
-                const fotoSrc = c.foto_url
-                    || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(c.nombre || 'x')}`;
-                return `
-                <li class="contacto-card">
-                    <img class="contacto-card__foto" src="${h(fotoSrc)}" alt=""
-                         width="80" height="80">
-                    <div class="contacto-card__info">
-                        <strong>${h(c.nombre)}</strong>
-                        <small>${h(c.parentesco || '')}</small>
-                    </div>
-                    <div class="contacto-card__acciones">
-                        <a class="btn btn--familia" href="tel:${h(c.telefono)}">📞 Llamar</a>
-                        ${tel ? `<a class="btn btn--familia"
-                           href="https://wa.me/${h(tel)}"
-                           target="_blank" rel="noopener">💬 WhatsApp</a>` : ''}
-                    </div>
-                </li>
-            `;
-            }).join('')}
-        </ul>
+        ${familia.length === 0 ? `
+            <section class="card stack center">
+                <h2>👨‍👩‍👧 Todavía no hay familiares cargados</h2>
+                <p>Tu familia los va a agregar pronto. Cuando estén,
+                   los vas a poder llamar o mandarles WhatsApp desde acá.</p>
+            </section>
+        ` : `
+            <ul class="contactos-lista">
+                ${familia.map(c => {
+                    // Contactos reales: pueden NO tener foto_url ni un campo
+                    // whatsapp aparte (usamos teléfono). Defensa para que la
+                    // preview no rompa con filas más simples.
+                    const tel = (c.telefono || '').replace(/\D/g, '');
+                    const fotoSrc = c.foto_url
+                        || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(c.nombre || 'x')}`;
+                    return `
+                    <li class="contacto-card">
+                        <img class="contacto-card__foto" src="${h(fotoSrc)}" alt=""
+                             width="80" height="80">
+                        <div class="contacto-card__info">
+                            <strong>${h(c.nombre)}</strong>
+                            <small>${h(c.parentesco || '')}</small>
+                        </div>
+                        <div class="contacto-card__acciones">
+                            <a class="btn btn--familia" href="tel:${h(c.telefono)}">📞 Llamar</a>
+                            ${tel ? `<a class="btn btn--familia"
+                               href="https://wa.me/${h(tel)}"
+                               target="_blank" rel="noopener">💬 WhatsApp</a>` : ''}
+                        </div>
+                    </li>
+                `;
+                }).join('')}
+            </ul>
+        `}
     `;
     wireNav($app);
 }

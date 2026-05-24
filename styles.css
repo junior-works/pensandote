@@ -548,8 +548,27 @@ body[data-mode="simple"] .pense-secundario {
     margin: 0 0 1rem;
 }
 
-/* ---------------- Emergencias ---------------- */
-.emergencia-grid { display: grid; gap: 1rem; }
+/* ---------------- Emergencias ----------------
+   Los botones (`<a class="btn btn--xl">`) traen <span class="btn__big">
+   + <small> adentro. Sin esto, el .btn base (inline-flex row) los
+   pondría costado a costado: con largos distintos por botón ("911"
+   vs "SAME (ambulancia)") el bloque visual quedaba corrido a la
+   derecha — fix de "pantalla descentrada". Forzamos columna +
+   text-align center para que todos queden alineados igual. */
+.emergencia-grid { display: grid; gap: 1rem; width: 100%; margin: 0; padding: 0; }
+.emergencia-grid .btn {
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    gap: 0.25rem;
+    padding: 0.9em 1em;
+}
+.emergencia-grid .btn small { opacity: 0.92; font-size: 0.8em; }
+.emergencia-grid > .simple-instruccion { margin: 0; text-align: center; }
+.emergencia-vacia { /* mensaje cálido si no hay nada cargado */
+    text-align: center; margin: 0;
+}
 
 /* ---------------- Familia (lista de contactos simple) ---------------- */
 .contactos-lista { list-style: none; padding: 0; margin: 0; display: grid; gap: 1rem; }
