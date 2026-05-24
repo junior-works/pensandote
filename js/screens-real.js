@@ -15,6 +15,7 @@ import {
     actualizarParentesco
 } from './circles.js';
 import { state, setSesionReal, setModo, limpiarSesionReal } from './state.js';
+import { limpiarDatosReales } from './preview.js';
 import { go, refresh } from './router.js';
 import { h, modal, esEntornoDev, installModalBackButton, cleanupModalBackButton, renderErrorEstructurado } from './ui.js';
 
@@ -107,7 +108,7 @@ export function renderSinCirculos($app) {
             ]
         });
         if (ok !== 'ok') return;
-        await cerrarSesion(); limpiarSesionReal(); renderLogin($app);
+        await cerrarSesion(); limpiarDatosReales(); limpiarSesionReal(); renderLogin($app);
     });
     document.getElementById('form-crear').addEventListener('submit', async (e) => {
         e.preventDefault();
@@ -163,7 +164,7 @@ export function renderCuenta($app) {
                             </div>
                             ${esActivo && m ? `
                                 <div class="circulo-card__chips">
-                                    <span class="circulo-card__chip">Parentesco: <strong>${h(m.parentesco)}</strong></span>
+                                    <span class="circulo-card__chip">Parentesco: <strong>${h(m.parentesco || 'Familiar')}</strong></span>
                                     <span class="circulo-card__chip">Modo: <strong>${h(m.interface_mode)}</strong></span>
                                     <span class="circulo-card__chip">Permiso: <strong>${h(m.permission_level)}</strong></span>
                                 </div>
@@ -256,7 +257,7 @@ export function renderCuenta($app) {
             ]
         });
         if (ok !== 'ok') return;
-        await cerrarSesion(); limpiarSesionReal(); renderLogin($app);
+        await cerrarSesion(); limpiarDatosReales(); limpiarSesionReal(); renderLogin($app);
     });
     const btnHogar = document.getElementById('btn-hogar');
     if (btnHogar) btnHogar.addEventListener('click', () => go('#/inicio'));

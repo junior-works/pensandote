@@ -70,7 +70,7 @@ export async function renderPenseSimpleReal($app) {
     const $btn = $app.querySelector('#btn-pense');
     const otros = miembros.filter(m => m.user_id !== u.id);
     if (otros.length) {
-        $sel.innerHTML = otros.map(m => `<option value="${h(m.user_id)}">${h(m.parentesco)}</option>`).join('');
+        $sel.innerHTML = otros.map(m => `<option value="${h(m.user_id)}">${h(m.parentesco || 'Familiar')}</option>`).join('');
     } else {
         $sel.innerHTML = '<option>(sólo estás vos en el círculo)</option>';
         $sel.disabled = true;
@@ -794,7 +794,7 @@ function pedirVisibilidad(narradorId, miembros, esLegado = false) {
                         ${audiencia.map(m => `
                             <label class="vis-persona">
                                 <input type="checkbox" name="persona" value="${h(m.user_id)}">
-                                <div><strong>${h(m.parentesco)}</strong><small>${h(m.interface_mode)}</small></div>
+                                <div><strong>${h(m.parentesco || 'Familiar')}</strong><small>${h(m.interface_mode || '')}</small></div>
                             </label>
                         `).join('')}
                     </fieldset>

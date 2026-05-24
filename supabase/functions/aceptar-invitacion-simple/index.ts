@@ -37,6 +37,30 @@ function json(body: unknown, status = 200) {
     });
 }
 
+/**
+ * Busca un usuario por email iterando todas las páginas que devuelve
+ * `auth.admin.listUsers`. Es la única forma robusta vía supabase-js v2
+ * — el endpoint no acepta filtro por email. Devolvemos null si no está.
+ *
+ * Tope defensivo: 50 páginas × 1000 = 50.000 usuarios. Si alguna vez se
+ * llega a ese volumen ya hay que pasar a una RPC SQL que pegue contra
+ * `auth.users` directo con service_role.
+ */
+async function findUserIdByEmail(sb: any, email: string): Promise<string | null> {
+    const perPage = 1000;
+    const norm = email.toLowerCase();
+    for (let page = 1; page <= 50; page++) {
+        const { data, error } = await sb.auth.admin.listUsers({ page, perPage });
+        if (error) return null;
+        const users = data?.users ?? [];
+        const found = users.find((u: any) => (u.email || "").toLowerCase() === norm);
+        if (found) return found.id;
+        // Página parcial → no hay más usuarios; cortamos.
+        if (users.length < perPage) return null;
+    }
+    return null;
+}
+
 Deno.serve(async (req) => {
     if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
     if (req.method !== "POST")    return json({ error: "method_not_allowed" }, 405);
@@ -81,15 +105,12 @@ Deno.serve(async (req) => {
 
         // Buscamos primero si ya existe (caso reuso). Si la invitación
         // está claimed, el usuario tiene que existir; si no, lo creamos.
-        let userId: string | null = null;
-        {
-            const { data: list, error: errList } =
-                await sb.auth.admin.listUsers({ perPage: 200 });
-            if (!errList) {
-                const existing = list.users.find((u) => u.email === syntheticEmail);
-                if (existing) userId = existing.id;
-            }
-        }
+        //
+        // listUsers() está paginada: hay que iterar páginas hasta
+        // encontrarlo. Antes asumíamos < 200 usuarios — con más, el
+        // find fallaba y creábamos duplicados que después rompían el
+        // login del papá.
+        let userId: string | null = await findUserIdByEmail(sb, syntheticEmail);
 
         if (!userId) {
             const { data: createdUser, error: errCreate } =
@@ -105,12 +126,9 @@ Deno.serve(async (req) => {
                 });
             if (errCreate) {
                 // Carrera muy improbable: alguien lo creó entre el listUsers
-                // y acá. Reintentamos la búsqueda.
-                const { data: list2 } =
-                    await sb.auth.admin.listUsers({ perPage: 200 });
-                const existing = list2?.users.find((u) => u.email === syntheticEmail);
-                if (!existing) throw errCreate;
-                userId = existing.id;
+                // y acá. Reintentamos la búsqueda con paginado completo.
+                userId = await findUserIdByEmail(sb, syntheticEmail);
+                if (!userId) throw errCreate;
             } else {
                 userId = createdUser.user!.id;
             }

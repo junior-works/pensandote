@@ -29,7 +29,7 @@ import {
     urlInteraccionAudio,
     listarPuntas, crearPunta, borrarPunta
 } from './data-emotiva.js';
-import { entrarPreviewVerComoPapa } from './preview.js';
+import { entrarPreviewVerComoPapa, limpiarDatosReales } from './preview.js';
 
 // LocalStorage key para marcar pensamientos recibidos como "vistos".
 const LS_LAST_SEEN = (circleId, userId) =>
@@ -132,9 +132,9 @@ export async function renderHogar($app) {
                             </div>
                             ${esActivo && m ? `
                                 <div class="circulo-card__chips">
-                                    <span class="circulo-card__chip">Parentesco: <strong>${h(m.parentesco)}</strong></span>
-                                    <span class="circulo-card__chip">Modo: <strong>${h(m.interface_mode)}</strong></span>
-                                    <span class="circulo-card__chip">Permiso: <strong>${h(m.permission_level)}</strong></span>
+                                    <span class="circulo-card__chip">Parentesco: <strong>${h(m.parentesco || 'Familiar')}</strong></span>
+                                    <span class="circulo-card__chip">Modo: <strong>${h(m.interface_mode || 'dashboard')}</strong></span>
+                                    <span class="circulo-card__chip">Permiso: <strong>${h(m.permission_level || 'viewer')}</strong></span>
                                 </div>
                                 <div class="circulo-card__acciones">
                                     <button class="btn btn--mini" id="btn-editar-parentesco-hogar">
@@ -264,11 +264,6 @@ export async function renderHogar($app) {
                 </button>
             ` : ''}
             <div id="sec-historias">Cargando…</div>
-            <p class="muted" style="font-size:0.85em;">
-                ✨ <em>Próximamente</em> (TODO IA): transcripción automática,
-                título sugerido, repreguntas curiosas de la IA, libro
-                de fin de año.
-            </p>
         </section>
     `;
 
@@ -287,7 +282,10 @@ export async function renderHogar($app) {
             ]
         });
         if (ok !== 'ok') return;
-        await cerrarSesion(); limpiarSesionReal(); go('#/inicio');
+        await cerrarSesion();
+        limpiarDatosReales();   // libera blob URLs de fotos + descarta el cache
+        limpiarSesionReal();
+        go('#/inicio');
     });
 
     // Sección pensé: populate destinatarios + handler
@@ -300,7 +298,7 @@ export async function renderHogar($app) {
         $app.querySelector('#btn-invitar-hogar').addEventListener('click',
             () => abrirModalInvitacion(c.id));
         $app.querySelector('#btn-miembros').addEventListener('click',
-            () => go('#/cuenta'));
+            () => abrirModalMiembros(c, u));
         $app.querySelector('#btn-contactos').addEventListener('click', () => go('#/contactos'));
         $app.querySelector('#btn-medico').addEventListener('click',    () => go('#/datos-medicos'));
         $app.querySelector('#btn-accesos').addEventListener('click',   () => go('#/accesos-admin'));
@@ -502,7 +500,7 @@ function poblarDestinatariosPense(u) {
         return;
     }
     sel.innerHTML = otros.map(m => `
-        <option value="${h(m.user_id)}">${h(m.parentesco)}</option>
+        <option value="${h(m.user_id)}">${h(m.parentesco || 'Familiar')}</option>
     `).join('');
 }
 
@@ -731,7 +729,7 @@ async function cargarContactosUltimo(c, u, $cont) {
                     return `
                         <li class="contacto-card" style="grid-template-columns:1fr;">
                             <div class="contacto-card__info">
-                                <strong>${h(m.parentesco)}</strong>
+                                <strong>${h(m.parentesco || 'Familiar')}</strong>
                                 <small>${h(t ? `Hablaron ${txt}` : txt)}</small>
                             </div>
                         </li>
@@ -773,8 +771,6 @@ async function cargarHistorias(c, m, u, $cont) {
                             <small>${h(new Date(hi.created_at).toLocaleString('es-AR'))}
                               ${hi.duracion_seg ? '· ' + hi.duracion_seg + 's' : ''}
                               · <em>${h(hi.visibilidad)}</em></small>
-                            <button class="btn btn--mini" data-titulo-ia="${h(hi.id)}" disabled
-                                    title="Próximamente">✨ Título IA</button>
                         </div>
                         <button class="btn btn--mini" data-fav="${h(hi.id)}" title="Favorita">☆</button>
                         <div class="historia-tab-row__responder">
@@ -826,9 +822,6 @@ async function onPlayHistoria(hi) {
                 <audio src="${h(url)}" controls autoplay style="width:100%;"></audio>
                 <p class="muted" style="margin-top:0.6rem;">
                     Si la otra persona escucha esto, ahora puede contestarte con un audio o un texto.
-                </p>
-                <p class="muted" style="font-size:0.85em;">
-                    ✨ <em>Próximamente</em>: transcripción + repreguntas curiosas generadas por IA.
                 </p>
             `,
             acciones: [{ label: 'Cerrar', clase: 'btn--pense', value: 'ok' }],
@@ -947,9 +940,6 @@ async function onGrabarHistoria(c, u, $app) {
                     ${'<i></i>'.repeat(20)}
                 </span>
             </div>
-            <p class="muted" style="font-size:0.85em;">
-                ✨ <em>Próximamente</em>: la IA te pone un título y arma una repregunta amable.
-            </p>
         `,
         acciones: [
             { label: 'Cancelar' },
@@ -1036,8 +1026,8 @@ function pedirVisibilidad(narradorId) {
                             <label class="vis-persona">
                                 <input type="checkbox" name="persona" value="${h(m.user_id)}">
                                 <div>
-                                    <strong>${h(m.parentesco)}</strong>
-                                    <small>${h(m.interface_mode)}</small>
+                                    <strong>${h(m.parentesco || 'Familiar')}</strong>
+                                    <small>${h(m.interface_mode || '')}</small>
                                 </div>
                             </label>
                         `).join('')}
@@ -1192,6 +1182,62 @@ function renderSugeridas($cont, yaCargadas, c, u, $app) {
             }
         });
     });
+}
+
+// =====================================================================
+// Modal: lista real de miembros del círculo activo
+// =====================================================================
+//
+// El botón "👥 Miembros" del Hogar antes navegaba a #/cuenta (que
+// muestra los círculos del USUARIO, no los miembros del círculo).
+// Charly tocaba esperando ver a su hermana/papá y se confundía.
+// Ahora abre un modal con la lista real, traída de _miembrosCache
+// (ya cargada al inicio de renderHogar) o re-fetcheada si está vacía.
+async function abrirModalMiembros(c, u) {
+    let lista = _miembrosCache || [];
+    if (!lista.length) {
+        try { lista = await miembrosDelCirculo(c.id); }
+        catch (err) { lista = []; }
+    }
+    const cuerpo = `
+        ${lista.length === 0 ? `
+            <p class="muted">Todavía no hay miembros registrados en este círculo.</p>
+        ` : `
+            <ul class="miembros-modal-lista">
+                ${lista.map(m => {
+                    const esYo  = m.user_id === u.id;
+                    const par   = (m.parentesco || '').trim() || 'Familiar';
+                    const modo  = m.interface_mode || 'dashboard';
+                    const perm  = m.permission_level || 'viewer';
+                    const rolEmoji  = modo === 'simple' ? '🧓' : '👤';
+                    const permLabel = perm === 'admin'  ? '🛡️ admin'
+                                    : perm === 'editor' ? '✏️ editor'
+                                    :                     '👀 sólo ver';
+                    return `
+                        <li class="miembros-modal-item ${esYo ? 'is-yo' : ''}">
+                            <span class="miembros-modal-item__emoji">${rolEmoji}</span>
+                            <div class="miembros-modal-item__info">
+                                <strong>${h(par)}${esYo ? ' <small class="muted">(vos)</small>' : ''}</strong>
+                                <small>${h(modo)} · ${permLabel}</small>
+                            </div>
+                        </li>
+                    `;
+                }).join('')}
+            </ul>
+            <p class="muted" style="font-size:0.88em; margin-top:0.8rem;">
+                ${lista.length} ${lista.length === 1 ? 'persona' : 'personas'} en este círculo.
+            </p>
+        `}
+    `;
+    const v = await modal({
+        titulo: `👥 Miembros de ${h(c.nombre)}`,
+        cuerpo,
+        acciones: [
+            { label: '➕ Invitar a alguien', clase: 'btn--inicio', value: 'invitar' },
+            { label: 'Cerrar', value: 'cerrar' }
+        ]
+    });
+    if (v === 'invitar') abrirModalInvitacion(c.id);
 }
 
 /** Devuelve el parentesco del primer miembro modo simple del círculo

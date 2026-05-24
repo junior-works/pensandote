@@ -639,6 +639,25 @@ body[data-mode="dashboard"] .ideas-sugeridas__chip {
     white-space: nowrap;
 }
 
+/* Modal: lista de miembros del círculo */
+.miembros-modal-lista {
+    list-style: none; padding: 0; margin: 0; display: grid; gap: 0.5rem;
+}
+.miembros-modal-item {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 0.75rem;
+    align-items: center;
+    padding: 0.6em 0.8em;
+    background: var(--bg-soft);
+    border: 1px solid var(--line-d, var(--line));
+    border-radius: 8px;
+}
+.miembros-modal-item.is-yo { background: #fff8e9; border-color: var(--accent-pense, #c98a5d); }
+.miembros-modal-item__emoji { font-size: 1.6em; line-height: 1; }
+.miembros-modal-item__info { display: flex; flex-direction: column; gap: 0.1rem; }
+.miembros-modal-item__info small { color: var(--ink-soft); font-size: 0.85em; }
+
 /* ---------------- Familia (lista de contactos simple) ---------------- */
 .contactos-lista { list-style: none; padding: 0; margin: 0; display: grid; gap: 1rem; }
 .contacto-card {
