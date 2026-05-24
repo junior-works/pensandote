@@ -321,6 +321,30 @@ body[data-mode="simple"] .btn--mini { min-height: 44px; font-size: var(--fs-md);
 
 .simple-extras { display: grid; gap: 0.8rem; margin-top: 1rem; }
 
+/* Foto del día como cabecera del home simple (lo primero que ve el
+   papá al abrir). Sin margen arriba, integrada al borde del card. */
+.foto-cabecera {
+    margin: 0 0 0.5rem 0;
+}
+/* Saludo más compacto cuando va DEBAJO de la foto cabecera. */
+.simple-header--abajo-foto {
+    margin: 0.3rem 0 1rem;
+}
+body[data-mode="simple"] .simple-header--abajo-foto .simple-saludo {
+    /* Saludo más prudente cuando ya hay foto grande de bienvenida. */
+    font-size: var(--fs-xl);
+}
+
+/* "Pensé en vos" secundario — chico, debajo de la foto. Aprox. mitad
+   del btn--xl simple (92px) → ~52px. Sigue cálido pero no compite con
+   los tarjetones principales. */
+body[data-mode="simple"] .pense-secundario {
+    min-height: 56px;
+    font-size: var(--fs-md);
+    padding: 0.55em 1.1em;
+    margin-bottom: 1rem;
+}
+
 /* ---------------- Badge V2 ---------------- */
 .badge-v2 {
     display: inline-block;

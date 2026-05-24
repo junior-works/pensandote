@@ -296,7 +296,7 @@ function renderTabLegado($cont, c, u, miembros, esNarrador, esAdmin) {
                             Si vos sos quien tiene que abrirlo:
                         </p>
                         <button class="btn btn--mini" id="btn-desbloquear">
-                            🔓 Desbloquear el legado
+                            Legado
                         </button>
                         <p class="muted" style="font-size:0.78em; margin-top:0.6rem;">
                             Acción reversible. Hacelo solo cuando corresponda.

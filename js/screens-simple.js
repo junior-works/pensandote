@@ -29,18 +29,13 @@ export function renderInicio($app) {
     })();
 
     $app.innerHTML = `
-        <header class="simple-header">
-            <h1 class="simple-saludo">${horaSaludo},<br>${h(yo.nombre_corto)}</h1>
-            <p class="simple-fecha">${formatearFechaLarga(new Date())}</p>
-        </header>
-
         ${foto && foto.url ? `
-            <figure class="foto-carousel" style="margin-bottom:1.25rem;">
+            <figure class="foto-carousel foto-cabecera">
                 <img class="foto-carousel__img" src="${h(foto.url)}" alt="${h(foto.epigrafe || 'Foto del día')}">
                 ${foto.epigrafe ? `<figcaption><strong class="t-emocional">${h(foto.epigrafe)}</strong></figcaption>` : ''}
             </figure>
         ` : `
-            <article class="foto-del-dia foto-del-dia--placeholder">
+            <article class="foto-del-dia foto-del-dia--placeholder foto-cabecera">
                 <span class="badge-v2">v2 · Próximamente</span>
                 <div class="foto-del-dia__cuerpo">
                     <span class="foto-del-dia__emoji">📷</span>
@@ -48,6 +43,15 @@ export function renderInicio($app) {
                 </div>
             </article>
         `}
+
+        <header class="simple-header simple-header--abajo-foto">
+            <h1 class="simple-saludo">${horaSaludo},<br>${h(yo.nombre_corto)}</h1>
+            <p class="simple-fecha">${formatearFechaLarga(new Date())}</p>
+        </header>
+
+        <button class="btn btn--pense btn--full pense-secundario" data-go="#/v2/pense">
+            💛 Pensé en vos
+        </button>
 
         <nav class="simple-grid" aria-label="Secciones principales">
             <button class="tarjeton tarjeton--emergencia"  data-go="#/emergencias">
@@ -85,10 +89,6 @@ export function renderInicio($app) {
         })()}
 
         <div class="simple-extras">
-            <button class="btn btn--xl btn--pense btn--full" data-go="#/v2/pense">
-                💛 Pensé en vos
-            </button>
-
             <button class="btn btn--xl btn--pense btn--full" data-go="#/v2/historias">
                 📖 Historias
             </button>
