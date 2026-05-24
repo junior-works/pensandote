@@ -31,6 +31,7 @@ import {
     pensamientosRecibidos, listarHistorias, listarFechas,
     listarAccesos
 } from './data-emotiva.js';
+import { miembrosDelCirculo } from './circles.js';
 import {
     CONTACTOS, MEDICO, TUTORIALES
 } from './mocks.js';
@@ -40,12 +41,20 @@ import {
 // Las pantallas simple los consumen en vez de importar mocks directo.
 // =========================================================================
 
+// Tres fuentes según contexto:
+//   1. preview ('Ver como lo ve papá')  → state.previewData
+//   2. modo real con datos cacheados    → state.datosReales
+//   3. demo / fallback                  → mocks editoriales
 export function getContactos() {
-    return state.modoPreview ? (state.previewData?.contactos || []) : CONTACTOS;
+    if (state.modoPreview) return state.previewData?.contactos || [];
+    if (state.datosReales) return state.datosReales.contactos || [];
+    return CONTACTOS;
 }
 
 export function getMedico() {
-    return state.modoPreview ? (state.previewData?.medico || null) : MEDICO;
+    if (state.modoPreview) return state.previewData?.medico || null;
+    if (state.datosReales) return state.datosReales.medico || null;
+    return MEDICO;
 }
 
 /** Tutoriales son contenido editorial global — no cambian por círculo. */
@@ -54,11 +63,15 @@ export function getTutoriales() {
 }
 
 export function getFotoDelDia() {
-    return state.modoPreview ? (state.previewData?.foto || null) : null;
+    if (state.modoPreview) return state.previewData?.foto || null;
+    if (state.datosReales) return state.datosReales.foto || null;
+    return null;
 }
 
 export function getPensamientosRecibidos() {
-    return state.modoPreview ? (state.previewData?.pensamientos || []) : [];
+    if (state.modoPreview) return state.previewData?.pensamientos || [];
+    if (state.datosReales) return state.datosReales.pensamientos || [];
+    return [];
 }
 
 export function getHistorias() {
@@ -66,11 +79,15 @@ export function getHistorias() {
 }
 
 export function getAccesos() {
-    return state.modoPreview ? (state.previewData?.accesos || []) : [];
+    if (state.modoPreview) return state.previewData?.accesos || [];
+    if (state.datosReales) return state.datosReales.accesos || [];
+    return [];
 }
 
 export function getMiembrosReales() {
-    return state.modoPreview ? (state.previewData?.miembros || []) : [];
+    if (state.modoPreview) return state.previewData?.miembros || [];
+    if (state.datosReales) return state.datosReales.miembros || [];
+    return [];
 }
 
 /**
@@ -92,6 +109,24 @@ export function getMiembroVisto() {
                 permission_level: papa.permission_level
             };
         }
+    }
+    // Modo real con sesión: el "miembro visto" es el propio usuario
+    // logueado. Para nombre_corto preferimos nombre_completo del perfil
+    // si está, sino caemos al parentesco (ej: 'Papá', 'Mamá'). NUNCA
+    // usamos el email (sería simple+TOKEN@... para link-login).
+    if (state.modo === 'real' && state.membresiaReal && state.usuarioReal) {
+        const m = state.membresiaReal;
+        const yo = (state.datosReales?.miembros || [])
+            .find(x => x.user_id === state.usuarioReal.id);
+        const nombre = yo?.user?.nombre_completo || m.parentesco || 'Familiar';
+        return {
+            id: state.usuarioReal.id,
+            nombre_completo: nombre,
+            nombre_corto:    nombre.split(' ')[0] || m.parentesco,
+            parentesco:      m.parentesco,
+            interface_mode:  m.interface_mode,
+            permission_level: m.permission_level
+        };
     }
     return miembroActivo();
 }
@@ -292,4 +327,44 @@ function hace(ms) {
     if (hr < 24) return `${hr} h`;
     const d = Math.round(hr / 24);
     return `${d} ${d === 1 ? 'día' : 'días'}`;
+}
+
+// =========================================================================
+// Datos reales del círculo activo — cache para la vista simple real.
+// =========================================================================
+
+/**
+ * Pre-carga los datos del círculo que el inicio simple necesita para
+ * mostrarse igual que la preview: contactos, datos médicos, foto del
+ * día, accesos, miembros, pensamientos recibidos. Los deja en
+ * state.datosReales. Los accessors los devuelven automáticamente.
+ */
+export async function prepararDatosReales(circleId, userId) {
+    if (!circleId || !userId) return;
+    try {
+        const [contactos, medico, foto, pensamientos, miembros, accesos] = await Promise.all([
+            listarContactos(circleId).catch(e => { console.warn('[datosReales] contactos', e); return []; }),
+            leerDatosMedicos(circleId).catch(e => { console.warn('[datosReales] medico', e); return null; }),
+            ultimaFotoDia(circleId).catch(e => { console.warn('[datosReales] foto', e); return null; }),
+            pensamientosRecibidos(circleId, userId).catch(e => { console.warn('[datosReales] pensé', e); return []; }),
+            miembrosDelCirculo(circleId).catch(e => { console.warn('[datosReales] miembros', e); return []; }),
+            listarAccesos(circleId).catch(e => { console.warn('[datosReales] accesos', e); return []; })
+        ]);
+        // Liberar blob URL viejo si había foto previa cacheada.
+        const urlVieja = state.datosReales?.foto?.url;
+        if (urlVieja && typeof urlVieja === 'string' && urlVieja.startsWith('blob:')) {
+            try { URL.revokeObjectURL(urlVieja); } catch (_) {}
+        }
+        state.datosReales = { contactos, medico, foto, pensamientos, miembros, accesos };
+    } catch (err) {
+        console.error('[prepararDatosReales]', err);
+    }
+}
+
+export function limpiarDatosReales() {
+    const u = state.datosReales?.foto?.url;
+    if (u && typeof u === 'string' && u.startsWith('blob:')) {
+        try { URL.revokeObjectURL(u); } catch (_) {}
+    }
+    state.datosReales = null;
 }

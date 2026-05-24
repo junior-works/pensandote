@@ -318,7 +318,7 @@ export function renderMedico($app) {
             cuerpo: `
                 <p>Te llevamos a la app de tu obra social (<strong>${h(MEDICO.obra_social)}</strong>)
                 para que pidas el turno desde ahí.</p>
-                <p class="muted">Si te perdés, llamá al consultorio o pedile ayuda a Charly.</p>
+                <p class="muted">Si te perdés, llamá al consultorio o pedile ayuda a tu familia.</p>
             `,
             acciones: [
                 { label: 'Cancelar' },
@@ -404,7 +404,7 @@ export function renderTutorial($app, ruta) {
                             ✅ Sí, listo
                         </button>
                         <button class="btn btn--xl btn--full" id="btn-ayuda">
-                            🆘 Pedir ayuda a Hijo 1
+                            🆘 Pedir ayuda a tu familia
                         </button>
                     </div>
                 </div>

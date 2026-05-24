@@ -35,7 +35,13 @@ export const state = {
     // --- "Ver como lo ve papá" — preview en memoria ---
     modoPreview: false,
     previewData: null,             // { contactos, medico, foto, pensamientos, historias, fechas, miembros }
-    previewPapaId: null            // user_id del miembro simple "central"
+    previewPapaId: null,           // user_id del miembro simple "central"
+
+    // --- Datos reales del círculo precargados para la vista simple real.
+    //     Los accessors (preview.js) los devuelven cuando estamos en
+    //     modo real (sin preview) y ya están cacheados. Mocks como
+    //     último fallback.
+    datosReales: null              // { contactos, medico, foto, accesos, miembros }
 };
 
 // =====================================================================

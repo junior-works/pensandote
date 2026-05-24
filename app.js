@@ -29,6 +29,7 @@ import * as Hogar     from './js/screens-hogar.js';
 import * as Admin     from './js/screens-admin.js';
 import * as Preview   from './js/preview.js';
 import * as Papa      from './js/screens-papa.js';
+import { prepararDatosReales, limpiarDatosReales } from './js/preview.js';
 
 const $app = document.getElementById('app');
 
@@ -186,6 +187,15 @@ function renderRouteReal(ruta) {
             if (sub === 'pense')     return Papa.renderPenseSimpleReal($app);
             if (sub === 'historias') return Papa.renderHistoriasSimpleReal($app);
         }
+        // Home: en modo real SIMPLE, el papá ve el layout de tarjetones
+        // (el mismo que la preview) — Emergencias, Familia, Médico,
+        // Cómo hago como cards independientes + secciones emocionales
+        // abajo (Pensé, Historias, Foto del día, Accesos). Los datos son
+        // reales: preparados en bootstrap y servidos por los accessors.
+        // En dashboard sigue el Hogar largo de admin.
+        if (state.membresiaReal?.interface_mode === 'simple') {
+            return Simple.renderInicio($app);
+        }
         return Hogar.renderHogar($app);
     }
     return Real.renderCuenta($app);
@@ -240,6 +250,13 @@ async function bootstrap() {
                     circuloActivoId,
                     membresia
                 });
+                // Si el usuario logueado es simple, precargamos los
+                // datos del círculo para que el home con tarjetones
+                // tenga los contactos / médico / foto / accesos reales
+                // (los accessors de preview.js los devuelven).
+                if (membresia?.interface_mode === 'simple' && circuloActivoId) {
+                    await prepararDatosReales(circuloActivoId, usr.id);
+                }
             } catch (err) {
                 console.error('[bootstrap circles]', err);
                 setSesionReal({ usuario: usr, circulos: [], circuloActivoId: null, membresia: null });

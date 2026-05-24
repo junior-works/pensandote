@@ -81,18 +81,10 @@ export async function renderHogar($app) {
                 en un click.
             </p>
         </section>
-        ` : `
-        <section class="card stack center">
-            <h2>🩺 Médico</h2>
-            <button class="btn btn--xl btn--medico btn--full" id="btn-ir-medico">
-                Ir a la pantalla del médico
-            </button>
-            <button class="btn btn--xl btn--tutoriales btn--full" id="btn-ir-comohago"
-                    style="margin-top:0.5rem;">
-                💡 Cómo hago…
-            </button>
-        </section>
-        `}
+        ` : ''}
+        <!-- NOTA: en modo real simple el papá ve Simple.renderInicio
+             (4 tarjetones independientes), no este Hogar. Quitamos la
+             card combinada que metía Médico+CómoHago en un solo bloque. -->
 
         <section class="card stack hogar-pense">
             <h2>💛 Pensé en vos</h2>
@@ -206,13 +198,10 @@ export async function renderHogar($app) {
                 btnVerComo.textContent = '👀 Ver como lo ve ' + (parentescoSimpleEnCirculo() || 'tu familiar');
             }
         });
-    } else {
-        // Simple: link a la pantalla Médico con dictado por voz.
-        const btnIrMed = $app.querySelector('#btn-ir-medico');
-        if (btnIrMed) btnIrMed.addEventListener('click', () => go('#/medico'));
-        const btnIrCh = $app.querySelector('#btn-ir-comohago');
-        if (btnIrCh) btnIrCh.addEventListener('click', () => go('#/como-hago'));
     }
+    // Nota: en modo real simple no se llega acá (el routing manda al
+    // Simple.renderInicio con tarjetones); no hace falta wirear botones
+    // específicos para la rama simple del Hogar.
 
     if (puedeEscribir) {
         $app.querySelector('#foto-input').addEventListener('change', (e) => onSubirFoto(c, e, $app));
