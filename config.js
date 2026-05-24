@@ -1,19 +1,19 @@
 /**
- * Pensándote — config local.
+ * Pensándote — config publicable.
  *
- * Este archivo NO va al repo (está en .gitignore). Se genera a partir
- * de config.example.js completando con las credenciales reales del
- * proyecto Supabase.
+ * SUPABASE_URL + anon/publishable key son públicas por diseño: el SDK
+ * de Supabase las consume desde el front, y la seguridad real la hace
+ * RLS en la base. La service_role NUNCA aparece acá.
  *
- * La anon key (publishable) es pública por diseño: el control real lo
- * hace RLS en la DB. Aun así, no la commiteamos.
+ * Si rotás la anon key, actualizá este archivo y commiteá.
  */
 
 window.PENSANDOTE_CONFIG = {
     SUPABASE_URL:      'https://uptxuzbfwfbluocvtkvz.supabase.co',
     SUPABASE_ANON_KEY: 'sb_publishable_nlWOTGzBc6ZbUofEJmHWmw_nm-1nNR3',
 
-    // Topic ntfy.sh para el botón pánico (placeholder; lo mueve a circles
-    // cuando soportemos notificaciones por círculo).
+    // Topic ntfy.sh placeholder. Cada círculo usa su circles.ntfy_topic
+    // real (migración 0003), así que esto sólo se usa si algún día
+    // necesitamos un topic global.
     NTFY_TOPIC: 'pensandote-test-cambiame'
 };
