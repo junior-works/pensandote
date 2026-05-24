@@ -1427,3 +1427,35 @@ body[data-mode="dashboard"] .hogar-pense { background: #fff8f3; }
 .contacto-admin-row__info small { color: var(--ink-soft); word-break: break-all; }
 .contacto-admin-row__acc { display: flex; gap: 0.3rem; flex-wrap: wrap; }
 
+/* ---- Accesos / Trámites (admin) ---- */
+.accesos-admin-lista { list-style: none; padding: 0; margin: 0; display: grid; gap: 0.5rem; }
+.acceso-admin-row {
+    display: grid;
+    grid-template-columns: 42px 1fr auto;
+    align-items: center; gap: 0.8rem;
+    background: #fff;
+    border: 1px solid rgba(17, 17, 17, 0.12);
+    border-radius: 10px;
+    padding: 0.6rem 0.9rem;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+.acceso-admin-row__emoji {
+    width: 38px; height: 38px;
+    background: var(--bg);
+    border: 1px solid rgba(17, 17, 17, 0.1);
+    border-radius: 50%;
+    display: grid; place-items: center;
+    font-size: 1.2rem;
+}
+.acceso-admin-row__info strong { display: block; }
+.acceso-admin-row__info small { color: var(--ink-soft); word-break: break-all; }
+.acceso-admin-row__acc { display: flex; gap: 0.3rem; flex-wrap: wrap; }
+
+/* ---- Accesos rápidos (vista simple) ---- */
+.accesos-rapidos { margin: 1.25rem 0; }
+.accesos-rapidos h2 { margin-bottom: 0.6rem; }
+.accesos-rapidos__grid {
+    display: grid; gap: 0.7rem;
+    grid-template-columns: 1fr;
+}
+

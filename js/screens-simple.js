@@ -11,7 +11,7 @@ import { go } from './router.js';
 import { h, modal, speakES, stopSpeak } from './ui.js';
 import {
     getContactos, getMedico, getTutoriales, getFotoDelDia,
-    getMiembroVisto, esPreview, avisarPreview
+    getMiembroVisto, getAccesos, esPreview, avisarPreview
 } from './preview.js';
 
 // =====================================================================
@@ -67,6 +67,19 @@ export function renderInicio($app) {
             </button>
         </nav>
 
+        ${(() => {
+            const accesos = getAccesos();
+            if (!accesos.length) return '';
+            return `
+                <section class="accesos-rapidos">
+                    <h2>🔗 Accesos rápidos</h2>
+                    <div class="accesos-rapidos__grid">
+                        ${accesos.slice(0, 6).map(a => botonAcceso(a)).join('')}
+                    </div>
+                </section>
+            `;
+        })()}
+
         <div class="simple-extras">
             <button class="btn btn--xl btn--pense btn--full" data-go="#/v2/pense">
                 <span>💛 Pensé en vos</span>
@@ -80,6 +93,41 @@ export function renderInicio($app) {
         </div>
     `;
     wireNav($app);
+    wireAccesos($app);
+}
+
+/** Botón grande para un acceso (llamar o abrir link). */
+function botonAcceso(a) {
+    const emoji = a.emoji || (a.tipo === 'llamar' ? '📞' : '🔗');
+    if (a.tipo === 'llamar') {
+        return `
+            <a class="btn btn--xl btn--medico btn--full" href="tel:${h(a.valor)}">
+                <span>${emoji} ${h(a.titulo)}</span>
+            </a>
+        `;
+    }
+    // link: en preview, simulado; en uso real, abre URL.
+    return `
+        <button class="btn btn--xl btn--medico btn--full"
+                data-acceso-link="${h(a.valor)}"
+                data-acceso-titulo="${h(a.titulo)}">
+            <span>${emoji} ${h(a.titulo)}</span>
+        </button>
+    `;
+}
+
+function wireAccesos($app) {
+    $app.querySelectorAll('[data-acceso-link]').forEach(b => {
+        b.addEventListener('click', () => {
+            const url = b.dataset.accesoLink;
+            if (esPreview()) {
+                avisarPreview('👀 Vista previa',
+                    `En la app real esto abriría ${url}. Acá no se ejecuta.`);
+                return;
+            }
+            window.open(url, '_blank', 'noopener');
+        });
+    });
 }
 
 function formatearFechaLarga(d) {
@@ -95,8 +143,20 @@ function formatearFechaLarga(d) {
 // =====================================================================
 // EMERGENCIAS
 // =====================================================================
+// Emergencias nacionales fijas: siempre presentes, no dependen del círculo.
+const EMERGENCIAS_FIJAS = [
+    { nombre: '911',               parentesco: 'Emergencias',         telefono: '911' },
+    { nombre: 'SAME (ambulancia)', parentesco: 'Emergencias médicas', telefono: '107' },
+    { nombre: 'Bomberos',          parentesco: 'Incendios',           telefono: '100' }
+];
+
 export function renderEmergencias($app) {
-    const emergencias = getContactos().filter(c => c.es_emergencia);
+    // Tomamos los contactos del círculo con es_emergencia=true.
+    // Filtramos los que tengan teléfono igual a uno de los fijos para
+    // evitar duplicados (en demo los mocks incluyen 911/SAME/Bomberos).
+    const telsFijos = new Set(EMERGENCIAS_FIJAS.map(f => f.telefono));
+    const delCirculo = getContactos()
+        .filter(c => c.es_emergencia && !telsFijos.has(String(c.telefono || '').trim()));
 
     $app.innerHTML = `
         ${barraVolver('Emergencias', 'emergencia')}
@@ -106,12 +166,24 @@ export function renderEmergencias($app) {
         </p>
 
         <div class="emergencia-grid">
-            ${emergencias.map(c => `
+            ${EMERGENCIAS_FIJAS.map(c => `
                 <a class="btn btn--xl btn--emergencia btn--full" href="tel:${h(c.telefono)}">
                     <span class="btn__big">${h(c.nombre)}</span>
                     <small>${h(c.parentesco)}</small>
                 </a>
             `).join('')}
+
+            ${delCirculo.length ? `
+                <p class="simple-instruccion" style="margin: 0.6rem 0 0;">
+                    Personas de confianza:
+                </p>
+                ${delCirculo.map(c => `
+                    <a class="btn btn--xl btn--emergencia btn--full" href="tel:${h(c.telefono)}">
+                        <span class="btn__big">📞 Llamar a ${h(c.nombre)}</span>
+                        ${c.parentesco ? `<small>${h(c.parentesco)}</small>` : ''}
+                    </a>
+                `).join('')}
+            ` : ''}
 
             <button class="btn btn--xl btn--panico btn--full" id="btn-panico">
                 <span class="btn__big">😟 No me siento bien</span>

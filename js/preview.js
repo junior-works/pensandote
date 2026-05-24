@@ -28,7 +28,8 @@ import { go } from './router.js';
 import { h, modal } from './ui.js';
 import {
     listarContactos, leerDatosMedicos, ultimaFotoDia,
-    pensamientosRecibidos, listarHistorias, listarFechas
+    pensamientosRecibidos, listarHistorias, listarFechas,
+    listarAccesos
 } from './data-emotiva.js';
 import {
     CONTACTOS, MEDICO, TUTORIALES
@@ -62,6 +63,10 @@ export function getPensamientosRecibidos() {
 
 export function getHistorias() {
     return state.modoPreview ? (state.previewData?.historias || []) : [];
+}
+
+export function getAccesos() {
+    return state.modoPreview ? (state.previewData?.accesos || []) : [];
 }
 
 export function getMiembrosReales() {
@@ -125,15 +130,16 @@ export async function entrarPreviewVerComoPapa(circleId, miembros) {
 
     let data;
     try {
-        const [contactos, medico, foto, pensamientos, historias, fechas] = await Promise.all([
+        const [contactos, medico, foto, pensamientos, historias, fechas, accesos] = await Promise.all([
             listarContactos(circleId).catch(e => { console.warn('[preview] contactos', e); return []; }),
             leerDatosMedicos(circleId).catch(e => { console.warn('[preview] medico', e); return null; }),
             ultimaFotoDia(circleId).catch(e => { console.warn('[preview] foto', e); return null; }),
             pensamientosRecibidos(circleId, papa.user_id).catch(e => { console.warn('[preview] pensé', e); return []; }),
             listarHistorias(circleId).catch(e => { console.warn('[preview] historias', e); return []; }),
-            listarFechas(circleId).catch(e => { console.warn('[preview] fechas', e); return []; })
+            listarFechas(circleId).catch(e => { console.warn('[preview] fechas', e); return []; }),
+            listarAccesos(circleId).catch(e => { console.warn('[preview] accesos', e); return []; })
         ]);
-        data = { contactos, medico, foto, pensamientos, historias, fechas, miembros };
+        data = { contactos, medico, foto, pensamientos, historias, fechas, miembros, accesos };
     } catch (err) {
         console.error('[preview] load', err);
         await modal({

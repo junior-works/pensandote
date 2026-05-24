@@ -19,7 +19,8 @@ import {
 } from './ui.js';
 import {
     listarContactos, crearContacto, actualizarContacto, borrarContacto,
-    leerDatosMedicos, guardarDatosMedicos
+    leerDatosMedicos, guardarDatosMedicos,
+    listarAccesos, crearAcceso, actualizarAcceso, borrarAcceso
 } from './data-emotiva.js';
 
 // =====================================================================
@@ -529,5 +530,201 @@ function abrirDictadoMail(datos) {
         // mailto: dispara el cliente de mail del teléfono.
         window.location.href = `mailto:${datos.medico_email}?subject=${subj}&body=${body}`;
         cerrar();
+    });
+}
+
+// =====================================================================
+// DASHBOARD: Accesos / Trámites (CRUD)
+// =====================================================================
+//
+// Botones rápidos que el adulto mayor toca para llamar o abrir un link
+// (PAMI, ANSES, banco, mail del cardiólogo). El admin los configura.
+//
+export async function renderAccesosAdmin($app) {
+    const c = state.circulosReal.find(x => x.id === state.circuloActivoIdReal);
+    if (!c) return go('#/inicio');
+
+    $app.innerHTML = `
+        <header class="admin-pantalla__head">
+            <button class="btn btn--mini" id="btn-volver">← Volver al hogar</button>
+            <h1>🔗 Accesos / Trámites</h1>
+        </header>
+        <p class="muted">
+            Botones grandes que tu familiar ve en su app. Cada uno hace una
+            llamada o abre un link (PAMI, ANSES, banco, lo que necesites).
+        </p>
+        <div style="margin: 0.8rem 0;">
+            <button class="btn btn--inicio" id="btn-nuevo-acceso">➕ Agregar acceso</button>
+        </div>
+        <div id="accesos-lista">Cargando…</div>
+    `;
+    $app.querySelector('#btn-volver').addEventListener('click', () => go('#/inicio'));
+    $app.querySelector('#btn-nuevo-acceso').addEventListener('click', () => {
+        abrirFormAcceso(c.id, null, () => renderAccesosAdmin($app));
+    });
+
+    const $lst = $app.querySelector('#accesos-lista');
+    try {
+        const lista = await listarAccesos(c.id);
+        if (!lista.length) {
+            $lst.innerHTML = `<p class="muted">No hay accesos cargados todavía. Empezá con uno.</p>`;
+            return;
+        }
+        $lst.innerHTML = `
+            <ul class="accesos-admin-lista">
+                ${lista.map(a => `
+                    <li class="acceso-admin-row">
+                        <span class="acceso-admin-row__emoji">${h(a.emoji || (a.tipo === 'llamar' ? '📞' : '🔗'))}</span>
+                        <div class="acceso-admin-row__info">
+                            <strong>${h(a.titulo)}</strong>
+                            <small>
+                                ${a.tipo === 'llamar' ? '📞 llamar' : '🔗 abrir'} ·
+                                <code>${h(a.valor)}</code>
+                            </small>
+                        </div>
+                        <div class="acceso-admin-row__acc">
+                            <button class="btn btn--mini" data-edit="${h(a.id)}">Editar</button>
+                            <button class="btn btn--mini btn--danger" data-del="${h(a.id)}">Borrar</button>
+                        </div>
+                    </li>
+                `).join('')}
+            </ul>
+        `;
+        $lst.querySelectorAll('[data-edit]').forEach(b => b.addEventListener('click', () => {
+            const a = lista.find(x => x.id === b.dataset.edit);
+            abrirFormAcceso(c.id, a, () => renderAccesosAdmin($app));
+        }));
+        $lst.querySelectorAll('[data-del]').forEach(b => b.addEventListener('click', async () => {
+            const a = lista.find(x => x.id === b.dataset.del);
+            const ok = await modal({
+                titulo: 'Borrar acceso',
+                cuerpo: `<p>¿Borrar el acceso <strong>${h(a.titulo)}</strong>?</p>`,
+                acciones: [
+                    { label: 'Cancelar' },
+                    { label: 'Borrar', clase: 'btn--danger', value: 'ok' }
+                ]
+            });
+            if (ok !== 'ok') return;
+            try {
+                await borrarAcceso(a.id);
+                renderAccesosAdmin($app);
+            } catch (err) {
+                await mostrarErrorEstructurado(err, 'No pude borrar el acceso');
+            }
+        }));
+    } catch (err) {
+        await mostrarErrorEstructurado(err, 'No pude cargar los accesos');
+        $lst.innerHTML = `<p class="muted">No se pudieron cargar.</p>`;
+    }
+}
+
+function abrirFormAcceso(circleId, acceso, onSaved) {
+    const editando = !!acceso;
+    const v = acceso || { titulo: '', emoji: '', tipo: 'llamar', valor: '', orden: 0 };
+
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    overlay.innerHTML = `
+        <div class="modal" role="dialog" aria-modal="true">
+            <button class="modal__close" aria-label="Cerrar" data-close-x>×</button>
+            <h2 class="modal__titulo">${editando ? '✏️ Editar acceso' : '➕ Nuevo acceso'}</h2>
+            <form id="form-acceso" class="stack">
+                <label class="stack">
+                    <span>Título (lo que ve tu familiar) *</span>
+                    <input name="titulo" class="input-real" required value="${h(v.titulo)}"
+                           placeholder="Pedir turno PAMI">
+                </label>
+                <label class="stack">
+                    <span>Emoji (opcional, ej: 🏥 🏦 💊 📅)</span>
+                    <input name="emoji" class="input-real" value="${h(v.emoji || '')}" maxlength="4">
+                </label>
+                <fieldset class="visibilidad-form" style="border:0;padding:0;">
+                    <legend>¿Qué hace el botón?</legend>
+                    <label class="visibilidad-opt">
+                        <input type="radio" name="tipo" value="llamar" ${v.tipo === 'llamar' ? 'checked' : ''}>
+                        <div>
+                            <strong>📞 Llamar a un número</strong>
+                            <small>Abre el teléfono y marca el número.</small>
+                        </div>
+                    </label>
+                    <label class="visibilidad-opt">
+                        <input type="radio" name="tipo" value="link" ${v.tipo === 'link' ? 'checked' : ''}>
+                        <div>
+                            <strong>🔗 Abrir un link</strong>
+                            <small>Abre la web/app que pongas debajo.</small>
+                        </div>
+                    </label>
+                </fieldset>
+                <label class="stack">
+                    <span id="acceso-valor-label">Número de teléfono *</span>
+                    <input name="valor" class="input-real" required value="${h(v.valor)}"
+                           id="acceso-valor"
+                           placeholder="+5491155510001 ó 0800-...">
+                </label>
+                <label class="stack">
+                    <span>Orden (más chico aparece primero)</span>
+                    <input name="orden" type="number" class="input-real" value="${Number(v.orden) || 0}">
+                </label>
+                <div class="modal__acciones modal__acciones--stack">
+                    <button type="submit" class="btn btn--inicio">
+                        ${editando ? 'Guardar cambios' : 'Crear acceso'}
+                    </button>
+                    <button type="button" class="btn btn--mini" data-cancel>Cancelar</button>
+                </div>
+            </form>
+        </div>
+    `;
+    document.body.appendChild(overlay);
+
+    let cerrado = false;
+    function cerrar() {
+        if (cerrado) return;
+        cerrado = true;
+        cleanupModalBackButton(overlay);
+        overlay.remove();
+    }
+    installModalBackButton(overlay, cerrar);
+    overlay.querySelector('[data-close-x]').addEventListener('click', cerrar);
+    overlay.querySelector('[data-cancel]').addEventListener('click', cerrar);
+    overlay.addEventListener('click', e => { if (e.target === overlay) cerrar(); });
+
+    // Prompt dinámico de "valor" según tipo:
+    const $lbl   = overlay.querySelector('#acceso-valor-label');
+    const $valor = overlay.querySelector('#acceso-valor');
+    overlay.querySelectorAll('input[name="tipo"]').forEach(r => {
+        r.addEventListener('change', () => {
+            if (r.value === 'llamar' && r.checked) {
+                $lbl.textContent = 'Número de teléfono *';
+                $valor.placeholder = '+5491155510001 ó 0800-...';
+            } else if (r.value === 'link' && r.checked) {
+                $lbl.textContent = 'URL completa *';
+                $valor.placeholder = 'https://...';
+            }
+        });
+    });
+
+    overlay.querySelector('#form-acceso').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const fd = new FormData(e.target);
+        const datos = {
+            titulo: String(fd.get('titulo') || '').trim(),
+            emoji:  String(fd.get('emoji') || '').trim() || null,
+            tipo:   ['llamar','link'].includes(String(fd.get('tipo'))) ? String(fd.get('tipo')) : 'llamar',
+            valor:  String(fd.get('valor') || '').trim(),
+            orden:  Number(fd.get('orden') || 0)
+        };
+        const btn = e.target.querySelector('button[type=submit]');
+        const orig = btn.textContent;
+        btn.disabled = true; btn.textContent = 'Guardando…';
+        try {
+            if (editando) await actualizarAcceso(acceso.id, datos);
+            else          await crearAcceso({ circleId, ...datos });
+            cerrar();
+            onSaved && onSaved();
+        } catch (err) {
+            await mostrarErrorEstructurado(err, 'No pude guardar el acceso');
+        } finally {
+            btn.disabled = false; btn.textContent = orig;
+        }
     });
 }

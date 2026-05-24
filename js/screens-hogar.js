@@ -71,6 +71,7 @@ export async function renderHogar($app) {
                 <button class="btn" id="btn-miembros">👥 Miembros</button>
                 <button class="btn" id="btn-contactos">📞 Contactos</button>
                 <button class="btn" id="btn-medico">🩺 Datos médicos</button>
+                <button class="btn" id="btn-accesos">🔗 Accesos / Trámites</button>
                 <button class="btn" id="btn-ver-como" style="grid-column:1 / -1;">
                     👀 Ver como lo ve ${h(parentescoSimpleEnCirculo() || 'tu familiar')}
                 </button>
@@ -187,6 +188,7 @@ export async function renderHogar($app) {
             () => go('#/cuenta'));
         $app.querySelector('#btn-contactos').addEventListener('click', () => go('#/contactos'));
         $app.querySelector('#btn-medico').addEventListener('click',    () => go('#/datos-medicos'));
+        $app.querySelector('#btn-accesos').addEventListener('click',   () => go('#/accesos-admin'));
         const btnVerComo = $app.querySelector('#btn-ver-como');
         if (btnVerComo) btnVerComo.addEventListener('click', async () => {
             btnVerComo.disabled = true;

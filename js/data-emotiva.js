@@ -346,6 +346,45 @@ export async function borrarContacto(id) {
 }
 
 // =====================================================================
+// Accesos / Trámites configurables (tabla public.accesos)
+// =====================================================================
+export async function listarAccesos(circleId) {
+    const sb = await sbClient();
+    const { data, error } = await sb.from('accesos')
+        .select('*').eq('circle_id', circleId)
+        .order('orden', { ascending: true })
+        .order('created_at', { ascending: true });
+    if (error) throw enriquecer('select accesos', error);
+    return data || [];
+}
+
+export async function crearAcceso({ circleId, titulo, emoji, tipo, valor, orden }) {
+    const sb = await sbClient();
+    const { error } = await sb.from('accesos').insert({
+        circle_id: circleId,
+        titulo, emoji: emoji || null, tipo, valor,
+        orden: Number(orden) || 0
+    });
+    if (error) throw enriquecer('insert accesos', error);
+}
+
+export async function actualizarAcceso(id, datos) {
+    const sb = await sbClient();
+    const { error } = await sb.from('accesos').update({
+        ...datos,
+        emoji: datos.emoji || null,
+        orden: Number(datos.orden) || 0
+    }).eq('id', id);
+    if (error) throw enriquecer('update accesos', error);
+}
+
+export async function borrarAcceso(id) {
+    const sb = await sbClient();
+    const { error } = await sb.from('accesos').delete().eq('id', id);
+    if (error) throw enriquecer('delete accesos', error);
+}
+
+// =====================================================================
 // Datos médicos del círculo (tabla public.medical_info, 1:1)
 // =====================================================================
 export async function leerDatosMedicos(circleId) {
