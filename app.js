@@ -27,6 +27,7 @@ import * as Real      from './js/screens-real.js';
 import * as Hogar     from './js/screens-hogar.js';
 import * as Admin     from './js/screens-admin.js';
 import * as Preview   from './js/preview.js';
+import * as Papa      from './js/screens-papa.js';
 
 const $app = document.getElementById('app');
 
@@ -169,6 +170,14 @@ function renderRouteReal(ruta) {
         if (ruta.name === 'datos-medicos')  return Admin.renderMedicoAdmin($app);
         if (ruta.name === 'accesos-admin')  return Admin.renderAccesosAdmin($app);
         if (ruta.name === 'medico')         return Admin.renderMedicoSimpleReal($app);
+        // #/v2/pense y #/v2/historias en modo real (no preview): pantallas
+        // funcionales del papá. En preview el router las desvía a
+        // Preview.renderPensePreview / HistoriasPreview más arriba.
+        if (ruta.name === 'v2') {
+            const sub = ruta.params[0];
+            if (sub === 'pense')     return Papa.renderPenseSimpleReal($app);
+            if (sub === 'historias') return Papa.renderHistoriasSimpleReal($app);
+        }
         return Hogar.renderHogar($app);
     }
     return Real.renderCuenta($app);

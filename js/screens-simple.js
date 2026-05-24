@@ -85,13 +85,11 @@ export function renderInicio($app) {
 
         <div class="simple-extras">
             <button class="btn btn--xl btn--pense btn--full" data-go="#/v2/pense">
-                <span>💛 Pensé en vos</span>
-                <span class="badge-v2 badge-v2--inline">Próximamente</span>
+                💛 Pensé en vos
             </button>
 
             <button class="btn btn--xl btn--pense btn--full" data-go="#/v2/historias">
-                <span>📖 Historias</span>
-                <span class="badge-v2 badge-v2--inline">Próximamente</span>
+                📖 Historias
             </button>
         </div>
     `;
