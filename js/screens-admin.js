@@ -470,12 +470,29 @@ function abrirDictadoMail(datos) {
     `;
     document.body.appendChild(overlay);
 
+    // Ver comentario de bug+fix en screens-simple.js#renderComoHagoIA.
+    // Misma idea: iterar `e.results` desde 0 y rebuildear el texto, así
+    // Chrome re-emitiendo finales no duplica nada.
     let cerrado = false;
     let recognizer = null;
+    let grabando = false;
+    let baseText = '';
+
+    function detenerDictado() {
+        if (!recognizer) { grabando = false; return; }
+        try { recognizer.onresult = null; } catch (_) {}
+        try { recognizer.onerror  = null; } catch (_) {}
+        try { recognizer.onend    = null; } catch (_) {}
+        try { recognizer.stop();  } catch (_) {}
+        try { recognizer.abort(); } catch (_) {}
+        recognizer = null;
+        grabando = false;
+    }
+
     function cerrar() {
         if (cerrado) return;
         cerrado = true;
-        if (recognizer) { try { recognizer.stop(); } catch (_) {} }
+        detenerDictado();
         cleanupModalBackButton(overlay);
         overlay.remove();
     }
@@ -488,46 +505,45 @@ function abrirDictadoMail(datos) {
     const $estado = overlay.querySelector('#mic-estado');
     const $mic    = overlay.querySelector('#btn-mic');
 
-    let grabando = false;
-    let acumulado = '';
-
     if (supported && $mic) {
         $mic.addEventListener('click', () => {
-            if (grabando) { try { recognizer.stop(); } catch (_) {} return; }
-            recognizer = new SR();
-            recognizer.lang = 'es-AR';
-            recognizer.continuous = true;
-            recognizer.interimResults = true;
-            // Lo que ya estaba escrito no se borra: se le agrega lo dictado.
-            acumulado = $texto.value ? $texto.value.trim() + ' ' : '';
-            recognizer.onresult = (e) => {
-                let final = acumulado;
+            if (grabando) { detenerDictado(); $mic.textContent = '🎤 Hablar'; $estado.textContent = ''; return; }
+            detenerDictado();  // garantiza single-instance
+            baseText = $texto.value ? $texto.value.trim() + ' ' : '';
+            const r = new SR();
+            r.lang = 'es-AR';
+            r.continuous = true;
+            r.interimResults = true;
+            r.onresult = (e) => {
+                let final = '';
                 let interim = '';
-                for (let i = e.resultIndex; i < e.results.length; i++) {
+                for (let i = 0; i < e.results.length; i++) {
                     const t = e.results[i][0].transcript;
                     if (e.results[i].isFinal) final += t + ' ';
                     else interim += t;
                 }
-                acumulado = final;
-                $texto.value = (final + interim).trim();
+                $texto.value = (baseText + final + interim).trim();
             };
-            recognizer.onerror = (e) => {
+            r.onerror = (ev) => {
                 grabando = false;
                 $mic.textContent = '🎤 Hablar';
-                $estado.textContent = `No pude grabar (${e.error || 'error'}). Probá escribir.`;
+                $estado.textContent = `No pude grabar (${ev.error || 'error'}). Probá escribir.`;
             };
-            recognizer.onend = () => {
+            r.onend = () => {
                 grabando = false;
                 $mic.textContent = '🎤 Hablar de nuevo';
                 $estado.textContent = '';
+                recognizer = null;
             };
+            recognizer = r;
             try {
-                recognizer.start();
+                r.start();
                 grabando = true;
                 $mic.textContent = '⏹ Parar';
                 $estado.textContent = 'Te escucho…';
             } catch (err) {
                 $estado.textContent = 'No pude empezar a grabar.';
+                detenerDictado();
             }
         });
     }

@@ -175,6 +175,13 @@ function renderRouteReal(ruta) {
         if (ruta.name === 'accesos-admin')  return Admin.renderAccesosAdmin($app);
         if (ruta.name === 'guia-admin')     return Admin.renderGuiaAdmin($app, ruta);
         if (ruta.name === 'medico')         return Admin.renderMedicoSimpleReal($app);
+        // Tarjetones del home simple del papá: deben funcionar en modo
+        // real (no sólo en preview). Antes #/emergencias y #/familia se
+        // caían acá y rebotaban a renderInicio sin abrir nada — los
+        // accessors de preview.js ya traen datos reales si bootstrap
+        // hizo prepararDatosReales (modo real simple).
+        if (ruta.name === 'emergencias')    return Simple.renderEmergencias($app);
+        if (ruta.name === 'familia')        return Simple.renderFamilia($app);
         // Cómo hago + IA — funcional en uso real (la edge function
         // requiere JWT, que tenemos por la sesión).
         if (ruta.name === 'como-hago')      return Simple.renderComoHago($app);
