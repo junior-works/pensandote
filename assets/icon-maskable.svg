@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Pensándote">
+    <!-- Pensándote — versión maskable.
+         Mismo símbolo que icon.svg, escalado al ~65% para caer dentro de
+         la "safe zone" central (radio 0.4 × 512 = 205 px). El fondo crema
+         llega hasta los bordes para que el launcher pueda recortar a
+         cualquier forma sin dejar transparencias. -->
+    <rect width="512" height="512" fill="#faf5e9"/>
+
+    <!-- Puente / abrazo terracota -->
+    <path d="M 152 316 Q 256 396 360 316"
+          fill="none" stroke="#e26b3f" stroke-width="29" stroke-linecap="round"/>
+
+    <!-- Cabezas -->
+    <circle cx="204" cy="230" r="48" fill="#111"/>
+    <circle cx="308" cy="230" r="48" fill="#111"/>
+</svg>

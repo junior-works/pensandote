@@ -346,6 +346,21 @@ body[data-mode="simple"] .btn--mini { min-height: 44px; font-size: var(--fs-md);
 .tutorial-paso__texto {
     font-size: var(--fs-lg); line-height: 1.35; margin: 0;
 }
+.tutorial-paso__pista {
+    margin: 1rem 0 0;
+    padding: 0.7rem 0.9rem;
+    background: #fff;
+    border: 2px dashed var(--line);
+    border-radius: var(--r-sm);
+    color: var(--ink-soft);
+    font-size: var(--fs-md);
+    line-height: 1.4;
+}
+.tutorial-paso__pista-label {
+    color: var(--ink);
+    font-weight: 700;
+    margin-right: 0.3rem;
+}
 
 /* ===================================================================
    DASHBOARD

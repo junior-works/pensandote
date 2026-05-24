@@ -264,7 +264,8 @@ export function renderTutorial($app, ruta) {
         t.pasos.length - 1
     ));
     const esUltimo = pasoIdx === t.pasos.length - 1;
-    const textoPaso = t.pasos[pasoIdx];
+    const paso = t.pasos[pasoIdx];
+    const textoPaso = paso.texto;
 
     $app.innerHTML = `
         ${barraVolver(t.titulo, 'tutoriales', '#/como-hago')}
@@ -278,6 +279,12 @@ export function renderTutorial($app, ruta) {
         <section class="tutorial-paso">
             <div class="tutorial-paso__num">Paso ${pasoIdx + 1} de ${t.pasos.length}</div>
             <p class="tutorial-paso__texto">${h(textoPaso)}</p>
+            ${paso.pista_visual ? `
+                <p class="tutorial-paso__pista">
+                    <span class="tutorial-paso__pista-label">💡 Pista:</span>
+                    ${h(paso.pista_visual)}
+                </p>
+            ` : ''}
         </section>
 
         <div class="stack">
