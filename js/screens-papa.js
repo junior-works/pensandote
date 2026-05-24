@@ -290,20 +290,19 @@ function renderTabLegado($cont, c, u, miembros, esNarrador, esAdmin) {
                     Cuando llegue el momento, acá vas a encontrar lo que tu familiar
                     dejó para ustedes.
                 </p>
-                ${esAdmin ? `
-                    <div style="margin-top: 1.5rem; padding-top:1rem; border-top:1px dashed rgba(17,17,17,0.15);">
-                        <p class="muted" style="font-size:0.9em;">
-                            Si vos sos quien tiene que abrirlo:
-                        </p>
-                        <button class="btn btn--mini" id="btn-desbloquear">
-                            Legado
-                        </button>
-                        <p class="muted" style="font-size:0.78em; margin-top:0.6rem;">
-                            Acción reversible. Hacelo solo cuando corresponda.
-                        </p>
-                    </div>
-                ` : ''}
             </div>
+
+            ${esAdmin ? `
+                <div class="legado-action-fondo">
+                    <p class="muted" style="font-size:0.85em;">
+                        Si vos sos quien tiene que abrirlo:
+                    </p>
+                    <button class="btn btn--mini" id="btn-desbloquear">Legado</button>
+                    <p class="muted" style="font-size:0.78em; margin-top:0.5rem;">
+                        Acción reversible. Hacelo solo cuando corresponda.
+                    </p>
+                </div>
+            ` : ''}
         `;
         if (esAdmin) {
             $cont.querySelector('#btn-desbloquear').addEventListener('click',
@@ -319,13 +318,14 @@ function renderTabLegado($cont, c, u, miembros, esNarrador, esAdmin) {
         </p>
         <div id="sec-legado-list-oyente"><p class="muted">Cargando…</p></div>
         ${esAdmin ? `
-            <hr style="margin: 1.5rem 0 0.8rem;">
-            <button class="btn btn--mini btn--danger" id="btn-bloquear">
-                🔒 Volver a bloquear el legado
-            </button>
-            <p class="muted" style="font-size:0.78em; margin-top:0.4rem;">
-                Si lo abriste sin querer, podés cerrarlo. Las historias siguen guardadas.
-            </p>
+            <div class="legado-action-fondo">
+                <button class="btn btn--mini btn--danger" id="btn-bloquear">
+                    🔒 Volver a bloquear
+                </button>
+                <p class="muted" style="font-size:0.78em; margin-top:0.5rem;">
+                    Si lo abriste sin querer, podés cerrarlo. Las historias siguen guardadas.
+                </p>
+            </div>
         ` : ''}
     `;
     cargarYRenderizarHistorias({

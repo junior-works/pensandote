@@ -345,6 +345,19 @@ body[data-mode="simple"] .pense-secundario {
     margin-bottom: 1rem;
 }
 
+/* Acción delicada (desbloquear/bloquear legado) — al final del panel,
+   sutil, fuera del flujo principal. Bien separada del contenido para
+   que no quede "a mano" por accidente. */
+.legado-action-fondo {
+    margin-top: 4rem;
+    padding-top: 1.5rem;
+    border-top: 1px dashed rgba(17, 17, 17, 0.12);
+    text-align: center;
+    opacity: 0.78;
+}
+.legado-action-fondo:hover { opacity: 1; }
+.legado-action-fondo p { margin: 0 0 0.4rem; }
+
 /* ---------------- Badge V2 ---------------- */
 .badge-v2 {
     display: inline-block;
