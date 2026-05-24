@@ -9,12 +9,17 @@ import { CONTACTOS, MEDICO, TUTORIALES } from './mocks.js';
 import { miembroActivo } from './state.js';
 import { go } from './router.js';
 import { h, modal, speakES, stopSpeak } from './ui.js';
+import {
+    getContactos, getMedico, getTutoriales, getFotoDelDia,
+    getMiembroVisto, esPreview, avisarPreview
+} from './preview.js';
 
 // =====================================================================
 // INICIO
 // =====================================================================
 export function renderInicio($app) {
-    const yo = miembroActivo();
+    const yo = getMiembroVisto();
+    const foto = getFotoDelDia();
     const horaSaludo = (() => {
         const hr = new Date().getHours();
         if (hr < 12) return 'Buenos días';
@@ -28,13 +33,20 @@ export function renderInicio($app) {
             <p class="simple-fecha">${formatearFechaLarga(new Date())}</p>
         </header>
 
-        <article class="foto-del-dia foto-del-dia--placeholder">
-            <span class="badge-v2">v2 · Próximamente</span>
-            <div class="foto-del-dia__cuerpo">
-                <span class="foto-del-dia__emoji">📷</span>
-                <p>Acá vas a ver la foto del día que te mandan tus seres queridos.</p>
-            </div>
-        </article>
+        ${foto && foto.url ? `
+            <figure class="foto-carousel" style="margin-bottom:1.25rem;">
+                <img class="foto-carousel__img" src="${h(foto.url)}" alt="${h(foto.epigrafe || 'Foto del día')}">
+                ${foto.epigrafe ? `<figcaption><strong class="t-emocional">${h(foto.epigrafe)}</strong></figcaption>` : ''}
+            </figure>
+        ` : `
+            <article class="foto-del-dia foto-del-dia--placeholder">
+                <span class="badge-v2">v2 · Próximamente</span>
+                <div class="foto-del-dia__cuerpo">
+                    <span class="foto-del-dia__emoji">📷</span>
+                    <p>Acá vas a ver la foto del día que te mandan tus seres queridos.</p>
+                </div>
+            </article>
+        `}
 
         <nav class="simple-grid" aria-label="Secciones principales">
             <button class="tarjeton tarjeton--emergencia"  data-go="#/emergencias">
@@ -84,7 +96,7 @@ function formatearFechaLarga(d) {
 // EMERGENCIAS
 // =====================================================================
 export function renderEmergencias($app) {
-    const emergencias = CONTACTOS.filter(c => c.es_emergencia);
+    const emergencias = getContactos().filter(c => c.es_emergencia);
 
     $app.innerHTML = `
         ${barraVolver('Emergencias', 'emergencia')}
@@ -110,10 +122,15 @@ export function renderEmergencias($app) {
     wireNav($app);
 
     document.getElementById('btn-panico').addEventListener('click', async () => {
+        if (esPreview()) {
+            await avisarPreview('👀 Vista previa — botón de pánico',
+                'En la app real este botón le manda un aviso (ntfy + WhatsApp con tu ubicación) a tu familia. Acá no se ejecuta nada porque es vista previa.');
+            return;
+        }
         await modal({
             titulo: '📡 Avisando a tu familia…',
             cuerpo: `
-                <p>Estamos mandando un aviso a <strong>Charly</strong> y <strong>Lucía</strong>.</p>
+                <p>Estamos mandando un aviso a tu familia.</p>
                 <p class="muted">Te van a llamar en unos minutos. Quedate tranquila/o.</p>
                 <div class="loader-puntos" aria-hidden="true"><span></span><span></span><span></span></div>
             `,
@@ -134,27 +151,35 @@ export function renderEmergencias($app) {
 // FAMILIA
 // =====================================================================
 export function renderFamilia($app) {
-    const familia = CONTACTOS.filter(c => !c.es_emergencia);
+    const familia = getContactos().filter(c => !c.es_emergencia);
     $app.innerHTML = `
         ${barraVolver('Familia', 'familia')}
 
         <ul class="contactos-lista">
-            ${familia.map(c => `
+            ${familia.map(c => {
+                // Contactos reales: pueden NO tener foto_url ni un campo
+                // whatsapp aparte (usamos teléfono). Defensa para que la
+                // preview no rompa con filas más simples.
+                const tel = (c.telefono || '').replace(/\D/g, '');
+                const fotoSrc = c.foto_url
+                    || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(c.nombre || 'x')}`;
+                return `
                 <li class="contacto-card">
-                    <img class="contacto-card__foto" src="${h(c.foto_url)}" alt=""
+                    <img class="contacto-card__foto" src="${h(fotoSrc)}" alt=""
                          width="80" height="80">
                     <div class="contacto-card__info">
                         <strong>${h(c.nombre)}</strong>
-                        <small>${h(c.parentesco)}</small>
+                        <small>${h(c.parentesco || '')}</small>
                     </div>
                     <div class="contacto-card__acciones">
                         <a class="btn btn--familia" href="tel:${h(c.telefono)}">📞 Llamar</a>
-                        <a class="btn btn--familia"
-                           href="https://wa.me/${h(c.whatsapp.replace(/\D/g,''))}"
-                           target="_blank" rel="noopener">💬 WhatsApp</a>
+                        ${tel ? `<a class="btn btn--familia"
+                           href="https://wa.me/${h(tel)}"
+                           target="_blank" rel="noopener">💬 WhatsApp</a>` : ''}
                     </div>
                 </li>
-            `).join('')}
+            `;
+            }).join('')}
         </ul>
     `;
     wireNav($app);
@@ -345,10 +370,15 @@ export function renderTutorial($app, ruta) {
     const ayuda = document.getElementById('btn-ayuda');
     if (ayuda) ayuda.addEventListener('click', async () => {
         stopSpeak();
+        if (esPreview()) {
+            await avisarPreview('👀 Vista previa — pedir ayuda',
+                'En la app real esto le avisa a la familia que necesitás una mano. Acá no se ejecuta.');
+            return;
+        }
         await modal({
             titulo: '🆘 Pediste ayuda',
-            cuerpo: `<p>Le avisamos a <strong>Charly</strong> que necesitás una mano con
-                    <em>${h(t.titulo)}</em>. Te va a llamar pronto.</p>`,
+            cuerpo: `<p>Le avisamos a tu familia que necesitás una mano con
+                    <em>${h(t.titulo)}</em>. Te van a llamar pronto.</p>`,
             acciones: [{ label: 'Listo', clase: 'btn--xl btn--full btn--familia', value: 'ok' }],
             tono: 'ok'
         });

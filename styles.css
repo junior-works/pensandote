@@ -1341,6 +1341,50 @@ body[data-mode="dashboard"] .hogar-pense { background: #fff8f3; }
 }
 .circulo-card__acciones { display: flex; gap: 0.4rem; flex-wrap: wrap; }
 
+/* ---- Vista previa "Ver como lo ve papá" (banner global) ---- */
+#preview-banner {
+    background: #111;
+    color: #fff;
+    border-bottom: 3px solid var(--accent-inicio);
+    padding: 0.5rem 1rem;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+.preview-banner__inner {
+    max-width: 760px;
+    margin: 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 0.7rem;
+}
+.preview-banner__icon { font-size: 1.3rem; }
+.preview-banner__txt {
+    flex: 1;
+    font-size: 0.95rem;
+    line-height: 1.25;
+}
+.preview-banner__txt strong { color: var(--accent-inicio); }
+/* El botón "Salir" siempre chiquito y plano, ignora el skin del modo. */
+#preview-banner #btn-salir-preview {
+    background: #fff;
+    color: #111;
+    border: 2px solid #fff;
+    border-radius: 8px;
+    min-height: 34px;
+    padding: 0.3em 0.8em;
+    box-shadow: none;
+    font-size: 0.9rem;
+    flex-shrink: 0;
+}
+#preview-banner #btn-salir-preview:hover {
+    transform: none;
+    background: var(--accent-inicio);
+    border-color: var(--accent-inicio);
+    box-shadow: none;
+}
+
 /* ---- Pantallas admin (header + lista de contactos) ---- */
 .admin-pantalla__head {
     display: flex; align-items: center; gap: 0.8rem;

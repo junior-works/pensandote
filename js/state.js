@@ -30,7 +30,12 @@ export const state = {
     usuarioReal: null,             // auth.User | null
     circulosReal: [],              // [{id, nombre, owner_id}]
     circuloActivoIdReal: null,
-    membresiaReal: null            // {interface_mode, parentesco, permission_level}
+    membresiaReal: null,           // {interface_mode, parentesco, permission_level}
+
+    // --- "Ver como lo ve papá" — preview en memoria ---
+    modoPreview: false,
+    previewData: null,             // { contactos, medico, foto, pensamientos, historias, fechas, miembros }
+    previewPapaId: null            // user_id del miembro simple "central"
 };
 
 // =====================================================================

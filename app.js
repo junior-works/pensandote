@@ -26,6 +26,7 @@ import * as V2        from './js/screens-v2.js';
 import * as Real      from './js/screens-real.js';
 import * as Hogar     from './js/screens-hogar.js';
 import * as Admin     from './js/screens-admin.js';
+import * as Preview   from './js/preview.js';
 
 const $app = document.getElementById('app');
 
@@ -70,6 +71,43 @@ function renderRoute(ruta) {
     return renderRouteDemo(ruta);
 }
 
+function renderRoutePreview(ruta) {
+    // Mapeo de rutas para preview. Reusamos las pantallas simple
+    // (que ahora consultan accessors → datos reales en preview) y
+    // pisamos #/medico con la pantalla Médico real (que ya tiene
+    // datos de medical_info + dictado por voz).
+    try {
+        if (ruta.name === 'inicio')      return Simple.renderInicio($app);
+        if (ruta.name === 'emergencias') return Simple.renderEmergencias($app);
+        if (ruta.name === 'familia')     return Simple.renderFamilia($app);
+        if (ruta.name === 'medico')      return Admin.renderMedicoSimpleReal($app);
+        if (ruta.name === 'como-hago')   return Simple.renderComoHago($app);
+        if (ruta.name === 'tutorial')    return Simple.renderTutorial($app, ruta);
+        if (ruta.name === 'v2') {
+            const sub = ruta.params[0];
+            if (sub === 'pense')     return Preview.renderPensePreview($app);
+            if (sub === 'historias') return Preview.renderHistoriasPreview($app);
+            // El resto de las rutas v2 (foto-del-dia / audios / calendario
+            // / historias-tab) son maquetas demo — las dejamos pasar al
+            // render demo sólo si no estamos en preview puro. En preview,
+            // mandamos al inicio para no exponer mocks confusos.
+            return Simple.renderInicio($app);
+        }
+        // Cualquier otra ruta: caer al inicio simple.
+        Simple.renderInicio($app);
+    } catch (err) {
+        console.error('[preview render]', err);
+        $app.innerHTML = `
+            <section class="card stack">
+                <h2>Ups</h2>
+                <p>Algo falló en la vista previa.</p>
+                <pre>${(err && err.message) || err}</pre>
+            </section>
+        `;
+    }
+    window.scrollTo({ top: 0 });
+}
+
 function renderRouteDemo(ruta) {
     const yo = miembroActivo();
     document.body.dataset.mode = yo.interface_mode;
@@ -93,6 +131,15 @@ function renderRouteDemo(ruta) {
 }
 
 function renderRouteReal(ruta) {
+    // "Ver como lo ve papá" — el admin está mirando como su papá. NO
+    // tocamos sesión ni membresía; sólo forzamos render simple.
+    if (state.modoPreview) {
+        document.body.dataset.mode = 'simple';
+        Preview.montarBannerPreview();
+        return renderRoutePreview(ruta);
+    }
+    Preview.desmontarBannerPreview();
+
     // Setear body[data-mode] según la membresía real, para que la CSS
     // scopée los estilos (dashboard moderno / simple grande) correctamente.
     document.body.dataset.mode = state.membresiaReal?.interface_mode || 'dashboard';

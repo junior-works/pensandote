@@ -25,6 +25,7 @@ import {
     listarInteracciones, toggleFavorita, repreguntarTexto, repreguntarAudio,
     urlInteraccionAudio
 } from './data-emotiva.js';
+import { entrarPreviewVerComoPapa } from './preview.js';
 
 // LocalStorage key para marcar pensamientos recibidos como "vistos".
 const LS_LAST_SEEN = (circleId, userId) =>
@@ -70,6 +71,9 @@ export async function renderHogar($app) {
                 <button class="btn" id="btn-miembros">👥 Miembros</button>
                 <button class="btn" id="btn-contactos">📞 Contactos</button>
                 <button class="btn" id="btn-medico">🩺 Datos médicos</button>
+                <button class="btn" id="btn-ver-como" style="grid-column:1 / -1;">
+                    👀 Ver como lo ve ${h(parentescoSimpleEnCirculo() || 'tu familiar')}
+                </button>
             </div>
             <p class="muted" style="font-size:0.9em;">
                 Compartí el link de invitación por WhatsApp y se suma al círculo
@@ -183,6 +187,19 @@ export async function renderHogar($app) {
             () => go('#/cuenta'));
         $app.querySelector('#btn-contactos').addEventListener('click', () => go('#/contactos'));
         $app.querySelector('#btn-medico').addEventListener('click',    () => go('#/datos-medicos'));
+        const btnVerComo = $app.querySelector('#btn-ver-como');
+        if (btnVerComo) btnVerComo.addEventListener('click', async () => {
+            btnVerComo.disabled = true;
+            btnVerComo.textContent = 'Abriendo vista previa…';
+            const ok = await entrarPreviewVerComoPapa(c.id, _miembrosCache);
+            if (ok) {
+                document.body.dataset.mode = 'simple';
+                go('#/inicio');
+            } else {
+                btnVerComo.disabled = false;
+                btnVerComo.textContent = '👀 Ver como lo ve ' + (parentescoSimpleEnCirculo() || 'tu familiar');
+            }
+        });
     } else {
         // Simple: link a la pantalla Médico con dictado por voz.
         const btnIrMed = $app.querySelector('#btn-ir-medico');
@@ -817,4 +834,11 @@ function pedirVisibilidad(narradorId) {
             }
         });
     });
+}
+
+/** Devuelve el parentesco del primer miembro modo simple del círculo
+ *  (para el label del botón "Ver como lo ve …"). null si no hay. */
+function parentescoSimpleEnCirculo() {
+    const m = (_miembrosCache || []).find(x => x.interface_mode === 'simple');
+    return m ? (m.parentesco || '').toLowerCase() : null;
 }
