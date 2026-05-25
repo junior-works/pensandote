@@ -99,9 +99,18 @@ export async function renderHogar($app) {
         </header>
 
         ${!esSimple ? `
+        <section class="card stack hogar-checkin">
+            <h2>📅 Estado del día</h2>
+            <div id="sec-checkin-estado"><p class="muted">Cargando…</p></div>
+        </section>
+
+        <section class="card stack hogar-actividad">
+            <h2>📋 Actividad reciente</h2>
+            <div id="sec-actividad"><p class="muted">Cargando…</p></div>
+        </section>
+
         <section class="card stack hogar-avisos" id="hogar-avisos">
-            <h2>🔔 Avisos</h2>
-            <div id="sec-avisos-estado"><p class="muted">Cargando…</p></div>
+            <div id="sec-avisos-estado"><p class="muted">Cargando avisos…</p></div>
         </section>
 
         <section class="card stack hogar-acciones">
@@ -123,16 +132,6 @@ export async function renderHogar($app) {
                 Compartí el link de invitación por WhatsApp y se suma al círculo
                 en un click.
             </p>
-        </section>
-
-        <section class="card stack hogar-checkin">
-            <h2>📅 Estado del día</h2>
-            <div id="sec-checkin-estado"><p class="muted">Cargando…</p></div>
-        </section>
-
-        <section class="card stack hogar-actividad">
-            <h2>📋 Actividad reciente</h2>
-            <div id="sec-actividad"><p class="muted">Cargando…</p></div>
         </section>
 
         <section class="card stack hogar-circulos">
@@ -1219,7 +1218,11 @@ async function pintarAvisos($cont) {
     if (!$cont) return;
     const vapid = window.PENSANDOTE_CONFIG?.VAPID_PUBLIC_KEY || '';
     if (!vapid || vapid.startsWith('REEMPLAZAR')) {
-        $cont.innerHTML = `<p class="muted">Avisos no configurados todavía (falta VAPID_PUBLIC_KEY).</p>`;
+        $cont.innerHTML = `
+            <div class="avisos-row">
+                <span class="avisos-row__label">🔔 Avisos</span>
+                <span class="muted">No configurados todavía.</span>
+            </div>`;
         return;
     }
     let st;
@@ -1227,33 +1230,34 @@ async function pintarAvisos($cont) {
     catch (err) { st = { estado: 'desactivado' }; }
 
     if (st.estado === 'no-soporta') {
-        $cont.innerHTML = `<p class="muted">Este navegador no soporta avisos. En desktop probá Chrome/Edge/Firefox; en mobile, Chrome Android.</p>`;
+        $cont.innerHTML = `
+            <div class="avisos-row">
+                <span class="avisos-row__label">🔔 Avisos</span>
+                <span class="status-chip">No soportado en este navegador</span>
+            </div>`;
         return;
     }
     if (st.estado === 'bloqueado') {
         $cont.innerHTML = `
-            <p class="muted">Tenés los avisos <strong>bloqueados</strong> en este navegador.</p>
-            <p class="muted" style="font-size:0.88em;">
-                Para activarlos: tocá el candado/⓵ en la barra de direcciones →
-                Notificaciones → Permitir, y volvé a esta pantalla.
-            </p>
-        `;
+            <div class="avisos-row">
+                <span class="avisos-row__label">🔔 Avisos</span>
+                <span class="status-chip status-chip--danger">🚫 Bloqueados</span>
+            </div>
+            <p class="muted avisos-help">
+                Tocá el candado en la barra de direcciones → Notificaciones → Permitir,
+                y volvé a esta pantalla.
+            </p>`;
         return;
     }
     if (st.estado === 'activado') {
         $cont.innerHTML = `
-            <p>
-                <span class="status-chip status-chip--ok">✅ Avisos activados en este dispositivo</span>
-            </p>
-            <p class="muted" style="font-size:0.88em;">
-                Te vamos a avisar cuando tu familiar no marque su check-in del día y para
-                eventos importantes. Probá ya mismo que te llegan:
-            </p>
-            <div class="hogar-avisos__acciones">
-                <button class="btn btn--inicio" id="btn-probar-aviso">🔔 Probar aviso</button>
-                <button class="btn btn--mini" id="btn-desactivar-avisos">Desactivar avisos</button>
+            <div class="avisos-row">
+                <span class="avisos-row__label">🔔 Avisos</span>
+                <span class="status-chip status-chip--ok">✅ Activados</span>
+                <button class="btn btn--mini btn--inicio" id="btn-probar-aviso">🔔 Probar</button>
+                <button class="btn btn--mini" id="btn-desactivar-avisos">Desactivar</button>
             </div>
-            <p id="probar-feedback" class="muted" style="font-size:0.88em; min-height:1.1em; margin:0;"></p>
+            <p id="probar-feedback" class="muted avisos-feedback"></p>
         `;
         const $feedback = $cont.querySelector('#probar-feedback');
         $cont.querySelector('#btn-probar-aviso').addEventListener('click', async (ev) => {
@@ -1264,13 +1268,10 @@ async function pintarAvisos($cont) {
             $feedback.style.color = '';
             try {
                 const r = await probarAviso(state.circuloActivoIdReal);
-                // r.sent es la cantidad que entró al servicio de push.
-                // Si 0, pusieron "activado" en otro dispositivo distinto
-                // — explicámoslo claro en lugar de un genérico "Enviado".
                 if (r?.sent > 0) {
-                    $feedback.textContent = `✅ Enviado — fijate que te llegue la notificación (${r.sent} dispositivo${r.sent === 1 ? '' : 's'}).`;
+                    $feedback.textContent = `✅ Enviado — fijate que te llegue (${r.sent} dispositivo${r.sent === 1 ? '' : 's'}).`;
                 } else {
-                    $feedback.textContent = 'Se envió, pero ningún dispositivo del círculo tiene avisos activos. Si recién lo activaste, esperá unos segundos y reintentá.';
+                    $feedback.textContent = 'Se envió pero ningún dispositivo del círculo está suscripto. Si recién activaste, esperá unos segundos.';
                 }
             } catch (err) {
                 $feedback.style.color = 'var(--accent-anecdota, #c43c2f)';
@@ -1284,7 +1285,7 @@ async function pintarAvisos($cont) {
             btn.disabled = true; btn.textContent = 'Desactivando…';
             try { await desactivarAvisos(); pintarAvisos($cont); }
             catch (err) {
-                btn.disabled = false; btn.textContent = 'Desactivar avisos';
+                btn.disabled = false; btn.textContent = 'Desactivar';
                 await modal({
                     titulo: 'No pude desactivar',
                     cuerpo: `<pre>${h(err?.message || err)}</pre>`,
@@ -1296,11 +1297,14 @@ async function pintarAvisos($cont) {
     }
     // desactivado (default).
     $cont.innerHTML = `
-        <p class="muted">
-            Activá los avisos para enterarte cuando tu familiar no marque
-            "Estoy bien" en el día (y futuras alertas importantes).
+        <div class="avisos-row">
+            <span class="avisos-row__label">🔔 Avisos</span>
+            <span class="status-chip">🔕 Desactivados</span>
+            <button class="btn btn--mini btn--inicio" id="btn-activar-avisos">Activar avisos</button>
+        </div>
+        <p class="muted avisos-help">
+            Te avisamos cuando tu familiar no marque su check-in del día.
         </p>
-        <button class="btn btn--inicio" id="btn-activar-avisos">🔔 Activar avisos</button>
     `;
     $cont.querySelector('#btn-activar-avisos').addEventListener('click', async (ev) => {
         const btn = ev.currentTarget;
@@ -1309,7 +1313,7 @@ async function pintarAvisos($cont) {
             await activarAvisos(vapid);
             pintarAvisos($cont);
         } catch (err) {
-            btn.disabled = false; btn.textContent = '🔔 Activar avisos';
+            btn.disabled = false; btn.textContent = 'Activar avisos';
             await modal({
                 titulo: 'No pude activar los avisos',
                 cuerpo: `<p>${h(err?.message || err)}</p>`,
