@@ -732,6 +732,48 @@ export async function activarAvisos(vapidPublicKey) {
     return { endpoint: sub.endpoint };
 }
 
+/**
+ * Llama a la edge function `enviar-push` con la sesión del usuario
+ * actual (Authorization Bearer access_token + apikey anon). verify_jwt
+ * en la function valida el JWT y adentro usa service role para mandar
+ * a todas las suscripciones dashboard del círculo. Devuelve la
+ * respuesta JSON; tira error si falla.
+ */
+export async function probarAviso(circleId) {
+    if (!circleId) throw new Error('sin círculo activo');
+    const cfg = (typeof window !== 'undefined') ? window.PENSANDOTE_CONFIG : null;
+    if (!cfg?.SUPABASE_URL || !cfg?.SUPABASE_ANON_KEY) {
+        throw new Error('falta config de Supabase');
+    }
+    const sb = await sbClient();
+    const { data: { session } } = await sb.auth.getSession();
+    if (!session?.access_token) throw new Error('sin sesión');
+
+    const res = await fetch(`${cfg.SUPABASE_URL}/functions/v1/enviar-push`, {
+        method: 'POST',
+        headers: {
+            'Authorization': `Bearer ${session.access_token}`,
+            'apikey':        cfg.SUPABASE_ANON_KEY,
+            'Content-Type':  'application/json'
+        },
+        body: JSON.stringify({
+            circle_id: circleId,
+            title:     'Prueba 🔔',
+            body:      '¡Las notificaciones funcionan!',
+            url:       '#/inicio'
+        })
+    });
+    let body = null;
+    try { body = await res.json(); } catch (_) {}
+    if (!res.ok) {
+        const msg = body?.error || `HTTP ${res.status}`;
+        const err = new Error(msg);
+        err.detalle = body;
+        throw err;
+    }
+    return body || {};
+}
+
 export async function desactivarAvisos() {
     if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
     const reg = await navigator.serviceWorker.ready;

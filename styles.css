@@ -731,6 +731,12 @@ body[data-mode="dashboard"] .ideas-sugeridas__chip {
 }
 .pense-toast.is-visible { opacity: 1; transform: translate(-50%, 0); }
 
+/* Avisos: botones probar / desactivar en línea (panel admin) */
+body[data-mode="dashboard"] .hogar-avisos__acciones {
+    display: flex; flex-wrap: wrap; gap: 0.5rem;
+    align-items: center;
+}
+
 /* ---- Muro de actividad (admin Hogar) ----
    Feed compacto: icon a la izquierda, texto en el medio, tiempo
    relativo a la derecha en muted. Hover sutil. */

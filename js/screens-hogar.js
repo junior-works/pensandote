@@ -29,7 +29,7 @@ import {
     urlInteraccionAudio,
     listarPuntas, crearPunta, borrarPunta,
     ultimosCheckinsPorMiembro,
-    estadoAvisos, activarAvisos, desactivarAvisos,
+    estadoAvisos, activarAvisos, desactivarAvisos, probarAviso,
     actividadReciente
 } from './data-emotiva.js';
 import { entrarPreviewVerComoPapa, limpiarDatosReales } from './preview.js';
@@ -1247,10 +1247,38 @@ async function pintarAvisos($cont) {
             </p>
             <p class="muted" style="font-size:0.88em;">
                 Te vamos a avisar cuando tu familiar no marque su check-in del día y para
-                eventos importantes. Si querés silenciar acá, tocá "Desactivar".
+                eventos importantes. Probá ya mismo que te llegan:
             </p>
-            <button class="btn btn--mini" id="btn-desactivar-avisos">Desactivar avisos</button>
+            <div class="hogar-avisos__acciones">
+                <button class="btn btn--inicio" id="btn-probar-aviso">🔔 Probar aviso</button>
+                <button class="btn btn--mini" id="btn-desactivar-avisos">Desactivar avisos</button>
+            </div>
+            <p id="probar-feedback" class="muted" style="font-size:0.88em; min-height:1.1em; margin:0;"></p>
         `;
+        const $feedback = $cont.querySelector('#probar-feedback');
+        $cont.querySelector('#btn-probar-aviso').addEventListener('click', async (ev) => {
+            const btn = ev.currentTarget;
+            const orig = btn.textContent;
+            btn.disabled = true; btn.textContent = 'Enviando…';
+            $feedback.textContent = '';
+            $feedback.style.color = '';
+            try {
+                const r = await probarAviso(state.circuloActivoIdReal);
+                // r.sent es la cantidad que entró al servicio de push.
+                // Si 0, pusieron "activado" en otro dispositivo distinto
+                // — explicámoslo claro en lugar de un genérico "Enviado".
+                if (r?.sent > 0) {
+                    $feedback.textContent = `✅ Enviado — fijate que te llegue la notificación (${r.sent} dispositivo${r.sent === 1 ? '' : 's'}).`;
+                } else {
+                    $feedback.textContent = 'Se envió, pero ningún dispositivo del círculo tiene avisos activos. Si recién lo activaste, esperá unos segundos y reintentá.';
+                }
+            } catch (err) {
+                $feedback.style.color = 'var(--accent-anecdota, #c43c2f)';
+                $feedback.textContent = `No pude enviar: ${err?.message || err}`;
+            } finally {
+                btn.disabled = false; btn.textContent = orig;
+            }
+        });
         $cont.querySelector('#btn-desactivar-avisos').addEventListener('click', async (ev) => {
             const btn = ev.currentTarget;
             btn.disabled = true; btn.textContent = 'Desactivando…';
