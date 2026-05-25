@@ -550,6 +550,109 @@ export async function borrarAcceso(id) {
 }
 
 // =====================================================================
+// Avisos (Web Push) — suscripción del navegador del admin
+// =====================================================================
+//
+// El navegador genera un PushSubscription (endpoint + keys p256dh/auth)
+// y lo persistimos en `push_subscriptions`. La edge function
+// `enviar-push` consulta esa tabla cuando hay algo que avisar a la
+// familia (papá no marcó check-in hoy, etc.).
+
+function urlBase64ToUint8Array(base64String) {
+    const padding = '='.repeat((4 - base64String.length % 4) % 4);
+    const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+    const rawData = atob(base64);
+    const outputArray = new Uint8Array(rawData.length);
+    for (let i = 0; i < rawData.length; ++i) outputArray[i] = rawData.charCodeAt(i);
+    return outputArray;
+}
+
+/**
+ * Estado de avisos del navegador actual.
+ *   - 'no-soporta': el browser no tiene Notification/PushManager.
+ *   - 'bloqueado' : Notification.permission === 'denied'.
+ *   - 'activado'  : hay PushSubscription Y está en nuestra DB.
+ *   - 'desactivado': default — el admin nunca lo activó (o lo desactivó).
+ */
+export async function estadoAvisos() {
+    if (!('Notification' in window) || !('serviceWorker' in navigator) || !('PushManager' in window)) {
+        return { estado: 'no-soporta' };
+    }
+    if (Notification.permission === 'denied') {
+        return { estado: 'bloqueado' };
+    }
+    try {
+        const reg = await navigator.serviceWorker.ready;
+        const sub = await reg.pushManager.getSubscription();
+        if (!sub) return { estado: 'desactivado' };
+        // Confirmamos que esta suscripción esté en nuestra DB.
+        const sb = await sbClient();
+        const { data, error } = await sb.from('push_subscriptions')
+            .select('endpoint').eq('endpoint', sub.endpoint).maybeSingle();
+        if (error) return { estado: 'desactivado' };
+        return data ? { estado: 'activado', endpoint: sub.endpoint } : { estado: 'desactivado' };
+    } catch (err) {
+        console.warn('[estadoAvisos]', err);
+        return { estado: 'desactivado' };
+    }
+}
+
+export async function activarAvisos(vapidPublicKey) {
+    if (!('Notification' in window) || !('serviceWorker' in navigator) || !('PushManager' in window)) {
+        throw new Error('Este navegador no soporta avisos.');
+    }
+    if (!vapidPublicKey) throw new Error('Falta VAPID_PUBLIC_KEY en config.');
+
+    let permiso = Notification.permission;
+    if (permiso !== 'granted') {
+        permiso = await Notification.requestPermission();
+    }
+    if (permiso === 'denied') {
+        throw new Error('Tenés los avisos bloqueados — habilitalos en la configuración del navegador.');
+    }
+    if (permiso !== 'granted') throw new Error('No diste permiso para mostrar avisos.');
+
+    const reg = await navigator.serviceWorker.ready;
+    let sub = await reg.pushManager.getSubscription();
+    if (!sub) {
+        sub = await reg.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: urlBase64ToUint8Array(vapidPublicKey)
+        });
+    }
+    const json = sub.toJSON();
+    const sb = await sbClient();
+    const { data: { user } } = await sb.auth.getUser();
+    if (!user) throw new Error('sin sesión');
+
+    const { error } = await sb.from('push_subscriptions').upsert({
+        user_id:    user.id,
+        endpoint:   sub.endpoint,
+        p256dh:     json.keys?.p256dh || null,
+        auth:       json.keys?.auth   || null,
+        user_agent: navigator.userAgent.slice(0, 500)
+    }, { onConflict: 'endpoint' });
+    if (error) throw enriquecer('upsert push_subscriptions', error);
+    return { endpoint: sub.endpoint };
+}
+
+export async function desactivarAvisos() {
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+    const reg = await navigator.serviceWorker.ready;
+    const sub = await reg.pushManager.getSubscription();
+    if (sub) {
+        // Borramos primero en DB para que la edge function no la siga
+        // intentando aunque el unsubscribe del browser falle.
+        const sb = await sbClient();
+        try {
+            await sb.from('push_subscriptions').delete().eq('endpoint', sub.endpoint);
+        } catch (err) { console.warn('[desactivarAvisos delete]', err); }
+        try { await sub.unsubscribe(); }
+        catch (err) { console.warn('[desactivarAvisos unsubscribe]', err); }
+    }
+}
+
+// =====================================================================
 // Check-in "estoy bien" del día
 // =====================================================================
 //

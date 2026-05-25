@@ -28,7 +28,8 @@ import {
     listarInteracciones, toggleFavorita, repreguntarTexto, repreguntarAudio,
     urlInteraccionAudio,
     listarPuntas, crearPunta, borrarPunta,
-    ultimosCheckinsPorMiembro
+    ultimosCheckinsPorMiembro,
+    estadoAvisos, activarAvisos, desactivarAvisos
 } from './data-emotiva.js';
 import { entrarPreviewVerComoPapa, limpiarDatosReales } from './preview.js';
 
@@ -97,6 +98,11 @@ export async function renderHogar($app) {
         </header>
 
         ${!esSimple ? `
+        <section class="card stack hogar-avisos" id="hogar-avisos">
+            <h2>🔔 Avisos</h2>
+            <div id="sec-avisos-estado"><p class="muted">Cargando…</p></div>
+        </section>
+
         <section class="card stack hogar-acciones">
             <h2>⚙️ Acciones del círculo</h2>
             <div class="hogar-acciones__grid">
@@ -382,6 +388,10 @@ export async function renderHogar($app) {
 
         // Estado del día (check-in de los miembros simple del círculo).
         cargarCheckinsDelDia(c, $app.querySelector('#sec-checkin-estado'));
+
+        // Avisos (Web Push) — sólo dashboard. El admin activa una vez
+        // por dispositivo; las pushes las dispara la edge function.
+        pintarAvisos($app.querySelector('#sec-avisos-estado'));
 
         // Sección "Ideas para contar" — wire form + cargar cola/sugeridas inicial.
         const $formPunta = $app.querySelector('#form-punta');
@@ -1190,6 +1200,85 @@ function renderSugeridas($cont, yaCargadas, c, u, $app) {
                 });
             }
         });
+    });
+}
+
+// =====================================================================
+// Avisos (Web Push) — UI de activación
+// =====================================================================
+async function pintarAvisos($cont) {
+    if (!$cont) return;
+    const vapid = window.PENSANDOTE_CONFIG?.VAPID_PUBLIC_KEY || '';
+    if (!vapid || vapid.startsWith('REEMPLAZAR')) {
+        $cont.innerHTML = `<p class="muted">Avisos no configurados todavía (falta VAPID_PUBLIC_KEY).</p>`;
+        return;
+    }
+    let st;
+    try { st = await estadoAvisos(); }
+    catch (err) { st = { estado: 'desactivado' }; }
+
+    if (st.estado === 'no-soporta') {
+        $cont.innerHTML = `<p class="muted">Este navegador no soporta avisos. En desktop probá Chrome/Edge/Firefox; en mobile, Chrome Android.</p>`;
+        return;
+    }
+    if (st.estado === 'bloqueado') {
+        $cont.innerHTML = `
+            <p class="muted">Tenés los avisos <strong>bloqueados</strong> en este navegador.</p>
+            <p class="muted" style="font-size:0.88em;">
+                Para activarlos: tocá el candado/⓵ en la barra de direcciones →
+                Notificaciones → Permitir, y volvé a esta pantalla.
+            </p>
+        `;
+        return;
+    }
+    if (st.estado === 'activado') {
+        $cont.innerHTML = `
+            <p>
+                <span class="status-chip status-chip--ok">✅ Avisos activados en este dispositivo</span>
+            </p>
+            <p class="muted" style="font-size:0.88em;">
+                Te vamos a avisar cuando tu familiar no marque su check-in del día y para
+                eventos importantes. Si querés silenciar acá, tocá "Desactivar".
+            </p>
+            <button class="btn btn--mini" id="btn-desactivar-avisos">Desactivar avisos</button>
+        `;
+        $cont.querySelector('#btn-desactivar-avisos').addEventListener('click', async (ev) => {
+            const btn = ev.currentTarget;
+            btn.disabled = true; btn.textContent = 'Desactivando…';
+            try { await desactivarAvisos(); pintarAvisos($cont); }
+            catch (err) {
+                btn.disabled = false; btn.textContent = 'Desactivar avisos';
+                await modal({
+                    titulo: 'No pude desactivar',
+                    cuerpo: `<pre>${h(err?.message || err)}</pre>`,
+                    acciones: [{ label: 'OK', value: 'ok' }]
+                });
+            }
+        });
+        return;
+    }
+    // desactivado (default).
+    $cont.innerHTML = `
+        <p class="muted">
+            Activá los avisos para enterarte cuando tu familiar no marque
+            "Estoy bien" en el día (y futuras alertas importantes).
+        </p>
+        <button class="btn btn--inicio" id="btn-activar-avisos">🔔 Activar avisos</button>
+    `;
+    $cont.querySelector('#btn-activar-avisos').addEventListener('click', async (ev) => {
+        const btn = ev.currentTarget;
+        btn.disabled = true; btn.textContent = 'Pidiendo permiso…';
+        try {
+            await activarAvisos(vapid);
+            pintarAvisos($cont);
+        } catch (err) {
+            btn.disabled = false; btn.textContent = '🔔 Activar avisos';
+            await modal({
+                titulo: 'No pude activar los avisos',
+                cuerpo: `<p>${h(err?.message || err)}</p>`,
+                acciones: [{ label: 'OK', clase: 'btn--inicio', value: 'ok' }]
+            });
+        }
     });
 }
 

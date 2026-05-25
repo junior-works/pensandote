@@ -18,7 +18,7 @@
  * correcto en ambos entornos.
  */
 
-const CACHE_NAME = 'pensandote-shell-v0.9.22';
+const CACHE_NAME = 'pensandote-shell-v0.9.23';
 
 const SHELL_FILES = [
     './',
@@ -134,4 +134,60 @@ async function cacheFirst(request) {
 // la PWA. Aún no lo usamos desde app.js, pero queda listo.
 self.addEventListener('message', (event) => {
     if (event.data === 'skipWaiting') self.skipWaiting();
+});
+
+// ---------------------------------------------------------------------
+// Web Push — handler `push` y `notificationclick`
+// ---------------------------------------------------------------------
+//
+// Payload esperado (lo manda la edge function `enviar-push`):
+//   { title: string, body: string, url?: string, tag?: string }
+//
+// Si llega vacío o malformado, mostramos un fallback genérico (Chrome
+// exige una notificación por cada push silencioso o cierra la
+// suscripción).
+self.addEventListener('push', (event) => {
+    let data = {};
+    try { data = event.data ? event.data.json() : {}; }
+    catch (_) {
+        try { data = { body: event.data?.text() || '' }; } catch (__) {}
+    }
+    const title = data.title || 'Pensándote';
+    const opts = {
+        body:  data.body || '',
+        icon:  './assets/icon-192.png',
+        badge: './assets/icon-192.png',
+        // tag agrupa: dos pushes con el mismo tag se "consolidan" en
+        // una sola notificación, evitando spam (ej. "papá no marcó hoy"
+        // sobre el mismo círculo durante el día).
+        tag:   data.tag || 'pensandote',
+        // url viaja como dato para que `notificationclick` sepa adónde
+        // llevar al usuario al tocarla.
+        data:  { url: data.url || './' }
+    };
+    event.waitUntil(self.registration.showNotification(title, opts));
+});
+
+self.addEventListener('notificationclick', (event) => {
+    event.notification.close();
+    const targetUrl = event.notification.data?.url || './';
+    event.waitUntil((async () => {
+        const clientList = await self.clients.matchAll({
+            type: 'window',
+            includeUncontrolled: true
+        });
+        // Si la PWA ya está abierta en alguna pestaña, la enfocamos
+        // y navegamos a la URL del aviso (mismo origen — usamos hash
+        // para que sea instantáneo).
+        for (const client of clientList) {
+            if ('focus' in client) {
+                try { client.postMessage({ type: 'push-navigate', url: targetUrl }); } catch (_) {}
+                return client.focus();
+            }
+        }
+        // Si no hay ninguna abierta, la abrimos.
+        if (self.clients.openWindow) {
+            return self.clients.openWindow(targetUrl);
+        }
+    })());
 });
