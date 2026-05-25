@@ -29,7 +29,7 @@ import { h, modal } from './ui.js';
 import {
     listarContactos, leerDatosMedicos, ultimaFotoDia, ultimasFotosDia,
     pensamientosRecibidos, listarHistorias, listarFechas,
-    listarAccesos, listarPuntas
+    listarAccesos, listarPuntas, listarMedicamentos, tomasDeHoy
 } from './data-emotiva.js';
 import { miembrosDelCirculo } from './circles.js';
 import {
@@ -88,6 +88,20 @@ export function getHistorias() {
 export function getAccesos() {
     if (state.modoPreview) return state.previewData?.accesos || [];
     if (state.datosReales) return state.datosReales.accesos || [];
+    return [];
+}
+
+/** Medicamentos activos del círculo (catálogo). */
+export function getMedicamentos() {
+    if (state.modoPreview) return state.previewData?.medicamentos || [];
+    if (state.datosReales) return state.datosReales.medicamentos || [];
+    return [];
+}
+
+/** Tomas confirmadas del día actual. */
+export function getTomasHoy() {
+    if (state.modoPreview) return state.previewData?.tomasHoy || [];
+    if (state.datosReales) return state.datosReales.tomasHoy || [];
     return [];
 }
 
@@ -180,7 +194,7 @@ export async function entrarPreviewVerComoPapa(circleId, miembros) {
 
     let data;
     try {
-        const [contactos, medico, fotos, pensamientos, historias, fechas, accesos, puntas] = await Promise.all([
+        const [contactos, medico, fotos, pensamientos, historias, fechas, accesos, puntas, medicamentos, tomasHoy] = await Promise.all([
             listarContactos(circleId).catch(e => { console.warn('[preview] contactos', e); return []; }),
             leerDatosMedicos(circleId).catch(e => { console.warn('[preview] medico', e); return null; }),
             ultimasFotosDia(circleId, 10).catch(e => { console.warn('[preview] fotos', e); return []; }),
@@ -188,9 +202,11 @@ export async function entrarPreviewVerComoPapa(circleId, miembros) {
             listarHistorias(circleId).catch(e => { console.warn('[preview] historias', e); return []; }),
             listarFechas(circleId).catch(e => { console.warn('[preview] fechas', e); return []; }),
             listarAccesos(circleId).catch(e => { console.warn('[preview] accesos', e); return []; }),
-            listarPuntas(circleId).catch(e => { console.warn('[preview] puntas', e); return []; })
+            listarPuntas(circleId).catch(e => { console.warn('[preview] puntas', e); return []; }),
+            listarMedicamentos(circleId, { soloActivos: true }).catch(e => { console.warn('[preview] medicamentos', e); return []; }),
+            tomasDeHoy(circleId).catch(e => { console.warn('[preview] tomas', e); return []; })
         ]);
-        data = { contactos, medico, fotos, pensamientos, historias, fechas, miembros, accesos, puntas };
+        data = { contactos, medico, fotos, pensamientos, historias, fechas, miembros, accesos, puntas, medicamentos, tomasHoy };
     } catch (err) {
         console.error('[preview] load', err);
         await modal({
@@ -363,18 +379,20 @@ function hace(ms) {
 export async function prepararDatosReales(circleId, userId) {
     if (!circleId || !userId) return;
     try {
-        const [contactos, medico, fotos, pensamientos, miembros, accesos, puntas] = await Promise.all([
+        const [contactos, medico, fotos, pensamientos, miembros, accesos, puntas, medicamentos, tomasHoy] = await Promise.all([
             listarContactos(circleId).catch(e => { console.warn('[datosReales] contactos', e); return []; }),
             leerDatosMedicos(circleId).catch(e => { console.warn('[datosReales] medico', e); return null; }),
             ultimasFotosDia(circleId, 10).catch(e => { console.warn('[datosReales] fotos', e); return []; }),
             pensamientosRecibidos(circleId, userId).catch(e => { console.warn('[datosReales] pensé', e); return []; }),
             miembrosDelCirculo(circleId).catch(e => { console.warn('[datosReales] miembros', e); return []; }),
             listarAccesos(circleId).catch(e => { console.warn('[datosReales] accesos', e); return []; }),
-            listarPuntas(circleId).catch(e => { console.warn('[datosReales] puntas', e); return []; })
+            listarPuntas(circleId).catch(e => { console.warn('[datosReales] puntas', e); return []; }),
+            listarMedicamentos(circleId, { soloActivos: true }).catch(e => { console.warn('[datosReales] medicamentos', e); return []; }),
+            tomasDeHoy(circleId).catch(e => { console.warn('[datosReales] tomas', e); return []; })
         ]);
         // Liberar blob URLs viejas antes de pisar el cache.
         revocarFotos(state.datosReales?.fotos);
-        state.datosReales = { contactos, medico, fotos, pensamientos, miembros, accesos, puntas };
+        state.datosReales = { contactos, medico, fotos, pensamientos, miembros, accesos, puntas, medicamentos, tomasHoy };
     } catch (err) {
         console.error('[prepararDatosReales]', err);
     }

@@ -41,6 +41,8 @@ const RUTAS = {
     'emergencias':  { simple: Simple.renderEmergencias },
     'familia':      { simple: Simple.renderFamilia },
     'medico':       { simple: Simple.renderMedico },
+    'salud':        { simple: Simple.renderSalud },
+    'remedios':     { simple: Simple.renderRemedios },
     'como-hago':    { simple: Simple.renderComoHago },
     'como-hago-ia': { simple: Simple.renderComoHagoIA },
     'tutorial':     { simple: Simple.renderTutorial },
@@ -89,6 +91,8 @@ function renderRoutePreview(ruta) {
         if (ruta.name === 'emergencias') return Simple.renderEmergencias($app);
         if (ruta.name === 'familia')     return Simple.renderFamilia($app);
         if (ruta.name === 'medico')      return Admin.renderMedicoSimpleReal($app);
+        if (ruta.name === 'salud')       return Simple.renderSalud($app);
+        if (ruta.name === 'remedios')    return Simple.renderRemedios($app);
         if (ruta.name === 'como-hago')   return Simple.renderComoHago($app);
         if (ruta.name === 'tutorial')    return Simple.renderTutorial($app, ruta);
         if (ruta.name === 'como-hago-ia') return Simple.renderComoHagoIA($app);
@@ -184,6 +188,11 @@ function renderRouteReal(ruta) {
         if (ruta.name === 'accesos-admin')  return Admin.renderAccesosAdmin($app);
         if (ruta.name === 'guia-admin')     return Admin.renderGuiaAdmin($app, ruta);
         if (ruta.name === 'medico')         return Admin.renderMedicoSimpleReal($app);
+        // Categoría Salud: menú "Médico + Mis remedios", y la lista de
+        // remedios. `#/medico` sigue funcionando para no romper links
+        // viejos; el inicio simple ahora ofrece "Salud" como tarjetón.
+        if (ruta.name === 'salud')          return Simple.renderSalud($app);
+        if (ruta.name === 'remedios')       return Simple.renderRemedios($app);
         // Tarjetones del home simple del papá: deben funcionar en modo
         // real (no sólo en preview). Antes #/emergencias y #/familia se
         // caían acá y rebotaban a renderInicio sin abrir nada — los

@@ -752,6 +752,106 @@ body[data-mode="dashboard"] .checkin-estado-item small {
     display: block; color: var(--ink-soft); font-size: 0.88em;
 }
 
+/* ---- Recordatorio "tomá tu remedio" (inicio simple) ----
+   Card prominente arriba (después del check-in) si hay tomas
+   pendientes cuya hora ya pasó. */
+.remedios-aviso {
+    background: #fff0e8;
+    border: var(--bw-s) solid #d68a5c;
+    border-radius: var(--r-s-md);
+    padding: 0.9rem 1rem;
+    margin: 0 0 1.2rem;
+    box-shadow: var(--sh-s);
+}
+.remedios-aviso__titulo {
+    margin: 0 0 0.6rem;
+    font-size: 1.15em; font-weight: 700;
+    color: #6b3814;
+}
+.remedios-aviso__lista { list-style: none; padding: 0; margin: 0; display: grid; gap: 0.6rem; }
+.remedios-aviso__item {
+    background: #fff;
+    border: 1px solid var(--line-d, var(--line));
+    border-radius: 10px;
+    padding: 0.7em 0.85em;
+    display: flex; flex-direction: column; gap: 0.55rem;
+}
+.remedios-aviso__info strong { font-size: 1.08em; }
+.remedios-aviso__info small { color: var(--ink-soft); display: block; margin-top: 0.15rem; }
+
+/* ---- Pantalla "Salud" — menú con dos tarjetones ---- */
+.salud-grid {
+    display: grid; gap: 1.2rem;
+    grid-template-columns: repeat(2, 1fr);
+    margin: 1rem 0 1.5rem;
+}
+@media (max-width: 520px) { .salud-grid { grid-template-columns: 1fr; } }
+
+/* ---- Pantalla "Mis remedios" ---- */
+.remedios-lista { list-style: none; padding: 0; margin: 0; display: grid; gap: 1rem; }
+.remedio-card {
+    background: #fff;
+    border: var(--bw-s) solid var(--line-s);
+    border-radius: var(--r-s-md);
+    box-shadow: var(--sh-s);
+    padding: 1rem 1.1rem;
+}
+.remedio-card__head {
+    display: flex; align-items: baseline; gap: 0.6rem; flex-wrap: wrap;
+    margin-bottom: 0.4rem;
+}
+.remedio-card__head strong { font-size: 1.2em; }
+.remedio-card__head small  { color: var(--ink-soft); }
+.remedio-card__inst {
+    margin: 0 0 0.7rem;
+    font-size: 0.98em; color: var(--ink-soft);
+}
+.remedio-card__horarios { list-style: none; padding: 0; margin: 0; display: grid; gap: 0.5rem; }
+.remedio-slot {
+    display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 0.7rem;
+    background: var(--bg-soft);
+    border: 1px solid var(--line-d, var(--line));
+    border-radius: 10px;
+    padding: 0.55em 0.8em;
+}
+.remedio-slot__hora { font-size: 1.2em; font-weight: 700; }
+.remedio-slot__estado { color: #2c5a2c; font-weight: 600; }
+.remedio-slot.is-ok { background: #e8f3e8; border-color: #a3c2a3; }
+
+/* ---- Admin: lista de medicamentos del círculo + adherencia ---- */
+body[data-mode="dashboard"] .meds-admin-lista {
+    list-style: none; padding: 0; margin: 0; display: grid; gap: 0.6rem;
+}
+body[data-mode="dashboard"] .meds-admin-item {
+    background: var(--bg-soft);
+    border: 1px solid var(--line-d, var(--line));
+    border-radius: 8px;
+    padding: 0.7em 0.85em;
+    display: grid; gap: 0.4rem;
+}
+body[data-mode="dashboard"] .meds-admin-item.is-inactivo { opacity: 0.55; }
+body[data-mode="dashboard"] .meds-admin-item__head {
+    display: flex; justify-content: space-between; align-items: center; gap: 0.6rem;
+    flex-wrap: wrap;
+}
+body[data-mode="dashboard"] .meds-admin-item__acc {
+    display: flex; gap: 0.35rem; flex-wrap: wrap;
+}
+body[data-mode="dashboard"] .meds-admin-item__inst { margin: 0; font-size: 0.9em; }
+body[data-mode="dashboard"] .meds-admin-item__slots {
+    display: flex; flex-wrap: wrap; gap: 0.4rem;
+}
+body[data-mode="dashboard"] .meds-admin-slot {
+    font-size: 0.82em;
+    padding: 0.2em 0.55em;
+    border-radius: 999px;
+    background: #fff;
+    border: 1px solid var(--line-d, var(--line));
+    white-space: nowrap;
+}
+body[data-mode="dashboard"] .meds-admin-slot.is-ok { background: #e8f3e8; border-color: #a3c2a3; }
+body[data-mode="dashboard"] .meds-admin-slot.is-pend { background: #fff8e9; }
+
 /* Lista de documentos cargados (admin Datos médicos) */
 .docs-lista { list-style: none; padding: 0; margin: 0; display: grid; gap: 0.4rem; }
 .docs-lista__item {

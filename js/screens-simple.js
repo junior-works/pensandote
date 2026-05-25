@@ -11,12 +11,13 @@ import { go, goReplace } from './router.js';
 import { h, modal, speakES, stopSpeak, wireTTSToggle, renderErrorEstructurado } from './ui.js';
 import {
     preguntarComoHagoIA, listarTutoriales, obtenerTutorialPorSlug,
-    marcarCheckin, checkinDeHoy, enviarPensamiento
+    marcarCheckin, checkinDeHoy, enviarPensamiento,
+    marcarToma
 } from './data-emotiva.js';
 import {
     getContactos, getMedico, getTutoriales, getFotoDelDia, getFotosDia,
     getMiembroVisto, getMiembrosReales, getPensamientosRecibidos,
-    getAccesos, esPreview, avisarPreview
+    getAccesos, getMedicamentos, getTomasHoy, esPreview, avisarPreview
 } from './preview.js';
 import { dispararPanico } from './utils/panico.js';
 import { crearDictado } from './utils/dictado.js';
@@ -93,6 +94,31 @@ export async function renderInicio($app) {
             </button>
         </section>
 
+        ${(() => {
+            const pendientes = remediosPendientesAhora();
+            if (!pendientes.length) return '';
+            return `
+                <section class="remedios-aviso" id="remedios-aviso">
+                    <h2 class="remedios-aviso__titulo">💊 Tenés que tomar tus remedios</h2>
+                    <ul class="remedios-aviso__lista">
+                        ${pendientes.map(p => `
+                            <li class="remedios-aviso__item" data-pendiente="${h(p.medId)}|${h(p.horario)}">
+                                <div class="remedios-aviso__info">
+                                    <strong>${h(p.nombre)}</strong>
+                                    <small>${h(p.horario)}${p.dosis ? ' · ' + h(p.dosis) : ''}</small>
+                                </div>
+                                <button class="btn btn--xl btn--familia"
+                                        data-tomar-med="${h(p.medId)}"
+                                        data-tomar-horario="${h(p.horario)}">
+                                    Ya la tomé 💊
+                                </button>
+                            </li>
+                        `).join('')}
+                    </ul>
+                </section>
+            `;
+        })()}
+
         <nav class="simple-grid" aria-label="Secciones principales">
             <button class="tarjeton tarjeton--emergencia"  data-go="#/emergencias">
                 <span class="tarjeton__icono">🚨</span>
@@ -102,9 +128,9 @@ export async function renderInicio($app) {
                 <span class="tarjeton__icono">👨‍👩‍👧</span>
                 <span class="tarjeton__label">Familia</span>
             </button>
-            <button class="tarjeton tarjeton--medico"      data-go="#/medico">
-                <span class="tarjeton__icono">🩺</span>
-                <span class="tarjeton__label">Médico</span>
+            <button class="tarjeton tarjeton--medico"      data-go="#/salud">
+                <span class="tarjeton__icono">💊</span>
+                <span class="tarjeton__label">Salud</span>
             </button>
             <button class="tarjeton tarjeton--tutoriales"  data-go="#/como-hago">
                 <span class="tarjeton__icono">💡</span>
@@ -139,6 +165,7 @@ export async function renderInicio($app) {
     wireGaleria($app, fotos);
     wireCorazones($app.querySelectorAll('.galeria__slide .foto-corazon'), fotos);
     wireCheckin($app);
+    wireRemediosAviso($app);
 }
 
 /** Activa el sync scroll → dots + tap → lightbox de la galería. */
@@ -271,6 +298,197 @@ function wireCheckin($app) {
                 acciones: [{ label: 'OK', clase: 'btn--inicio', value: 'ok' }]
             });
         }
+    });
+}
+
+// =====================================================================
+// Medicación — recordatorio en el inicio + pantallas Salud / Remedios
+// =====================================================================
+//
+// Criterio del aviso prominente: horarios de hoy que ya pasaron y
+// no fueron confirmados. Mostramos todos los past-due en una sola
+// tarjeta arriba, con un botón "Ya la tomé" por cada slot.
+function remediosPendientesAhora() {
+    const meds = (getMedicamentos() || []).filter(m => m.activo);
+    if (!meds.length) return [];
+    const tomas = getTomasHoy() || [];
+    const ahora = horaActualAR(); // "HH:MM"
+    const yaTomado = new Set(tomas.map(t => `${t.medicamento_id}|${t.horario}`));
+    const pend = [];
+    for (const m of meds) {
+        const horarios = Array.isArray(m.horarios) ? m.horarios : [];
+        for (const horario of horarios) {
+            if (yaTomado.has(`${m.id}|${horario}`)) continue;
+            if (horario <= ahora) {  // ya llegó la hora
+                pend.push({ medId: m.id, nombre: m.nombre, dosis: m.dosis, horario });
+            }
+        }
+    }
+    // Ordenar por horario (más vieja primero — la más urgente).
+    pend.sort((a, b) => a.horario.localeCompare(b.horario));
+    return pend;
+}
+
+/** "HH:MM" en hora local Argentina. */
+function horaActualAR() {
+    const f = new Date().toLocaleTimeString('en-GB', {
+        timeZone: 'America/Argentina/Buenos_Aires',
+        hour: '2-digit', minute: '2-digit', hour12: false
+    });
+    return f; // "HH:MM"
+}
+
+function wireRemediosAviso($app) {
+    const $aviso = $app.querySelector('#remedios-aviso');
+    if (!$aviso) return;
+    $aviso.querySelectorAll('[data-tomar-med]').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            const medId = btn.dataset.tomarMed;
+            const horario = btn.dataset.tomarHorario;
+            await confirmarToma(medId, horario, btn, () => {
+                // Quitar la fila — si quedan otras, las dejamos; si no,
+                // la sección se vuelve a evaluar al re-renderizar.
+                const li = btn.closest('.remedios-aviso__item');
+                if (li) li.remove();
+                const lista = $aviso.querySelector('.remedios-aviso__lista');
+                if (lista && !lista.querySelector('li')) $aviso.remove();
+            });
+        });
+    });
+}
+
+/** Flujo común para confirmar una toma: preview-aware + actualiza cache. */
+async function confirmarToma(medId, horario, $btn, onOk) {
+    if (esPreview()) {
+        avisarPreview('👀 Vista previa — tomar remedio',
+            'En la app real esto avisa a tu familia que ya la tomaste. Acá no se ejecuta.');
+        return;
+    }
+    if (state.modo !== 'real') { onOk?.(); return; }
+    if ($btn) { $btn.disabled = true; $btn.textContent = 'Marcando…'; }
+    try {
+        await marcarToma({
+            circleId: state.circuloActivoIdReal,
+            medicamentoId: medId,
+            horario
+        });
+        // Actualizamos el cache para que la próxima vez que se re-evalúe
+        // remediosPendientesAhora() esta toma no aparezca de nuevo.
+        const cache = state.datosReales?.tomasHoy;
+        if (cache) {
+            cache.push({
+                medicamento_id: medId,
+                horario,
+                fecha: new Date().toLocaleDateString('en-CA', { timeZone: 'America/Argentina/Buenos_Aires' }),
+                confirmado_at: new Date().toISOString()
+            });
+        }
+        mostrarToast('✓ Listo, le avisamos a tu familia');
+        onOk?.();
+    } catch (err) {
+        console.error('[confirmarToma]', err);
+        if ($btn) { $btn.disabled = false; $btn.textContent = 'Ya la tomé 💊'; }
+        await modal({
+            titulo: 'No pude registrar la toma',
+            cuerpo: `<pre>${h(err?.message || err)}</pre>`,
+            acciones: [{ label: 'OK', clase: 'btn--inicio', value: 'ok' }]
+        });
+    }
+}
+
+/** Pantalla "Salud" — menú con Médico + Mis remedios. */
+export function renderSalud($app) {
+    $app.innerHTML = `
+        ${barraVolver('Salud', 'medico')}
+
+        <p class="simple-instruccion">Elegí qué necesitás.</p>
+
+        <div class="salud-grid">
+            <button class="tarjeton tarjeton--medico" data-go="#/medico">
+                <span class="tarjeton__icono">🩺</span>
+                <span class="tarjeton__label">Médico</span>
+            </button>
+            <button class="tarjeton tarjeton--medico" data-go="#/remedios">
+                <span class="tarjeton__icono">💊</span>
+                <span class="tarjeton__label">Mis remedios</span>
+            </button>
+        </div>
+    `;
+    wireNav($app);
+}
+
+/** Pantalla "Mis remedios" — lista de medicación con horarios de hoy. */
+export function renderRemedios($app) {
+    const meds = (getMedicamentos() || []).filter(m => m.activo);
+    const tomas = getTomasHoy() || [];
+    const yaTomado = new Map(); // medId|horario → toma
+    for (const t of tomas) yaTomado.set(`${t.medicamento_id}|${t.horario}`, t);
+
+    $app.innerHTML = `
+        ${barraVolver('Mis remedios', 'medico', '#/salud')}
+
+        ${meds.length === 0 ? `
+            <section class="card stack center">
+                <h2>💊 Todavía no cargaron tus remedios</h2>
+                <p>Pedíle a tu familia que los carguen. Cuando estén,
+                   los vas a ver acá con sus horarios.</p>
+            </section>
+        ` : `
+            <p class="simple-instruccion">Estos son tus remedios de hoy.</p>
+            <ul class="remedios-lista">
+                ${meds.map(m => {
+                    const horarios = Array.isArray(m.horarios) ? [...m.horarios].sort() : [];
+                    return `
+                        <li class="remedio-card">
+                            <div class="remedio-card__head">
+                                <strong>${h(m.nombre)}</strong>
+                                ${m.dosis ? `<small>${h(m.dosis)}</small>` : ''}
+                            </div>
+                            ${m.instrucciones ? `
+                                <p class="remedio-card__inst">${h(m.instrucciones)}</p>
+                            ` : ''}
+                            <ul class="remedio-card__horarios">
+                                ${horarios.length === 0 ? `
+                                    <li class="muted">Sin horarios cargados.</li>
+                                ` : horarios.map(hor => {
+                                    const t = yaTomado.get(`${m.id}|${hor}`);
+                                    if (t) {
+                                        const horaConf = new Date(t.confirmado_at).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
+                                        return `
+                                            <li class="remedio-slot is-ok">
+                                                <span class="remedio-slot__hora">${h(hor)}</span>
+                                                <span class="remedio-slot__estado">✓ Tomada (${h(horaConf)})</span>
+                                            </li>
+                                        `;
+                                    }
+                                    return `
+                                        <li class="remedio-slot">
+                                            <span class="remedio-slot__hora">${h(hor)}</span>
+                                            <button class="btn btn--xl btn--familia"
+                                                    data-tomar-med="${h(m.id)}"
+                                                    data-tomar-horario="${h(hor)}">
+                                                Ya la tomé 💊
+                                            </button>
+                                        </li>
+                                    `;
+                                }).join('')}
+                            </ul>
+                        </li>
+                    `;
+                }).join('')}
+            </ul>
+        `}
+    `;
+    wireNav($app);
+
+    // Wire de los botones "Ya la tomé" — re-renderiza la pantalla al
+    // confirmar, así el slot pasa a ✓ con la hora real.
+    $app.querySelectorAll('[data-tomar-med]').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            await confirmarToma(btn.dataset.tomarMed, btn.dataset.tomarHorario, btn, () => {
+                renderRemedios($app);
+            });
+        });
     });
 }
 

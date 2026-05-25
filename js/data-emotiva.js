@@ -620,6 +620,100 @@ export async function ultimosCheckinsPorMiembro(circleId) {
 }
 
 // =====================================================================
+// Medicación — medicamentos del círculo + tomas confirmadas del día
+// =====================================================================
+//
+// medicamentos: catálogo del círculo. `horarios` es jsonb array de
+// strings "HH:MM" (24h).
+// tomas_medicamento: cada (medicamento_id, fecha, horario) es único.
+// El papá confirma cada slot al tomar; el admin ve la adherencia.
+
+export async function listarMedicamentos(circleId, { soloActivos = false } = {}) {
+    const sb = await sbClient();
+    let q = sb.from('medicamentos')
+        .select('id, circle_id, nombre, dosis, instrucciones, horarios, activo, created_at')
+        .eq('circle_id', circleId);
+    if (soloActivos) q = q.eq('activo', true);
+    const { data, error } = await q.order('created_at', { ascending: true });
+    if (error) throw enriquecer('select medicamentos', error);
+    return data || [];
+}
+
+export async function crearMedicamento(circleId, { nombre, dosis, instrucciones, horarios, activo = true }) {
+    const sb = await sbClient();
+    const { data, error } = await sb.from('medicamentos').insert({
+        circle_id:     circleId,
+        nombre:        String(nombre || '').trim(),
+        dosis:         dosis ? String(dosis).trim() : null,
+        instrucciones: instrucciones ? String(instrucciones).trim() : null,
+        horarios:      Array.isArray(horarios) ? horarios : [],
+        activo:        !!activo
+    }).select().single();
+    if (error) throw enriquecer('insert medicamentos', error);
+    return data;
+}
+
+export async function editarMedicamento(id, patch) {
+    const sb = await sbClient();
+    const allowed = ['nombre','dosis','instrucciones','horarios','activo'];
+    const clean = {};
+    for (const k of allowed) if (k in patch) clean[k] = patch[k];
+    const { data, error } = await sb.from('medicamentos').update(clean)
+        .eq('id', id).select().single();
+    if (error) throw enriquecer('update medicamentos', error);
+    return data;
+}
+
+export async function borrarMedicamento(id) {
+    const sb = await sbClient();
+    const { error } = await sb.from('medicamentos').delete().eq('id', id);
+    if (error) throw enriquecer('delete medicamentos', error);
+}
+
+/** Todas las tomas confirmadas para HOY (AR) del círculo. */
+export async function tomasDeHoy(circleId) {
+    const sb = await sbClient();
+    const { data, error } = await sb.from('tomas_medicamento')
+        .select('id, medicamento_id, fecha, horario, user_id, confirmado_at')
+        .eq('circle_id', circleId)
+        .eq('fecha', hoyArgentina());
+    if (error) throw enriquecer('select tomas', error);
+    return data || [];
+}
+
+/**
+ * Marca una toma como hecha hoy. Idempotente vía unique
+ * (medicamento_id, fecha, horario): si ya estaba marcada, devolvemos
+ * el record existente sin error.
+ */
+export async function marcarToma({ circleId, medicamentoId, horario }) {
+    const sb = await sbClient();
+    const { data: { user } } = await sb.auth.getUser();
+    if (!user) throw new Error('sin sesión');
+    const fecha = hoyArgentina();
+    const { data, error } = await sb.from('tomas_medicamento').insert({
+        circle_id:      circleId,
+        medicamento_id: medicamentoId,
+        fecha,
+        horario,
+        user_id:        user.id
+    }).select().single();
+    if (error) {
+        if (error.code === '23505') {
+            const { data: existing } = await sb.from('tomas_medicamento')
+                .select('*')
+                .eq('medicamento_id', medicamentoId)
+                .eq('fecha', fecha)
+                .eq('horario', horario)
+                .maybeSingle();
+            return existing;
+        }
+        throw enriquecer('insert tomas', error);
+    }
+    return data;
+}
+
+// =====================================================================
 // Datos médicos del círculo (tabla public.medical_info, 1:1)
 // =====================================================================
 export async function leerDatosMedicos(circleId) {

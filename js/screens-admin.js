@@ -23,7 +23,9 @@ import {
     listarContactos, crearContacto, actualizarContacto, borrarContacto,
     leerDatosMedicos, guardarDatosMedicos,
     listarAccesos, crearAcceso, actualizarAcceso, borrarAcceso,
-    listarDocumentos, subirDocumento, borrarDocumento
+    listarDocumentos, subirDocumento, borrarDocumento,
+    listarMedicamentos, crearMedicamento, editarMedicamento, borrarMedicamento,
+    tomasDeHoy
 } from './data-emotiva.js';
 
 // =====================================================================
@@ -302,6 +304,17 @@ export async function renderMedicoAdmin($app) {
             </label>
             <div id="sec-docs"><p class="muted">Cargando…</p></div>
         </section>
+
+        <section class="card stack" style="margin-top:1rem;">
+            <h2 style="margin:0;">💊 Medicación</h2>
+            <p class="muted" style="font-size:0.9em; margin:0;">
+                Cargá los remedios que tu familiar tiene que tomar. Acá ves
+                <strong>la adherencia de hoy</strong>: cuáles ya marcó y cuáles
+                quedan pendientes.
+            </p>
+            <button class="btn btn--inicio" id="btn-nuevo-med">+ Agregar medicamento</button>
+            <div id="sec-meds"><p class="muted">Cargando…</p></div>
+        </section>
     `;
     $app.querySelector('#btn-volver').addEventListener('click', () => go('#/inicio'));
     $app.querySelector('#form-medico-admin').addEventListener('submit', async (e) => {
@@ -352,6 +365,215 @@ export async function renderMedicoAdmin($app) {
         }
     });
     cargarDocumentos(c.id, $docs);
+
+    // Medicación: lista + botón "nuevo".
+    const $btnNuevoMed = $app.querySelector('#btn-nuevo-med');
+    const $meds        = $app.querySelector('#sec-meds');
+    if ($btnNuevoMed) $btnNuevoMed.addEventListener('click', () => {
+        abrirFormMedicamento(c.id, null, () => cargarMedicamentos(c.id, $meds));
+    });
+    cargarMedicamentos(c.id, $meds);
+}
+
+// =====================================================================
+// Medicación (admin) — lista, crear, editar, borrar + adherencia hoy
+// =====================================================================
+async function cargarMedicamentos(circleId, $cont) {
+    if (!$cont) return;
+    let meds = [];
+    let tomas = [];
+    try {
+        [meds, tomas] = await Promise.all([
+            listarMedicamentos(circleId),
+            tomasDeHoy(circleId).catch(() => [])
+        ]);
+    } catch (err) {
+        $cont.innerHTML = `<p class="muted">Error: ${h(err?.message || err)}</p>`;
+        return;
+    }
+    if (!meds.length) {
+        $cont.innerHTML = `<p class="muted">Todavía no cargaste ningún medicamento.</p>`;
+        return;
+    }
+    const tomasIdx = new Map();
+    for (const t of tomas) tomasIdx.set(`${t.medicamento_id}|${t.horario}`, t);
+
+    $cont.innerHTML = `
+        <ul class="meds-admin-lista">
+            ${meds.map(m => {
+                const horarios = Array.isArray(m.horarios) ? [...m.horarios].sort() : [];
+                return `
+                    <li class="meds-admin-item ${m.activo ? '' : 'is-inactivo'}">
+                        <div class="meds-admin-item__head">
+                            <strong>${h(m.nombre)}${m.dosis ? ` <small>· ${h(m.dosis)}</small>` : ''}</strong>
+                            <div class="meds-admin-item__acc">
+                                <button class="btn btn--mini" data-edit-med="${h(m.id)}">Editar</button>
+                                <button class="btn btn--mini" data-toggle-med="${h(m.id)}" data-activo="${m.activo}">
+                                    ${m.activo ? 'Pausar' : 'Activar'}
+                                </button>
+                                <button class="btn btn--mini btn--danger" data-del-med="${h(m.id)}" title="Borrar">×</button>
+                            </div>
+                        </div>
+                        ${m.instrucciones ? `<p class="meds-admin-item__inst muted">${h(m.instrucciones)}</p>` : ''}
+                        <div class="meds-admin-item__slots">
+                            ${horarios.length === 0
+                                ? `<span class="muted">Sin horarios.</span>`
+                                : horarios.map(hor => {
+                                    const t = tomasIdx.get(`${m.id}|${hor}`);
+                                    if (t) {
+                                        const hora = new Date(t.confirmado_at).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
+                                        return `<span class="meds-admin-slot is-ok">${h(hor)} · ✓ ${h(hora)}</span>`;
+                                    }
+                                    return `<span class="meds-admin-slot is-pend">${h(hor)} · ⏳ pendiente</span>`;
+                                }).join('')}
+                        </div>
+                    </li>
+                `;
+            }).join('')}
+        </ul>
+    `;
+    $cont.querySelectorAll('[data-edit-med]').forEach(b => {
+        b.addEventListener('click', () => {
+            const med = meds.find(x => x.id === b.dataset.editMed);
+            if (med) abrirFormMedicamento(circleId, med, () => cargarMedicamentos(circleId, $cont));
+        });
+    });
+    $cont.querySelectorAll('[data-toggle-med]').forEach(b => {
+        b.addEventListener('click', async () => {
+            const id = b.dataset.toggleMed;
+            const activoActual = b.dataset.activo === 'true';
+            b.disabled = true;
+            try {
+                await editarMedicamento(id, { activo: !activoActual });
+                await cargarMedicamentos(circleId, $cont);
+            } catch (err) {
+                b.disabled = false;
+                await modal({
+                    titulo: 'No pude actualizar',
+                    cuerpo: `<pre>${h(err?.message || err)}</pre>`,
+                    acciones: [{ label: 'OK', value: 'ok' }]
+                });
+            }
+        });
+    });
+    $cont.querySelectorAll('[data-del-med]').forEach(b => {
+        b.addEventListener('click', async () => {
+            const ok = await modal({
+                titulo: '¿Borrar este medicamento?',
+                cuerpo: '<p>Si lo borrás, las tomas históricas también se pierden. Si querés sólo pausarlo, usá "Pausar".</p>',
+                acciones: [{ label: 'Cancelar' }, { label: 'Borrar', clase: 'btn--danger', value: 'ok' }]
+            });
+            if (ok !== 'ok') return;
+            b.disabled = true;
+            try {
+                await borrarMedicamento(b.dataset.delMed);
+                await cargarMedicamentos(circleId, $cont);
+            } catch (err) {
+                b.disabled = false;
+                await modal({
+                    titulo: 'No pude borrar',
+                    cuerpo: `<pre>${h(err?.message || err)}</pre>`,
+                    acciones: [{ label: 'OK', value: 'ok' }]
+                });
+            }
+        });
+    });
+}
+
+function abrirFormMedicamento(circleId, medExistente, onSaved) {
+    const editar = !!medExistente;
+    const horariosInicial = Array.isArray(medExistente?.horarios) ? medExistente.horarios.join(', ') : '';
+
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    overlay.innerHTML = `
+        <div class="modal" role="dialog" aria-modal="true">
+            <button class="modal__close" aria-label="Cerrar" data-close-x>×</button>
+            <h2 class="modal__titulo">${editar ? '✏️ Editar medicamento' : '+ Nuevo medicamento'}</h2>
+            <form id="form-med" class="stack">
+                <label class="stack">
+                    <span>Nombre</span>
+                    <input name="nombre" class="input-real" required
+                           value="${h(medExistente?.nombre || '')}" placeholder="Enalapril">
+                </label>
+                <label class="stack">
+                    <span>Dosis</span>
+                    <input name="dosis" class="input-real"
+                           value="${h(medExistente?.dosis || '')}" placeholder="10 mg, 1 comprimido">
+                </label>
+                <label class="stack">
+                    <span>Instrucciones (opcional)</span>
+                    <textarea name="instrucciones" class="input-real" rows="2"
+                              placeholder="Después del desayuno, con un vaso de agua.">${h(medExistente?.instrucciones || '')}</textarea>
+                </label>
+                <label class="stack">
+                    <span>Horarios (separados por coma, formato HH:MM)</span>
+                    <input name="horarios" class="input-real" required
+                           value="${h(horariosInicial)}" placeholder="08:00, 20:00">
+                </label>
+                <div class="modal__acciones modal__acciones--stack">
+                    <button type="submit" class="btn btn--inicio">${editar ? 'Guardar cambios' : 'Crear'}</button>
+                    <button type="button" class="btn btn--mini" data-cancel>Cancelar</button>
+                </div>
+            </form>
+        </div>
+    `;
+    document.body.appendChild(overlay);
+
+    let cerrado = false;
+    function cerrar() {
+        if (cerrado) return;
+        cerrado = true;
+        cleanupModalBackButton(overlay);
+        overlay.remove();
+    }
+    installModalBackButton(overlay, cerrar);
+    overlay.querySelector('[data-close-x]').addEventListener('click', cerrar);
+    overlay.querySelector('[data-cancel]').addEventListener('click', cerrar);
+    overlay.addEventListener('click', e => { if (e.target === overlay) cerrar(); });
+
+    overlay.querySelector('#form-med').addEventListener('submit', async (ev) => {
+        ev.preventDefault();
+        const fd = new FormData(ev.target);
+        const horariosRaw = String(fd.get('horarios') || '');
+        const horarios = horariosRaw.split(/[,\s]+/)
+            .map(s => s.trim())
+            .filter(Boolean)
+            .filter(s => /^([01]\d|2[0-3]):[0-5]\d$/.test(s));
+        if (horarios.length === 0) {
+            await modal({
+                titulo: 'Horarios inválidos',
+                cuerpo: '<p>Cargá al menos un horario en formato HH:MM (ej: 08:00, 14:30, 20:00).</p>',
+                acciones: [{ label: 'OK', value: 'ok' }]
+            });
+            return;
+        }
+        const payload = {
+            nombre:        String(fd.get('nombre') || '').trim(),
+            dosis:         String(fd.get('dosis') || '').trim() || null,
+            instrucciones: String(fd.get('instrucciones') || '').trim() || null,
+            horarios
+        };
+        const btn = ev.target.querySelector('button[type=submit]');
+        btn.disabled = true; btn.textContent = 'Guardando…';
+        try {
+            if (editar) {
+                await editarMedicamento(medExistente.id, payload);
+            } else {
+                await crearMedicamento(circleId, { ...payload, activo: true });
+            }
+            cerrar();
+            onSaved?.();
+        } catch (err) {
+            btn.disabled = false;
+            btn.textContent = editar ? 'Guardar cambios' : 'Crear';
+            await modal({
+                titulo: 'No pude guardarlo',
+                cuerpo: `<pre>${h(err?.message || err)}</pre>`,
+                acciones: [{ label: 'OK', value: 'ok' }]
+            });
+        }
+    });
 }
 
 async function cargarDocumentos(circleId, $cont) {
