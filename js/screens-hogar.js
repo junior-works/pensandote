@@ -1397,29 +1397,52 @@ function nombreDeActor(actorId) {
 }
 
 function actividadTexto(ev) {
-    const actor = nombreDeActor(ev.actorId);
+    const yoId   = state.usuarioReal?.id || null;
+    const esYo   = yoId && ev.actorId === yoId;
+    const actor  = esYo ? 'Vos' : nombreDeActor(ev.actorId);
     switch (ev.tipo) {
         case 'checkin':
-            return `${actor} marcó que está bien`;
+            return esYo
+                ? `Vos marcaste que estás bien`
+                : `${actor} marcó que está bien`;
         case 'foto':
-            return `${actor} subió una foto`;
+            return esYo
+                ? `Vos subiste una foto`
+                : `${actor} subió una foto`;
         case 'toma':
-            return `${actor} tomó ${ev.datos.medicamentoNombre} de las ${ev.datos.horario}`;
+            return esYo
+                ? `Vos tomaste ${ev.datos.medicamentoNombre} de las ${ev.datos.horario}`
+                : `${actor} tomó ${ev.datos.medicamentoNombre} de las ${ev.datos.horario}`;
         case 'historia':
-            return `${actor} contó una historia`;
+            return esYo
+                ? `Vos contaste una historia`
+                : `${actor} contó una historia`;
         case 'pense': {
-            const para = ev.datos.paraUserId ? nombreDeActor(ev.datos.paraUserId) : 'al círculo';
-            // "le mandó un cariño A …": si actor empieza con "Tu " es
-            // "Tu hija le mandó un cariño a Tu papá" → suena raro. Para
-            // el destinatario, si es "Tu papá", lo dejamos así porque
-            // el "a" suena natural ("a tu papá").
+            const paraId   = ev.datos.paraUserId || null;
+            const paraEsYo = yoId && paraId && paraId === yoId;
+            if (esYo && paraEsYo) {
+                // Caso degenerado: te mandaste un cariño a vos mismo.
+                return `Vos te mandaste un cariño`;
+            }
+            if (paraEsYo) {
+                // "Tu hija te mandó un cariño" / "María te mandó un cariño"
+                return `${actor} te mandó un cariño`;
+            }
+            const para = paraId ? nombreDeActor(paraId) : 'al círculo';
+            // Si destinatario empieza con "Tu " queda "a tu papá" (natural).
             const paraSlug = para.startsWith('Tu ') ? para.replace(/^Tu /, 'tu ') : para;
-            return `${actor} le mandó un cariño a ${paraSlug}`;
+            return esYo
+                ? `Vos le mandaste un cariño a ${paraSlug}`
+                : `${actor} le mandó un cariño a ${paraSlug}`;
         }
         case 'punta':
-            return `${actor} dejó una idea para contar`;
+            return esYo
+                ? `Vos dejaste una idea para contar`
+                : `${actor} dejó una idea para contar`;
         default:
-            return `${actor} hizo algo`;
+            return esYo
+                ? `Hiciste algo`
+                : `${actor} hizo algo`;
     }
 }
 

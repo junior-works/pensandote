@@ -47,11 +47,14 @@ export async function pensamientosRecibidos(circleId, userId, limit = 15) {
 // Foto del día
 // ---------------------------------------------------------------------
 /**
- * Trae las últimas N fotos del día del círculo, cada una con su blob
- * URL ya generada (bajada vía storage.download). El caller es
- * responsable de revocar las URLs cuando deje de usarlas.
+ * Trae las últimas N fotos del día del círculo (newest-first), cada una
+ * con su blob URL ya generada (bajada vía storage.download). El caller
+ * es responsable de revocar las URLs cuando deje de usarlas.
+ *
+ * Política (Charly): no se borra nada — el álbum entero queda y el
+ * carrusel del dashboard muestra el historial completo hasta el tope.
  */
-export async function ultimasFotosDia(circleId, limit = 10) {
+export async function ultimasFotosDia(circleId, limit = 60) {
     const sb = await sbClient();
     const { data, error } = await sb.from('fotos_dia')
         .select('*').eq('circle_id', circleId)
