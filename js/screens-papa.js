@@ -3,10 +3,11 @@
  * Historias accesibles desde el inicio de la vista simple.
  *
  * Estas pantallas se rendean cuando el usuario REAL (logueado, sea
- * dashboard o simple) navega a #/v2/pense o #/v2/historias. En modo
- * preview el router las desvía a Preview.renderPensePreview /
- * renderHistoriasPreview (que ya tienen las acciones bloqueadas), así
- * que acá NO repetimos las guardas — esto es para uso real.
+ * dashboard o simple) navega a #/v2/historias (la de pensé quedó
+ * deprecated cuando el "pensé" pasó al corazón sobre la foto). En
+ * modo preview el router también las usa — tienen guardas esPreview()
+ * en los handlers que graban/marcan/mandan para no ejecutar acciones
+ * reales mientras el admin ve como papá.
  */
 
 import { state, setSesionReal } from './state.js';

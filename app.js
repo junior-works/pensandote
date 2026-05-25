@@ -98,12 +98,14 @@ function renderRoutePreview(ruta) {
         if (ruta.name === 'como-hago-ia') return Simple.renderComoHagoIA($app);
         if (ruta.name === 'v2') {
             const sub = ruta.params[0];
-            if (sub === 'pense')     return Preview.renderPensePreview($app);
-            if (sub === 'historias') return Preview.renderHistoriasPreview($app);
-            // El resto de las rutas v2 (foto-del-dia / audios / calendario
-            // / historias-tab) son maquetas demo — las dejamos pasar al
-            // render demo sólo si no estamos en preview puro. En preview,
-            // mandamos al inicio para no exponer mocks confusos.
+            // Historias: usamos el mismo render real (Papa.*) — ya tiene
+            // guardas esPreview() para no grabar ni marcar puntas en vivo.
+            // Antes ruteábamos a Preview.renderHistoriasPreview que era
+            // una versión vieja sin tabs / sin puntas / sin legado.
+            if (sub === 'historias') return Papa.renderHistoriasSimpleReal($app);
+            // #/v2/pense quedó deprecated cuando el "pensé" pasó al
+            // corazón sobre la foto. Si alguien navega manualmente, lo
+            // mandamos al inicio.
             return Simple.renderInicio($app);
         }
         // Cualquier otra ruta: caer al inicio simple.
@@ -206,8 +208,8 @@ function renderRouteReal(ruta) {
         if (ruta.name === 'tutorial')       return Simple.renderTutorial($app, ruta);
         if (ruta.name === 'como-hago-ia')   return Simple.renderComoHagoIA($app);
         // #/v2/pense y #/v2/historias en modo real (no preview): pantallas
-        // funcionales del papá. En preview el router las desvía a
-        // Preview.renderPensePreview / HistoriasPreview más arriba.
+        // funcionales del papá. En preview el router las desvía/ignora
+        // — ver renderRoutePreview más arriba.
         if (ruta.name === 'v2') {
             const sub = ruta.params[0];
             if (sub === 'pense')     return Papa.renderPenseSimpleReal($app);

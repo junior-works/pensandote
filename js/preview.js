@@ -278,93 +278,10 @@ export function desmontarBannerPreview() {
 }
 
 // =========================================================================
-// Renders custom para preview (Pensé en vos / Historias) — usan datos
-// reales pero las acciones de "mandar / grabar" están bloqueadas.
+// (Las pantallas custom de pense/historias para preview se eliminaron —
+// ahora preview usa los mismos renders reales (Papa.*) que tienen
+// guardas esPreview() para bloquear las acciones que mandan/graban.)
 // =========================================================================
-
-export function renderPensePreview($app) {
-    const lista = getPensamientosRecibidos();
-    const miembros = getMiembrosReales();
-    const ult = lista[0];
-    const autor = ult
-        ? (miembros.find(m => m.user_id === ult.de_user_id)?.parentesco || 'alguien')
-        : null;
-
-    $app.innerHTML = `
-        <header class="barra-volver barra-volver--pense">
-            <button class="barra-volver__btn" id="btn-volver-pense" aria-label="Volver">← Volver</button>
-            <h1 class="barra-volver__titulo">Pensé en vos</h1>
-        </header>
-
-        ${ult ? `
-            <div class="pense-polaroid">
-                <div class="pense-polaroid__cinta"></div>
-                <p class="pense-polaroid__msg">Tu ${h(autor)} te está pensando 💛</p>
-                <small class="pense-polaroid__pie">
-                    hace ${hace(Date.now() - new Date(ult.created_at).getTime())}
-                </small>
-            </div>
-        ` : `
-            <section class="card stack center" style="margin-top:1rem;">
-                <p>Todavía nadie te mandó un pensé en este círculo.</p>
-            </section>
-        `}
-
-        <button class="btn btn--xl btn--pense btn--full" id="btn-devolver-pense" style="margin-top:1rem;">
-            💛 Devolvé el pensé
-        </button>
-        <p class="muted center" style="margin-top:1rem;">
-            Sin palabras, sin textear: tocás un botón y la otra persona sabe
-            que la pensaste.
-        </p>
-    `;
-    $app.querySelector('#btn-volver-pense').addEventListener('click', () => go('#/inicio'));
-    $app.querySelector('#btn-devolver-pense').addEventListener('click', () => {
-        avisarPreview('👀 Vista previa',
-            'En la app real esto le manda al autor que la pensaste. Acá no se manda nada.');
-    });
-}
-
-export function renderHistoriasPreview($app) {
-    const lista = getHistorias();
-    $app.innerHTML = `
-        <header class="barra-volver barra-volver--pense">
-            <button class="barra-volver__btn" id="btn-volver-hp" aria-label="Volver">← Volver</button>
-            <h1 class="barra-volver__titulo">Historias</h1>
-        </header>
-
-        <button class="btn btn--xl btn--anecdota btn--full" id="btn-grabar-preview" disabled
-                style="margin-top:0.5rem;">
-            🔴 Contar una anécdota
-        </button>
-        <p class="muted center">(En vista previa no podés grabar — sólo tu familiar puede.)</p>
-
-        ${lista.length ? `
-            <h2 style="margin-top:1.5rem;">Historias guardadas</h2>
-            <ul class="historias-lista">
-                ${lista.map(h_ => `
-                    <li class="historia-row">
-                        <span class="historia-row__icono">📖</span>
-                        <div>
-                            <strong>${h(h_.titulo || 'Historia sin título')}</strong>
-                            <small>${h(new Date(h_.created_at).toLocaleDateString('es-AR'))}${h_.duracion_seg ? ' · ' + h_.duracion_seg + 's' : ''}</small>
-                        </div>
-                    </li>
-                `).join('')}
-            </ul>
-        ` : `<p class="muted" style="margin-top:1.5rem;">Tu familiar todavía no grabó ninguna historia.</p>`}
-    `;
-    $app.querySelector('#btn-volver-hp').addEventListener('click', () => go('#/inicio'));
-}
-
-function hace(ms) {
-    const m = Math.round(ms / 60000);
-    if (m < 60) return `${m} min`;
-    const hr = Math.round(m / 60);
-    if (hr < 24) return `${hr} h`;
-    const d = Math.round(hr / 24);
-    return `${d} ${d === 1 ? 'día' : 'días'}`;
-}
 
 // =========================================================================
 // Datos reales del círculo activo — cache para la vista simple real.

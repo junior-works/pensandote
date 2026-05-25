@@ -1675,19 +1675,62 @@ body[data-mode="dashboard"] .meds-admin-slot.is-pend { background: #fff8e9; }
      tipográfica más ligera.
    =================================================================== */
 body[data-mode="dashboard"] {
-    --line-d:      rgba(17, 17, 17, 0.16);
-    --line-d-soft: rgba(17, 17, 17, 0.08);
-    --sh-d:        0 1px 2px rgba(0, 0, 0, 0.06), 0 1px 1px rgba(0, 0, 0, 0.04);
-    --sh-d-hover:  0 3px 6px rgba(0, 0, 0, 0.09);
+    --line-d:        rgba(17, 17, 17, 0.14);
+    --line-d-soft:   rgba(17, 17, 17, 0.07);
+    --sh-d:          0 1px 2px rgba(0, 0, 0, 0.05), 0 1px 1px rgba(0, 0, 0, 0.03);
+    --sh-d-hover:    0 3px 8px rgba(0, 0, 0, 0.08);
+    --sh-d-card:     0 1px 3px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.025);
+    --r-d-card:      14px;
+    --r-d-input:     8px;
+    --r-d-pill:      999px;
+    --ink-soft-d:    rgba(17, 17, 17, 0.62);
+    --focus-ring:    0 0 0 3px rgba(91, 142, 142, 0.32);
 }
 
 body[data-mode="dashboard"] {
     font-size: 1rem;
+    line-height: 1.45;
+    color: var(--ink);
 }
 
-body[data-mode="dashboard"] h1 { font-size: 1.7rem; letter-spacing: -0.01em; }
-body[data-mode="dashboard"] h2 { font-size: 1.15rem; margin-top: 1.4em; font-weight: 700; }
-body[data-mode="dashboard"] h3 { font-size: 1rem;    font-weight: 600; }
+/* Jerarquía tipográfica del dashboard — escala consistente. */
+body[data-mode="dashboard"] h1 {
+    font-size: 1.6rem;
+    line-height: 1.2;
+    letter-spacing: -0.012em;
+    font-weight: 700;
+    margin: 1.2rem 0 0.8rem;
+}
+body[data-mode="dashboard"] h2 {
+    font-size: 1.08rem;
+    line-height: 1.3;
+    letter-spacing: -0.005em;
+    font-weight: 700;
+    margin: 0 0 0.6rem;
+    color: var(--ink);
+}
+body[data-mode="dashboard"] h3 {
+    font-size: 0.95rem;
+    line-height: 1.3;
+    font-weight: 600;
+    margin: 0.8rem 0 0.4rem;
+    color: var(--ink-soft-d);
+    text-transform: none;
+}
+/* h2 al tope de una card no necesita margin-top extra. */
+body[data-mode="dashboard"] .card > h2:first-child,
+body[data-mode="dashboard"] .card > .stack:first-child > h2:first-child {
+    margin-top: 0;
+}
+/* Etiquetas de formularios — consistentes (label + valor). */
+body[data-mode="dashboard"] label.stack > span:first-child,
+body[data-mode="dashboard"] label.stack > .label {
+    font-size: 0.86rem;
+    font-weight: 600;
+    color: var(--ink-soft-d);
+}
+/* Texto secundario unificado en dashboard. */
+body[data-mode="dashboard"] .muted { color: var(--ink-soft-d); }
 
 /* ---- Botones modernos (override de la base neobrutalista) ---- */
 body[data-mode="dashboard"] .btn {
@@ -1713,6 +1756,14 @@ body[data-mode="dashboard"] .btn:active {
 }
 body[data-mode="dashboard"] .btn:disabled { opacity: 0.55; cursor: not-allowed; }
 body[data-mode="dashboard"] .btn:disabled:hover { transform: none; box-shadow: var(--sh-d); }
+/* Foco visible para teclado — accesibilidad + sensación premium. */
+body[data-mode="dashboard"] .btn:focus-visible,
+body[data-mode="dashboard"] .input-real:focus-visible,
+body[data-mode="dashboard"] select:focus-visible,
+body[data-mode="dashboard"] textarea:focus-visible {
+    outline: none;
+    box-shadow: var(--sh-d), var(--focus-ring);
+}
 
 body[data-mode="dashboard"] .btn--xl   { min-height: 48px; font-size: 1rem;    padding: 0.7em 1.3em; }
 body[data-mode="dashboard"] .btn--mini { min-height: 30px; font-size: 0.85rem; padding: 0.25em 0.7em; }
@@ -1728,14 +1779,18 @@ body[data-mode="dashboard"] .btn--danger    { background: #fff; color: var(--acc
 body[data-mode="dashboard"] .btn--inicio:hover  { background: #e8a64a; }
 body[data-mode="dashboard"] .btn--familia:hover { background: #5b8e8e; }
 
-/* ---- Cards modernas ---- */
+/* ---- Cards modernas — radio, sombra y padding parejos en todo el panel ---- */
 body[data-mode="dashboard"] .card {
     background: #fff;
     border: 1px solid var(--line-d);
-    border-radius: 12px;
-    box-shadow: var(--sh-d);
-    padding: 1.1em 1.25em;
+    border-radius: var(--r-d-card);
+    box-shadow: var(--sh-d-card);
+    padding: 1.15em 1.3em;
+    margin-block: 0.9rem;
 }
+body[data-mode="dashboard"] .card + .card { margin-top: 0.9rem; }
+/* Sección dentro de un card (h3 + contenido) — separación sutil. */
+body[data-mode="dashboard"] .card .stack { gap: 0.7rem; }
 
 /* ---- Pills modernos ---- */
 body[data-mode="dashboard"] .pill {
@@ -1788,17 +1843,136 @@ body[data-mode="dashboard"] textarea:focus {
     box-shadow: 0 0 0 3px rgba(17,17,17,0.08);
 }
 
-/* ---- Hogar header en dashboard ---- */
+/* ---- Hogar header en dashboard — prolijo, alineado con el resto ---- */
 body[data-mode="dashboard"] .hogar-header {
     background: #fff;
     border: 1px solid var(--line-d);
-    border-radius: 12px;
-    box-shadow: var(--sh-d);
+    border-radius: var(--r-d-card);
+    box-shadow: var(--sh-d-card);
+    padding: 0.95rem 1.2rem;
+    margin: 0.9rem 0 1rem;
 }
-body[data-mode="dashboard"] .hogar-header__nombre { font-size: 1.4rem; }
+body[data-mode="dashboard"] .hogar-header small {
+    color: var(--ink-soft-d);
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    font-weight: 600;
+}
+body[data-mode="dashboard"] .hogar-header__nombre {
+    font-size: 1.45rem;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    margin: 0.15rem 0 0.05rem;
+    line-height: 1.2;
+}
 
-/* "Pensé en vos" no necesita ser tan ploplón en dashboard */
+/* "Pensé en vos" — fondo suave en dashboard, no compite con las otras cards. */
 body[data-mode="dashboard"] .hogar-pense { background: #fff8f3; }
+
+/* ---- Sticky bar del círculo activo — más integrada, sutil ---- */
+body[data-mode="dashboard"] #circulo-bar {
+    background: rgba(255, 255, 255, 0.97);
+    backdrop-filter: blur(6px);
+    border-bottom: 1px solid var(--line-d);
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.03);
+    padding: 0.5rem 1rem;
+}
+body[data-mode="dashboard"] .circulo-bar__inner {
+    font-size: 0.88rem;
+    color: var(--ink-soft-d);
+}
+body[data-mode="dashboard"] .circulo-bar__txt {
+    color: var(--ink);
+    font-weight: 600;
+    letter-spacing: -0.005em;
+}
+body[data-mode="dashboard"] .circulo-bar__dot {
+    background: var(--accent-familia);
+    box-shadow: 0 0 0 3px rgba(91, 142, 142, 0.18);
+}
+
+/* ---- Chips de estado unificados (✓ / ⏳ / pendiente / usada / activo) ----
+   Patrón base + variantes. Los chips antiguos seguirán funcionando pero
+   los nuevos componentes usan `.status-chip`. */
+body[data-mode="dashboard"] .status-chip {
+    display: inline-flex; align-items: center; gap: 0.3rem;
+    font-size: 0.78rem;
+    font-weight: 600;
+    padding: 0.2em 0.65em;
+    border-radius: var(--r-d-pill);
+    background: var(--bg-soft);
+    border: 1px solid var(--line-d);
+    color: var(--ink-soft-d);
+    white-space: nowrap;
+    line-height: 1.3;
+}
+body[data-mode="dashboard"] .status-chip--ok       { background: #e8f3e8; border-color: #b8d6b8; color: #2c5a2c; }
+body[data-mode="dashboard"] .status-chip--pendiente{ background: #fff8e9; border-color: #e9d8a8; color: #7a5a14; }
+body[data-mode="dashboard"] .status-chip--danger   { background: #fde9e9; border-color: #f0bcbc; color: #8a2a2a; }
+body[data-mode="dashboard"] .status-chip--info     { background: #e8eef5; border-color: #b8c8db; color: #2c4a6a; }
+
+/* ---- Empty state consistente (no se ve roto, se ve intencional) ---- */
+body[data-mode="dashboard"] .empty-state {
+    text-align: center;
+    padding: 1.4rem 1rem;
+    color: var(--ink-soft-d);
+}
+body[data-mode="dashboard"] .empty-state__icon {
+    font-size: 2rem;
+    display: block;
+    margin-bottom: 0.4rem;
+    opacity: 0.55;
+}
+body[data-mode="dashboard"] .empty-state__msg {
+    font-size: 0.95rem;
+    margin: 0;
+}
+
+/* ---- Pulido a los chips existentes (alineados al nuevo sistema) ---- */
+body[data-mode="dashboard"] .puntas-cola__chip,
+body[data-mode="dashboard"] .meds-admin-slot,
+body[data-mode="dashboard"] .ideas-sugeridas__chip {
+    font-size: 0.78rem;
+    font-weight: 600;
+    border-radius: var(--r-d-pill);
+    padding: 0.2em 0.65em;
+    line-height: 1.3;
+}
+body[data-mode="dashboard"] .meds-admin-slot.is-ok,
+body[data-mode="dashboard"] .puntas-cola__chip--usada {
+    background: #e8f3e8; border-color: #b8d6b8; color: #2c5a2c;
+}
+body[data-mode="dashboard"] .meds-admin-slot.is-pend {
+    background: #fff8e9; border-color: #e9d8a8; color: #7a5a14;
+}
+
+/* Listas con items hover-able (miembros, contactos, accesos, meds) — feedback sutil */
+body[data-mode="dashboard"] .meds-admin-item,
+body[data-mode="dashboard"] .checkin-estado-item,
+body[data-mode="dashboard"] .puntas-cola__item,
+body[data-mode="dashboard"] .ideas-sugeridas__item,
+body[data-mode="dashboard"] .docs-lista__item {
+    border-radius: 10px;
+    transition: background 120ms ease, border-color 120ms ease;
+}
+body[data-mode="dashboard"] .meds-admin-item:hover,
+body[data-mode="dashboard"] .docs-lista__item:hover {
+    border-color: rgba(17, 17, 17, 0.22);
+}
+
+/* Header de admin (pantallas Contactos/Datos médicos/Accesos/Guía) — mismo
+   ritmo visual que el hogar-header. */
+body[data-mode="dashboard"] .admin-pantalla__head {
+    display: flex; align-items: center; gap: 0.8rem;
+    margin: 0.9rem 0 0.6rem;
+    padding: 0.3rem 0;
+}
+body[data-mode="dashboard"] .admin-pantalla__head h1 {
+    margin: 0;
+    font-size: 1.35rem;
+    line-height: 1.2;
+}
 
 /* ---- Componente nuevo: circulo-card (lista "Tus círculos") ---- */
 .circulos-lista { list-style: none; padding: 0; margin: 0; display: grid; gap: 0.75rem; }

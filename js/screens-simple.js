@@ -848,7 +848,12 @@ export function renderMedico($app) {
 // Identificador en la URL: el id del mock (string) o el `slug` de la
 // DB. Ambos son string, render y router se llevan bien sin distinguir.
 export async function renderComoHago($app) {
-    const usarDB = state.modo === 'real' && !state.modoPreview;
+    // Antes excluíamos preview del path DB para "mantener la maqueta
+    // consistente". Charly cambió de opinión: la preview debe mostrar
+    // FIELMENTE lo que ve el papá real — incluido el tutorial nuevo de
+    // onboarding que sólo está en DB. En preview hay sesión real
+    // (admin loggeado), así que la query funciona igual.
+    const usarDB = state.modo === 'real';
 
     $app.innerHTML = `
         ${barraVolver('Cómo hago…', 'tutoriales')}
@@ -920,7 +925,8 @@ function iconoTutorial(slug) {
 // =====================================================================
 export async function renderTutorial($app, ruta) {
     const id = ruta.params[0];
-    const usarDB = state.modo === 'real' && !state.modoPreview;
+    // Ver renderComoHago — preview también usa DB ahora.
+    const usarDB = state.modo === 'real';
 
     // Loader chiquito mientras pegamos a Supabase. En demo el find es
     // sincrónico y se omite este flash.
@@ -1157,6 +1163,14 @@ export function renderComoHagoIA($app) {
         // Si estaba dictando, terminamos el dictado antes de mandar la
         // pregunta a la IA. destroy() es idempotente.
         dictado.destroy();
+
+        // En preview NO disparamos la edge function — cuesta plata y
+        // consume contexto. Mostramos un aviso y salimos.
+        if (esPreview()) {
+            avisarPreview('👀 Vista previa — IA',
+                'En la app real esto le pregunta a la IA y te explica paso a paso. Acá no se ejecuta.');
+            return;
+        }
 
         const origLabel = $btnPreg.textContent;
         $btnPreg.disabled = true;
