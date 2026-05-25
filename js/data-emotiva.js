@@ -550,6 +550,102 @@ export async function borrarAcceso(id) {
 }
 
 // =====================================================================
+// Muro de actividad / coordinación familiar (dashboard)
+// =====================================================================
+//
+// Junta eventos recientes de varias tablas (sin tablas nuevas), los
+// normaliza al shape común { tipo, actorId, at, datos } y los devuelve
+// ordenados por fecha desc para el feed del admin. Cada tabla aporta
+// sus últimas 15; juntas se cortan al `limit` final.
+//
+// IMPORTANTE: historias con `es_legado=true` NO entran — son privadas
+// del narrador hasta el desbloqueo manual.
+export async function actividadReciente(circleId, { limit = 25 } = {}) {
+    const sb = await sbClient();
+    const each = 15;
+
+    const [chk, fot, tom, his, pen, pun] = await Promise.all([
+        sb.from('checkins')
+            .select('user_id, created_at')
+            .eq('circle_id', circleId)
+            .order('created_at', { ascending: false }).limit(each),
+        sb.from('fotos_dia')
+            .select('id, subida_por, created_at')
+            .eq('circle_id', circleId)
+            .order('created_at', { ascending: false }).limit(each),
+        sb.from('tomas_medicamento')
+            .select('id, medicamento_id, horario, user_id, confirmado_at')
+            .eq('circle_id', circleId)
+            .order('confirmado_at', { ascending: false }).limit(each),
+        sb.from('historias')
+            .select('id, narrador_id, titulo, created_at, es_legado')
+            .eq('circle_id', circleId)
+            .eq('es_legado', false)
+            .order('created_at', { ascending: false }).limit(each),
+        sb.from('pensamientos')
+            .select('id, de_user_id, para_user_id, created_at')
+            .eq('circle_id', circleId)
+            .order('created_at', { ascending: false }).limit(each),
+        sb.from('puntas_historia')
+            .select('id, de_user_id, created_at')
+            .eq('circle_id', circleId)
+            .order('created_at', { ascending: false }).limit(each)
+    ]);
+
+    // Nombres de medicamentos para enriquecer las tomas en una sola query.
+    const medIds = [...new Set((tom.data || []).map(t => t.medicamento_id).filter(Boolean))];
+    let medsById = new Map();
+    if (medIds.length) {
+        const { data: meds } = await sb.from('medicamentos').select('id, nombre').in('id', medIds);
+        medsById = new Map((meds || []).map(m => [m.id, m.nombre]));
+    }
+
+    const eventos = [];
+    for (const c of chk.data || []) {
+        eventos.push({ tipo: 'checkin', actorId: c.user_id, at: c.created_at, datos: {} });
+    }
+    for (const f of fot.data || []) {
+        eventos.push({ tipo: 'foto', actorId: f.subida_por, at: f.created_at, datos: { fotoId: f.id } });
+    }
+    for (const t of tom.data || []) {
+        eventos.push({
+            tipo: 'toma',
+            actorId: t.user_id,
+            at: t.confirmado_at,
+            datos: {
+                medicamentoId: t.medicamento_id,
+                medicamentoNombre: medsById.get(t.medicamento_id) || 'un remedio',
+                horario: t.horario
+            }
+        });
+    }
+    for (const h_ of his.data || []) {
+        eventos.push({
+            tipo: 'historia',
+            actorId: h_.narrador_id,
+            at: h_.created_at,
+            // titulo no se usa en UI (no mostramos contenido) pero queda
+            // disponible por si la card después linkea al detalle.
+            datos: { titulo: h_.titulo }
+        });
+    }
+    for (const p of pen.data || []) {
+        eventos.push({
+            tipo: 'pense',
+            actorId: p.de_user_id,
+            at: p.created_at,
+            datos: { paraUserId: p.para_user_id || null }
+        });
+    }
+    for (const p of pun.data || []) {
+        eventos.push({ tipo: 'punta', actorId: p.de_user_id, at: p.created_at, datos: {} });
+    }
+
+    eventos.sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime());
+    return eventos.slice(0, limit);
+}
+
+// =====================================================================
 // Avisos (Web Push) — suscripción del navegador del admin
 // =====================================================================
 //

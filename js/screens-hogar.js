@@ -29,7 +29,8 @@ import {
     urlInteraccionAudio,
     listarPuntas, crearPunta, borrarPunta,
     ultimosCheckinsPorMiembro,
-    estadoAvisos, activarAvisos, desactivarAvisos
+    estadoAvisos, activarAvisos, desactivarAvisos,
+    actividadReciente
 } from './data-emotiva.js';
 import { entrarPreviewVerComoPapa, limpiarDatosReales } from './preview.js';
 
@@ -127,6 +128,11 @@ export async function renderHogar($app) {
         <section class="card stack hogar-checkin">
             <h2>📅 Estado del día</h2>
             <div id="sec-checkin-estado"><p class="muted">Cargando…</p></div>
+        </section>
+
+        <section class="card stack hogar-actividad">
+            <h2>📋 Actividad reciente</h2>
+            <div id="sec-actividad"><p class="muted">Cargando…</p></div>
         </section>
 
         <section class="card stack hogar-circulos">
@@ -392,6 +398,9 @@ export async function renderHogar($app) {
         // Avisos (Web Push) — sólo dashboard. El admin activa una vez
         // por dispositivo; las pushes las dispara la edge function.
         pintarAvisos($app.querySelector('#sec-avisos-estado'));
+
+        // Muro de actividad reciente — merge de eventos de varias tablas.
+        cargarActividadReciente(c, $app.querySelector('#sec-actividad'));
 
         // Sección "Ideas para contar" — wire form + cargar cola/sugeridas inicial.
         const $formPunta = $app.querySelector('#form-punta');
@@ -1326,6 +1335,104 @@ async function cargarCheckinsDelDia(c, $cont) {
         <p class="muted" style="font-size:0.85em; margin:0;">
             Se actualiza cuando tu familiar abre la app y toca "Estoy bien".
         </p>
+    `;
+}
+
+// =====================================================================
+// Muro de actividad / coordinación familiar (dashboard)
+// =====================================================================
+//
+// Render del feed que arma `actividadReciente()`. Resuelve nombres
+// desde `_miembrosCache` (ya cargado al iniciar renderHogar), templeta
+// cada tipo con copy cálido, y agrega tiempo relativo en español.
+const ACT_ICONOS = {
+    checkin:  '✅',
+    foto:     '📷',
+    toma:     '💊',
+    historia: '📖',
+    pense:    '💛',
+    punta:    '💡'
+};
+
+function nombreDeActor(actorId) {
+    const m = (_miembrosCache || []).find(x => x.user_id === actorId);
+    if (!m) return 'Alguien';
+    const nom = (m.user?.nombre_completo || '').trim();
+    if (nom) return nom.split(/\s+/)[0];
+    const par = (m.parentesco || '').trim();
+    if (par) return `Tu ${par.toLowerCase()}`;
+    return 'Tu familiar';
+}
+
+function actividadTexto(ev) {
+    const actor = nombreDeActor(ev.actorId);
+    switch (ev.tipo) {
+        case 'checkin':
+            return `${actor} marcó que está bien`;
+        case 'foto':
+            return `${actor} subió una foto`;
+        case 'toma':
+            return `${actor} tomó ${ev.datos.medicamentoNombre} de las ${ev.datos.horario}`;
+        case 'historia':
+            return `${actor} contó una historia`;
+        case 'pense': {
+            const para = ev.datos.paraUserId ? nombreDeActor(ev.datos.paraUserId) : 'al círculo';
+            // "le mandó un cariño A …": si actor empieza con "Tu " es
+            // "Tu hija le mandó un cariño a Tu papá" → suena raro. Para
+            // el destinatario, si es "Tu papá", lo dejamos así porque
+            // el "a" suena natural ("a tu papá").
+            const paraSlug = para.startsWith('Tu ') ? para.replace(/^Tu /, 'tu ') : para;
+            return `${actor} le mandó un cariño a ${paraSlug}`;
+        }
+        case 'punta':
+            return `${actor} dejó una idea para contar`;
+        default:
+            return `${actor} hizo algo`;
+    }
+}
+
+function tiempoRelativo(at) {
+    const ms = Date.now() - new Date(at).getTime();
+    if (!isFinite(ms) || ms < 0) return '';
+    if (ms < 60_000) return 'ahora';
+    const min = Math.round(ms / 60_000);
+    if (min < 60) return `hace ${min} min`;
+    const hr = Math.round(min / 60);
+    if (hr < 24) return `hace ${hr} h`;
+    const d = Math.round(hr / 24);
+    if (d === 1) return 'ayer';
+    if (d < 7) return `hace ${d} días`;
+    return new Date(at).toLocaleDateString('es-AR');
+}
+
+async function cargarActividadReciente(c, $cont) {
+    if (!$cont) return;
+    let eventos = [];
+    try {
+        eventos = await actividadReciente(c.id, { limit: 25 });
+    } catch (err) {
+        $cont.innerHTML = `<p class="muted">No pude cargar la actividad: ${h(err?.message || err)}</p>`;
+        return;
+    }
+    if (!eventos.length) {
+        $cont.innerHTML = `
+            <div class="empty-state">
+                <span class="empty-state__icon">📭</span>
+                <p class="empty-state__msg">Todavía no hay actividad para mostrar.<br>
+                Cuando empiecen a pasar cosas en el círculo, se ven acá.</p>
+            </div>`;
+        return;
+    }
+    $cont.innerHTML = `
+        <ul class="actividad-lista">
+            ${eventos.map(ev => `
+                <li class="actividad-item">
+                    <span class="actividad-item__icon" aria-hidden="true">${ACT_ICONOS[ev.tipo] || '•'}</span>
+                    <span class="actividad-item__texto">${h(actividadTexto(ev))}</span>
+                    <span class="actividad-item__hace">${h(tiempoRelativo(ev.at))}</span>
+                </li>
+            `).join('')}
+        </ul>
     `;
 }
 
