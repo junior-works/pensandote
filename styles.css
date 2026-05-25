@@ -639,6 +639,119 @@ body[data-mode="dashboard"] .ideas-sugeridas__chip {
     white-space: nowrap;
 }
 
+/* ---- Check-in "estoy bien" (vista simple del papá) ----
+   Bloque grande arriba de los tarjetones para que sea lo PRIMERO
+   que toque el papá al abrir la app. Cuando marcó, muta a estado
+   hecho con tilde y hora. */
+.checkin-card {
+    background: #fffaf0;
+    border: var(--bw-s) solid var(--line-s);
+    border-radius: var(--r-s-md);
+    box-shadow: var(--sh-s);
+    padding: 1rem 1.1rem;
+    margin: 0.8rem 0 1.2rem;
+    text-align: center;
+}
+.checkin-card__pregunta {
+    margin: 0 0 0.6rem;
+    font-size: var(--fs-lg);
+    font-weight: 600;
+}
+.checkin-card__btn { min-height: 92px; font-size: 1.15em; }
+.checkin-card__hecho {
+    background: #e8f3e8;
+    border: var(--bw-s) solid #a3c2a3;
+    border-radius: var(--r-s-md);
+    padding: 1.1em 0.9em;
+    font-size: 1.1em;
+    font-weight: 700;
+    color: #2c5a2c;
+    display: flex; flex-direction: column; align-items: center; gap: 0.3rem;
+}
+.checkin-card__hecho small {
+    font-weight: 500; font-size: 0.78em; color: var(--ink-soft);
+}
+
+/* Avisito chico "Tu hija te está pensando" sobre el inicio */
+.pense-aviso {
+    background: #fff8e9;
+    border: 1px solid var(--line-d, var(--line));
+    border-radius: var(--r-s-sm, 10px);
+    padding: 0.55em 0.85em;
+    margin: 0 0 0.8rem;
+    font-size: 0.95em;
+    text-align: center;
+}
+.pense-aviso small { color: var(--ink-soft); }
+
+/* Corazón "pensé en vos" sobre cada foto (galería + lightbox) */
+.foto-corazon {
+    position: absolute;
+    bottom: 0.6rem; right: 0.6rem;
+    width: 52px; height: 52px;
+    border-radius: 999px;
+    border: 2px solid #fff;
+    background: rgba(0, 0, 0, 0.45);
+    color: #fff;
+    font-size: 1.5rem;
+    line-height: 1;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer;
+    transition: transform 120ms, background 120ms;
+    z-index: 2;
+}
+.foto-corazon:hover { transform: scale(1.06); }
+.foto-corazon:active { transform: scale(0.94); }
+.foto-corazon.is-mandado {
+    background: rgba(220, 50, 80, 0.92);
+    border-color: #fff;
+}
+.galeria__slide { position: relative; }
+.lightbox__slide { position: relative; }
+.foto-corazon--lightbox { bottom: 1.5rem; right: 1.2rem; width: 60px; height: 60px; font-size: 1.7rem; }
+
+/* Toast efímero (feedback "Le avisamos a tu hija 💛") */
+.pense-toast {
+    position: fixed;
+    left: 50%; bottom: 2rem;
+    transform: translate(-50%, 1rem);
+    background: #2a1e12;
+    color: #fff;
+    padding: 0.7em 1.1em;
+    border-radius: 999px;
+    font-size: 0.98em;
+    font-weight: 600;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.25);
+    z-index: 200;
+    opacity: 0;
+    transition: opacity 200ms, transform 200ms;
+    pointer-events: none;
+    max-width: calc(100vw - 2rem);
+    text-align: center;
+}
+.pense-toast.is-visible { opacity: 1; transform: translate(-50%, 0); }
+
+/* ---- Estado del día (admin Hogar — checkins de simples) ---- */
+body[data-mode="dashboard"] .checkin-estado-lista {
+    list-style: none; padding: 0; margin: 0; display: grid; gap: 0.5rem;
+}
+body[data-mode="dashboard"] .checkin-estado-item {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    align-items: center;
+    gap: 0.7rem;
+    padding: 0.55em 0.85em;
+    border-radius: 8px;
+    background: var(--bg-soft);
+    border: 1px solid var(--line-d, var(--line));
+    font-size: 0.95em;
+}
+body[data-mode="dashboard"] .checkin-estado-item.is-ok { background: #e8f3e8; border-color: #a3c2a3; }
+body[data-mode="dashboard"] .checkin-estado-item__icono { font-size: 1.4em; }
+body[data-mode="dashboard"] .checkin-estado-item small {
+    display: block; color: var(--ink-soft); font-size: 0.88em;
+}
+
 /* Lista de documentos cargados (admin Datos médicos) */
 .docs-lista { list-style: none; padding: 0; margin: 0; display: grid; gap: 0.4rem; }
 .docs-lista__item {

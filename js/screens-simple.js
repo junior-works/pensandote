@@ -10,11 +10,13 @@ import { state, miembroActivo } from './state.js';
 import { go, goReplace } from './router.js';
 import { h, modal, speakES, stopSpeak, wireTTSToggle, renderErrorEstructurado } from './ui.js';
 import {
-    preguntarComoHagoIA, listarTutoriales, obtenerTutorialPorSlug
+    preguntarComoHagoIA, listarTutoriales, obtenerTutorialPorSlug,
+    marcarCheckin, checkinDeHoy, enviarPensamiento
 } from './data-emotiva.js';
 import {
     getContactos, getMedico, getTutoriales, getFotoDelDia, getFotosDia,
-    getMiembroVisto, getAccesos, esPreview, avisarPreview
+    getMiembroVisto, getMiembrosReales, getPensamientosRecibidos,
+    getAccesos, esPreview, avisarPreview
 } from './preview.js';
 import { dispararPanico } from './utils/panico.js';
 import { crearDictado } from './utils/dictado.js';
@@ -22,15 +24,24 @@ import { crearDictado } from './utils/dictado.js';
 // =====================================================================
 // INICIO
 // =====================================================================
-export function renderInicio($app) {
+export async function renderInicio($app) {
     const yo = getMiembroVisto();
     const fotos = getFotosDia();
+    const miembros = getMiembrosReales();
     const horaSaludo = (() => {
         const hr = new Date().getHours();
         if (hr < 12) return 'Buenos días';
         if (hr < 20) return 'Buenas tardes';
         return 'Buenas noches';
     })();
+
+    // Avisito suave si recibió pensé en vos en las últimas 24h. No abre
+    // pantalla — sólo un chip cálido en el inicio.
+    const pensamientos = getPensamientosRecibidos();
+    const ult = pensamientos[0];
+    const reciente = ult && (Date.now() - new Date(ult.created_at).getTime()) < 24 * 60 * 60 * 1000
+        ? { ult, autor: miembros.find(m => m.user_id === ult.de_user_id) }
+        : null;
 
     $app.innerHTML = `
         ${fotos.length ? `
@@ -40,6 +51,10 @@ export function renderInicio($app) {
                         <figure class="galeria__slide" data-idx="${i}">
                             <img class="galeria__img" src="${h(f.url)}" alt="${h(f.epigrafe || 'Foto')}">
                             ${f.epigrafe ? `<figcaption class="t-emocional">${h(f.epigrafe)}</figcaption>` : ''}
+                            ${puedeCorazonear(f, yo.id) ? `
+                                <button class="foto-corazon" data-corazon="${i}"
+                                        aria-label="Pensé en vos">🤍</button>
+                            ` : ''}
                         </figure>
                     `).join('')}
                 </div>
@@ -63,9 +78,20 @@ export function renderInicio($app) {
             <p class="simple-fecha">${formatearFechaLarga(new Date())}</p>
         </header>
 
-        <button class="btn btn--pense btn--full pense-secundario" data-go="#/v2/pense">
-            💛 Pensé en vos
-        </button>
+        ${reciente ? `
+            <p class="pense-aviso">
+                💛 Tu <strong>${h((reciente.autor?.parentesco || 'familiar').toLowerCase())}</strong>
+                te está pensando · <small>${h(formatearHaceCorto(Date.now() - new Date(reciente.ult.created_at).getTime()))}</small>
+            </p>
+        ` : ''}
+
+        <section class="checkin-card" id="checkin-card">
+            <p class="checkin-card__pregunta">¿Cómo estás hoy?</p>
+            <button class="btn btn--xl btn--familia btn--full checkin-card__btn"
+                    id="btn-checkin">
+                👍 Estoy bien
+            </button>
+        </section>
 
         <nav class="simple-grid" aria-label="Secciones principales">
             <button class="tarjeton tarjeton--emergencia"  data-go="#/emergencias">
@@ -111,6 +137,8 @@ export function renderInicio($app) {
     wireNav($app);
     wireAccesos($app);
     wireGaleria($app, fotos);
+    wireCorazones($app.querySelectorAll('.galeria__slide .foto-corazon'), fotos);
+    wireCheckin($app);
 }
 
 /** Activa el sync scroll → dots + tap → lightbox de la galería. */
@@ -125,29 +153,170 @@ function wireGaleria($app, fotos) {
         });
     }
     $app.querySelectorAll('.galeria__slide').forEach(slide => {
-        slide.addEventListener('click', () => {
+        slide.addEventListener('click', (ev) => {
+            // El corazón vive adentro del slide pero NO abre lightbox —
+            // su click no debe propagar al figure.
+            if (ev.target.closest('.foto-corazon')) return;
             abrirLightboxFotos(fotos, Number(slide.dataset.idx) || 0);
         });
     });
 }
 
+/**
+ * ¿Mostramos corazón "pensé en vos" sobre esta foto?
+ * No si el papá la subió él mismo (raro pero posible), y no si
+ * la foto no tiene uploader válido (no sabríamos a quién mandar).
+ */
+function puedeCorazonear(f, miUserId) {
+    return !!f?.subida_por && f.subida_por !== miUserId;
+}
+
+/** Wirea los corazones (gallery o lightbox) — comparten lógica. */
+function wireCorazones($botones, fotos) {
+    if (!$botones || !$botones.length) return;
+    const miembros = getMiembrosReales();
+    $botones.forEach(btn => {
+        btn.addEventListener('click', async (ev) => {
+            ev.stopPropagation();
+            const idx = Number(btn.dataset.corazon);
+            const f = fotos[idx];
+            if (!f?.subida_por) return;
+
+            // Visual: pintamos lleno inmediatamente (optimistic) y
+            // bloqueamos para no spamear. Si falla la query, revertimos.
+            const ya = btn.classList.contains('is-mandado');
+            if (ya) return;
+            btn.textContent = '❤️';
+            btn.classList.add('is-mandado');
+            btn.disabled = true;
+
+            const autor = miembros.find(m => m.user_id === f.subida_por);
+            const quien = (autor?.parentesco || 'familiar').toLowerCase();
+
+            if (esPreview()) {
+                mostrarToast(`Le habrías avisado a tu ${quien} 💛 (vista previa)`);
+                return;
+            }
+            try {
+                await enviarPensamiento({
+                    circleId:    state.circuloActivoIdReal,
+                    paraUserId:  f.subida_por
+                });
+                mostrarToast(`Le avisamos a tu ${quien} 💛`);
+            } catch (err) {
+                console.warn('[corazon foto]', err);
+                btn.textContent = '🤍';
+                btn.classList.remove('is-mandado');
+                btn.disabled = false;
+                mostrarToast('No pude avisarle, probá de nuevo');
+            }
+        });
+    });
+}
+
+/**
+ * Check-in "estoy bien": muta a estado hecho al tocarlo y también
+ * al cargar la pantalla si ya marcó hoy.
+ */
+function wireCheckin($app) {
+    const $card = $app.querySelector('#checkin-card');
+    const $btn  = $app.querySelector('#btn-checkin');
+    if (!$card || !$btn) return;
+
+    function pintarHecho(creadoEn) {
+        const hora = creadoEn
+            ? new Date(creadoEn).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })
+            : 'recién';
+        $card.innerHTML = `
+            <p class="checkin-card__pregunta">¿Cómo estás hoy?</p>
+            <div class="checkin-card__hecho" aria-live="polite">
+                ✓ Avisaste que hoy estás bien
+                <small>${h(hora)}</small>
+            </div>
+        `;
+    }
+
+    // Chequeo inicial: ya marcó hoy?
+    if (state.modo === 'real' && state.usuarioReal && state.circuloActivoIdReal && !state.modoPreview) {
+        checkinDeHoy(state.circuloActivoIdReal, state.usuarioReal.id)
+            .then(row => { if (row) pintarHecho(row.created_at); })
+            .catch(err => console.warn('[checkin load]', err));
+    }
+
+    $btn.addEventListener('click', async () => {
+        // En preview o demo (sin sesión real) sólo simulamos la mutación
+        // visual — no tenemos backend al que pegarle.
+        if (esPreview()) {
+            avisarPreview('👀 Vista previa — check-in',
+                'En la app real esto avisa a tu familia que estás bien hoy. Acá no se ejecuta.');
+            pintarHecho(Date.now());
+            return;
+        }
+        if (state.modo !== 'real') {
+            pintarHecho(Date.now());
+            return;
+        }
+        $btn.disabled = true;
+        $btn.textContent = 'Avisando…';
+        try {
+            const row = await marcarCheckin(state.circuloActivoIdReal);
+            pintarHecho(row?.created_at || Date.now());
+        } catch (err) {
+            console.error('[checkin marcar]', err);
+            $btn.disabled = false;
+            $btn.textContent = '👍 Estoy bien';
+            await modal({
+                titulo: 'No pude avisar',
+                cuerpo: `<pre>${h(err?.message || err)}</pre>`,
+                acciones: [{ label: 'OK', clase: 'btn--inicio', value: 'ok' }]
+            });
+        }
+    });
+}
+
+/** Toast efímero (2s) — para "Le avisamos a tu hija 💛". */
+function mostrarToast(texto) {
+    const t = document.createElement('div');
+    t.className = 'pense-toast';
+    t.textContent = texto;
+    document.body.appendChild(t);
+    requestAnimationFrame(() => t.classList.add('is-visible'));
+    setTimeout(() => {
+        t.classList.remove('is-visible');
+        setTimeout(() => t.remove(), 300);
+    }, 2200);
+}
+
+function formatearHaceCorto(ms) {
+    const m = Math.round(ms / 60000);
+    if (m < 60) return `hace ${m} min`;
+    const hr = Math.round(m / 60);
+    return `hace ${hr} h`;
+}
+
 /** Lightbox a pantalla completa con swipe horizontal entre fotos. */
 function abrirLightboxFotos(fotos, startIdx = 0) {
+    const yo = getMiembroVisto();
     const overlay = document.createElement('div');
     overlay.className = 'lightbox-overlay';
     overlay.innerHTML = `
         <button class="lightbox__close" aria-label="Cerrar">✕</button>
         <div class="lightbox__counter" id="lb-counter">${startIdx + 1} de ${fotos.length}</div>
         <div class="lightbox__track" id="lb-track">
-            ${fotos.map(f => `
+            ${fotos.map((f, i) => `
                 <figure class="lightbox__slide">
                     <img src="${h(f.url)}" alt="${h(f.epigrafe || 'Foto')}">
                     ${f.epigrafe ? `<figcaption>${h(f.epigrafe)}</figcaption>` : ''}
+                    ${puedeCorazonear(f, yo.id) ? `
+                        <button class="foto-corazon foto-corazon--lightbox" data-corazon="${i}"
+                                aria-label="Pensé en vos">🤍</button>
+                    ` : ''}
                 </figure>
             `).join('')}
         </div>
     `;
     document.body.appendChild(overlay);
+    wireCorazones(overlay.querySelectorAll('.foto-corazon'), fotos);
 
     const $track   = overlay.querySelector('#lb-track');
     const $counter = overlay.querySelector('#lb-counter');

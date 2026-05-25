@@ -27,7 +27,8 @@ import {
     listarHistorias, urlHistoriaAudio, grabarHistoria,
     listarInteracciones, toggleFavorita, repreguntarTexto, repreguntarAudio,
     urlInteraccionAudio,
-    listarPuntas, crearPunta, borrarPunta
+    listarPuntas, crearPunta, borrarPunta,
+    ultimosCheckinsPorMiembro
 } from './data-emotiva.js';
 import { entrarPreviewVerComoPapa, limpiarDatosReales } from './preview.js';
 
@@ -115,6 +116,11 @@ export async function renderHogar($app) {
                 Compartí el link de invitación por WhatsApp y se suma al círculo
                 en un click.
             </p>
+        </section>
+
+        <section class="card stack hogar-checkin">
+            <h2>📅 Estado del día</h2>
+            <div id="sec-checkin-estado"><p class="muted">Cargando…</p></div>
         </section>
 
         <section class="card stack hogar-circulos">
@@ -373,6 +379,9 @@ export async function renderHogar($app) {
                 }
             });
         }
+
+        // Estado del día (check-in de los miembros simple del círculo).
+        cargarCheckinsDelDia(c, $app.querySelector('#sec-checkin-estado'));
 
         // Sección "Ideas para contar" — wire form + cargar cola/sugeridas inicial.
         const $formPunta = $app.querySelector('#form-punta');
@@ -1182,6 +1191,53 @@ function renderSugeridas($cont, yaCargadas, c, u, $app) {
             }
         });
     });
+}
+
+// =====================================================================
+// Estado del día — check-ins de los miembros simple del círculo
+// =====================================================================
+//
+// El admin quiere ver de un vistazo si su papá / mamá ya marcó "estoy
+// bien" hoy. Para cada miembro modo simple del círculo: ✅ con hora
+// si marcó, ⏳ si todavía no.
+async function cargarCheckinsDelDia(c, $cont) {
+    if (!$cont) return;
+    const simples = (_miembrosCache || []).filter(m => m.interface_mode === 'simple');
+    if (!simples.length) {
+        $cont.innerHTML = `<p class="muted">No hay nadie en modo simple en este círculo todavía.</p>`;
+        return;
+    }
+    let porUser = {};
+    try { porUser = await ultimosCheckinsPorMiembro(c.id); }
+    catch (err) {
+        $cont.innerHTML = `<p class="muted">Error: ${h(err?.message || err)}</p>`;
+        return;
+    }
+    const hoyAR = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Argentina/Buenos_Aires' });
+    $cont.innerHTML = `
+        <ul class="checkin-estado-lista">
+            ${simples.map(m => {
+                const par   = (m.parentesco || 'Familiar');
+                const row   = porUser[m.user_id];
+                const ok    = row && row.fecha === hoyAR;
+                const hora  = ok ? new Date(row.created_at).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' }) : null;
+                return `
+                    <li class="checkin-estado-item ${ok ? 'is-ok' : 'is-pendiente'}">
+                        <span class="checkin-estado-item__icono">${ok ? '✅' : '⏳'}</span>
+                        <div>
+                            <strong>${h(par)}</strong>
+                            <small>${ok
+                                ? `marcó que está bien hoy a las ${h(hora)}`
+                                : 'todavía no marcó hoy'}</small>
+                        </div>
+                    </li>
+                `;
+            }).join('')}
+        </ul>
+        <p class="muted" style="font-size:0.85em; margin:0;">
+            Se actualiza cuando tu familiar abre la app y toca "Estoy bien".
+        </p>
+    `;
 }
 
 // =====================================================================

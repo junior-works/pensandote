@@ -550,6 +550,76 @@ export async function borrarAcceso(id) {
 }
 
 // =====================================================================
+// Check-in "estoy bien" del día
+// =====================================================================
+//
+// La tabla `checkins` tiene unique(circle_id, user_id, fecha) — la
+// fecha por default es hoy en hora Argentina. Marcar es idempotente:
+// si ya marcó hoy, capturamos el unique violation y devolvemos el
+// record existente sin error visible.
+function hoyArgentina() {
+    return new Date().toLocaleDateString('en-CA', { timeZone: 'America/Argentina/Buenos_Aires' });
+}
+
+export async function marcarCheckin(circleId) {
+    const sb = await sbClient();
+    const { data: { user } } = await sb.auth.getUser();
+    if (!user) throw new Error('sin sesión');
+    const { data, error } = await sb.from('checkins').insert({
+        circle_id: circleId,
+        user_id:   user.id
+        // fecha: DB default = hoy AR
+    }).select().single();
+    if (error) {
+        if (error.code === '23505') {
+            // Ya marcó hoy. Buscamos el record para devolver created_at.
+            const { data: existing } = await sb.from('checkins')
+                .select('*')
+                .eq('circle_id', circleId)
+                .eq('user_id', user.id)
+                .eq('fecha', hoyArgentina())
+                .maybeSingle();
+            return existing;
+        }
+        throw enriquecer('insert checkins', error);
+    }
+    return data;
+}
+
+export async function checkinDeHoy(circleId, userId) {
+    const sb = await sbClient();
+    const { data, error } = await sb.from('checkins')
+        .select('*')
+        .eq('circle_id', circleId)
+        .eq('user_id', userId)
+        .eq('fecha', hoyArgentina())
+        .maybeSingle();
+    if (error) throw enriquecer('select checkin', error);
+    return data;
+}
+
+/**
+ * Para el admin: el último checkin de cada miembro del círculo, en
+ * un dict { user_id → row }. Si un miembro nunca marcó, no aparece
+ * en el dict. Sólo bajamos los últimos 200 — alcanza para un círculo
+ * familiar con histórico de varios meses.
+ */
+export async function ultimosCheckinsPorMiembro(circleId) {
+    const sb = await sbClient();
+    const { data, error } = await sb.from('checkins')
+        .select('*')
+        .eq('circle_id', circleId)
+        .order('created_at', { ascending: false })
+        .limit(200);
+    if (error) throw enriquecer('select checkins', error);
+    const porUsuario = {};
+    for (const row of data || []) {
+        if (!porUsuario[row.user_id]) porUsuario[row.user_id] = row;
+    }
+    return porUsuario;
+}
+
+// =====================================================================
 // Datos médicos del círculo (tabla public.medical_info, 1:1)
 // =====================================================================
 export async function leerDatosMedicos(circleId) {
