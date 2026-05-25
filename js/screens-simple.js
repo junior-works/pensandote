@@ -17,7 +17,8 @@ import {
 import {
     getContactos, getMedico, getTutoriales, getFotoDelDia, getFotosDia,
     getMiembroVisto, getMiembrosReales, getPensamientosRecibidos,
-    getAccesos, getMedicamentos, getTomasHoy, esPreview, avisarPreview
+    getAccesos, getMedicamentos, getTomasHoy, getCheckinHoyPreview,
+    esPreview, avisarPreview
 } from './preview.js';
 import { dispararPanico } from './utils/panico.js';
 import { crearDictado } from './utils/dictado.js';
@@ -263,8 +264,14 @@ function wireCheckin($app) {
         `;
     }
 
-    // Chequeo inicial: ya marcó hoy?
-    if (state.modo === 'real' && state.usuarioReal && state.circuloActivoIdReal && !state.modoPreview) {
+    // Chequeo inicial: ¿el papá ya marcó hoy?
+    // - En preview: leemos del cache (cargado en entrarPreviewVerComoPapa)
+    //   así el admin viendo como papá ve el estado REAL del papá.
+    // - En real: fetch fresco contra checkins.
+    if (state.modoPreview) {
+        const row = getCheckinHoyPreview();
+        if (row) pintarHecho(row.created_at);
+    } else if (state.modo === 'real' && state.usuarioReal && state.circuloActivoIdReal) {
         checkinDeHoy(state.circuloActivoIdReal, state.usuarioReal.id)
             .then(row => { if (row) pintarHecho(row.created_at); })
             .catch(err => console.warn('[checkin load]', err));

@@ -29,7 +29,8 @@ import { h, modal } from './ui.js';
 import {
     listarContactos, leerDatosMedicos, ultimaFotoDia, ultimasFotosDia,
     pensamientosRecibidos, listarHistorias, listarFechas,
-    listarAccesos, listarPuntas, listarMedicamentos, tomasDeHoy
+    listarAccesos, listarPuntas, listarMedicamentos, tomasDeHoy,
+    checkinDeHoy
 } from './data-emotiva.js';
 import { miembrosDelCirculo } from './circles.js';
 import {
@@ -89,6 +90,13 @@ export function getAccesos() {
     if (state.modoPreview) return state.previewData?.accesos || [];
     if (state.datosReales) return state.datosReales.accesos || [];
     return [];
+}
+
+/** Check-in del papá para HOY (preview). En real, los screens
+ *  consultan directo `checkinDeHoy()`; este accessor sólo se usa
+ *  en preview para que el card refleje el estado real del papá. */
+export function getCheckinHoyPreview() {
+    return state.modoPreview ? (state.previewData?.checkinHoy || null) : null;
 }
 
 /** Medicamentos activos del círculo (catálogo). */
@@ -194,7 +202,7 @@ export async function entrarPreviewVerComoPapa(circleId, miembros) {
 
     let data;
     try {
-        const [contactos, medico, fotos, pensamientos, historias, fechas, accesos, puntas, medicamentos, tomasHoy] = await Promise.all([
+        const [contactos, medico, fotos, pensamientos, historias, fechas, accesos, puntas, medicamentos, tomasHoy, checkinHoy] = await Promise.all([
             listarContactos(circleId).catch(e => { console.warn('[preview] contactos', e); return []; }),
             leerDatosMedicos(circleId).catch(e => { console.warn('[preview] medico', e); return null; }),
             ultimasFotosDia(circleId, 10).catch(e => { console.warn('[preview] fotos', e); return []; }),
@@ -204,9 +212,12 @@ export async function entrarPreviewVerComoPapa(circleId, miembros) {
             listarAccesos(circleId).catch(e => { console.warn('[preview] accesos', e); return []; }),
             listarPuntas(circleId).catch(e => { console.warn('[preview] puntas', e); return []; }),
             listarMedicamentos(circleId, { soloActivos: true }).catch(e => { console.warn('[preview] medicamentos', e); return []; }),
-            tomasDeHoy(circleId).catch(e => { console.warn('[preview] tomas', e); return []; })
+            tomasDeHoy(circleId).catch(e => { console.warn('[preview] tomas', e); return []; }),
+            // Check-in del papá HOY — para que el card refleje su estado
+            // real ("✓ Avisaste que hoy estás bien" vs "👍 Estoy bien").
+            checkinDeHoy(circleId, papa.user_id).catch(e => { console.warn('[preview] checkin', e); return null; })
         ]);
-        data = { contactos, medico, fotos, pensamientos, historias, fechas, miembros, accesos, puntas, medicamentos, tomasHoy };
+        data = { contactos, medico, fotos, pensamientos, historias, fechas, miembros, accesos, puntas, medicamentos, tomasHoy, checkinHoy };
     } catch (err) {
         console.error('[preview] load', err);
         await modal({
