@@ -278,68 +278,30 @@ function wireCheckin($app) {
     }
 
     $btn.addEventListener('click', async () => {
-        // En preview (admin viendo como papá) sólo simulamos.
+        // En preview o demo (sin sesión real) sólo simulamos la mutación
+        // visual — no tenemos backend al que pegarle.
         if (esPreview()) {
             avisarPreview('👀 Vista previa — check-in',
                 'En la app real esto avisa a tu familia que estás bien hoy. Acá no se ejecuta.');
             pintarHecho(Date.now());
             return;
         }
-        // Demo PURO (sin sesión real): simulamos también. Ojo: NO
-        // basamos esto en state.modo porque puede estar desincronizado
-        // — usamos la existencia de usuarioReal como verdad de "hay
-        // backend con quien hablar".
-        if (!state.usuarioReal) {
-            console.warn('[checkin click] sin usuarioReal — simulando');
+        if (state.modo !== 'real') {
             pintarHecho(Date.now());
             return;
         }
-
-        // Log defensivo del contexto antes de mandar — útil cuando el
-        // insert falla y queremos saber con qué circle_id / user_id /
-        // membresía estábamos pegándole.
-        console.info('[checkin click]', {
-            modo:           state.modo,
-            modoPreview:    state.modoPreview,
-            userId:         state.usuarioReal?.id,
-            circuloActivo:  state.circuloActivoIdReal,
-            membresiaModo:  state.membresiaReal?.interface_mode,
-            membresiaPerm:  state.membresiaReal?.permission_level
-        });
-
-        if (!state.circuloActivoIdReal) {
-            $btn.disabled = false;
-            $btn.textContent = '👍 Estoy bien';
-            await modal({
-                titulo: 'No tengo un círculo activo',
-                cuerpo: '<p>Algo raro con tu sesión. Probá cerrar y volver a abrir la app desde el link que te mandaron.</p>',
-                acciones: [{ label: 'OK', clase: 'btn--inicio', value: 'ok' }]
-            });
-            return;
-        }
-
         $btn.disabled = true;
         $btn.textContent = 'Avisando…';
         try {
-            await marcarCheckin(state.circuloActivoIdReal);
-            // VERIFICACIÓN post-insert: leemos checkins HOY para
-            // confirmar que la fila quedó. Sólo después pintamos hecho.
-            // Esto cubre el escenario que vimos en producción: tilde
-            // verde mostrado sin que la fila estuviera en DB.
-            const verif = await checkinDeHoy(state.circuloActivoIdReal, state.usuarioReal.id);
-            if (!verif) {
-                throw new Error('El check-in no quedó guardado. Revisá tu conexión y probá de nuevo.');
-            }
-            console.info('[checkin click] OK', { id: verif.id, created_at: verif.created_at, fecha: verif.fecha });
-            pintarHecho(verif.created_at);
+            const row = await marcarCheckin(state.circuloActivoIdReal);
+            pintarHecho(row?.created_at || Date.now());
         } catch (err) {
-            console.error('[checkin marcar]', err, err?.detalle);
+            console.error('[checkin marcar]', err);
             $btn.disabled = false;
             $btn.textContent = '👍 Estoy bien';
             await modal({
                 titulo: 'No pude avisar',
-                cuerpo: `<p>${h(err?.message || err)}</p>
-                         <p class="muted">Si pasa de nuevo, sacale captura y mostrale a tu familia.</p>`,
+                cuerpo: `<pre>${h(err?.message || err)}</pre>`,
                 acciones: [{ label: 'OK', clase: 'btn--inicio', value: 'ok' }]
             });
         }

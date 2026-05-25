@@ -803,69 +803,28 @@ function hoyArgentina() {
 }
 
 export async function marcarCheckin(circleId) {
-    // Defensa contra silent fails — el caller (wireCheckin) además
-    // verifica con checkinDeHoy() post-insert que la fila REALMENTE
-    // quedó en DB antes de pintar el "hecho" verde.
-    if (!circleId) {
-        throw new Error('marcarCheckin: falta circle_id (el círculo activo está vacío)');
-    }
     const sb = await sbClient();
-
-    const userResp = await sb.auth.getUser();
-    if (userResp.error) {
-        console.error('[marcarCheckin] auth.getUser error', userResp.error);
-        throw new Error('No pude leer la sesión: ' + (userResp.error.message || userResp.error));
-    }
-    const user = userResp.data?.user;
-    if (!user) throw new Error('No hay sesión activa. Tocá el link de invitación de nuevo.');
-
-    console.info('[marcarCheckin] insert', { circle_id: circleId, user_id: user.id });
-
-    const ins = await sb.from('checkins').insert({
+    const { data: { user } } = await sb.auth.getUser();
+    if (!user) throw new Error('sin sesión');
+    const { data, error } = await sb.from('checkins').insert({
         circle_id: circleId,
         user_id:   user.id
-        // fecha: DB default = hoy AR (en la tabla)
-    }).select('id, circle_id, user_id, fecha, created_at').single();
-
-    console.info('[marcarCheckin] response', {
-        hasData:    !!ins.data,
-        errorCode:  ins.error?.code,
-        errorMsg:   ins.error?.message,
-        errorHint:  ins.error?.hint,
-        errorDetails: ins.error?.details,
-        data:       ins.data
-    });
-
-    if (ins.error) {
-        if (ins.error.code === '23505') {
-            // Unique violation — ya marcó hoy. Buscamos el record real.
-            const { data: existing, error: errSel } = await sb.from('checkins')
-                .select('id, circle_id, user_id, fecha, created_at')
+        // fecha: DB default = hoy AR
+    }).select().single();
+    if (error) {
+        if (error.code === '23505') {
+            // Ya marcó hoy. Buscamos el record para devolver created_at.
+            const { data: existing } = await sb.from('checkins')
+                .select('*')
                 .eq('circle_id', circleId)
                 .eq('user_id', user.id)
                 .eq('fecha', hoyArgentina())
                 .maybeSingle();
-            if (errSel) {
-                console.warn('[marcarCheckin] select existing failed', errSel);
-            }
-            if (!existing) {
-                // El unique disparó pero no encontramos el record — algo
-                // raro (¿desincronía de RLS sobre SELECT vs INSERT?).
-                throw new Error('Marcamos pero no pude confirmar la fila. Refrescá la página.');
-            }
             return existing;
         }
-        // Cualquier otro error (RLS, FK, NOT NULL) — propagamos limpio.
-        throw enriquecer('insert checkins', ins.error);
+        throw enriquecer('insert checkins', error);
     }
-
-    if (!ins.data) {
-        // No debería pasar — supabase-js devuelve data O error. Si vemos
-        // esto, el insert silenciosamente no quedó.
-        throw new Error('El check-in no quedó guardado (respuesta vacía del servidor).');
-    }
-
-    return ins.data;
+    return data;
 }
 
 export async function checkinDeHoy(circleId, userId) {
