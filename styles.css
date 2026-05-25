@@ -1968,6 +1968,63 @@ body[data-mode="dashboard"] .circulo-bar__dot {
     box-shadow: 0 0 0 3px rgba(91, 142, 142, 0.18);
 }
 
+/* ---- Tabs de círculos (2+ círculos) ----
+   Segmented control: las pestañas reemplazan el label estático cuando
+   el admin tiene 2+ círculos, así puede saltar de uno a otro de un
+   toque sin ir a "Tus círculos". La pestaña activa queda llena con
+   acento familia; las inactivas, neutras. */
+body[data-mode="dashboard"] #circulo-bar.circulo-bar--tabs {
+    padding: 0.35rem 0.8rem;
+}
+body[data-mode="dashboard"] .circulo-bar__tabs {
+    display: flex;
+    gap: 0.25rem;
+    overflow-x: auto;
+    scrollbar-width: none;
+    padding: 0;
+}
+body[data-mode="dashboard"] .circulo-bar__tabs::-webkit-scrollbar { display: none; }
+body[data-mode="dashboard"] .circulo-tab {
+    display: inline-flex; align-items: center; gap: 0.45rem;
+    padding: 0.4rem 0.85rem;
+    border-radius: 999px;
+    border: 1px solid var(--line-d);
+    background: transparent;
+    color: var(--ink-soft-d);
+    font-size: 0.88rem;
+    font-weight: 600;
+    line-height: 1.2;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 120ms ease, color 120ms ease, border-color 120ms ease, box-shadow 120ms ease;
+    min-height: 32px;
+    flex-shrink: 0;
+}
+body[data-mode="dashboard"] .circulo-tab:hover:not(.is-activo):not(:disabled) {
+    background: var(--bg-soft);
+    color: var(--ink);
+    border-color: rgba(17, 17, 17, 0.22);
+}
+body[data-mode="dashboard"] .circulo-tab:focus-visible {
+    outline: none;
+    box-shadow: var(--focus-ring);
+}
+body[data-mode="dashboard"] .circulo-tab.is-activo {
+    background: var(--accent-familia);
+    border-color: var(--accent-familia);
+    color: #fff;
+}
+body[data-mode="dashboard"] .circulo-tab.is-activo .circulo-tab__dot {
+    background: #fff;
+    box-shadow: none;
+}
+body[data-mode="dashboard"] .circulo-tab__dot {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--ink-soft-d);
+    flex-shrink: 0;
+}
+body[data-mode="dashboard"] .circulo-tab:disabled { opacity: 0.6; cursor: wait; }
+
 /* ---- Chips de estado unificados (✓ / ⏳ / pendiente / usada / activo) ----
    Patrón base + variantes. Los chips antiguos seguirán funcionando pero
    los nuevos componentes usan `.status-chip`. */

@@ -318,8 +318,8 @@ function actualizarBarraCirculo() {
 
     if (!debeMostrar) { desmontarBarraCirculo(); return; }
 
-    const c = state.circulosReal.find(x => x.id === state.circuloActivoIdReal);
-    if (!c) { desmontarBarraCirculo(); return; }
+    const activo = state.circulosReal.find(x => x.id === state.circuloActivoIdReal);
+    if (!activo) { desmontarBarraCirculo(); return; }
 
     let b = document.getElementById('circulo-bar');
     if (!b) {
@@ -329,22 +329,81 @@ function actualizarBarraCirculo() {
         // si existen — así no le pisan el lugar.
         document.body.insertBefore(b, document.getElementById('app'));
     }
-    // Si el admin elige un nombre genérico ("Familia X") lo mostramos
-    // tal cual; si ya lo nombró con "Círculo de…" tampoco doble-prefijo.
-    const nombre = c.nombre || 'tu círculo';
-    const yaTienePrefijo = /^c[íi]rculo\b/i.test(nombre.trim());
-    const titulo = yaTienePrefijo ? nombre : `Círculo de ${nombre}`;
-    b.innerHTML = `
-        <div class="circulo-bar__inner">
-            <span class="circulo-bar__dot" aria-hidden="true"></span>
-            <span class="circulo-bar__txt">${escapeHtml(titulo)}</span>
-        </div>
-    `;
+
+    // 2+ círculos → tabs (segmented control) para saltar de uno a otro
+    // de un toque. 1 solo → label estático (como antes).
+    if (state.circulosReal.length >= 2) {
+        b.classList.add('circulo-bar--tabs');
+        b.innerHTML = `
+            <div class="circulo-bar__inner circulo-bar__tabs" role="tablist" aria-label="Cambiar de círculo">
+                ${state.circulosReal.map(c => {
+                    const esActivo = c.id === state.circuloActivoIdReal;
+                    return `
+                        <button class="circulo-tab${esActivo ? ' is-activo' : ''}"
+                                role="tab"
+                                aria-selected="${esActivo}"
+                                data-circulo-tab="${escapeHtml(c.id)}"
+                                ${esActivo ? 'tabindex="0"' : 'tabindex="-1"'}>
+                            <span class="circulo-tab__dot" aria-hidden="true"></span>
+                            <span class="circulo-tab__txt">${escapeHtml(nombreCortoCirculo(c.nombre))}</span>
+                        </button>
+                    `;
+                }).join('')}
+            </div>
+        `;
+        // Wire de los clicks — al tocar otra pestaña: refetch membresía
+        // del usuario en ese círculo + setSesionReal + refresh. Mismo
+        // efecto que el botón "Activar" de "Tus círculos" pero a un toque.
+        b.querySelectorAll('[data-circulo-tab]').forEach(tab => {
+            tab.addEventListener('click', async () => {
+                const cid = tab.dataset.circuloTab;
+                if (cid === state.circuloActivoIdReal) return;
+                if (!state.usuarioReal) return;
+                tab.disabled = true;
+                try {
+                    const memb = await membresiaActiva(state.usuarioReal.id, cid);
+                    setSesionReal({
+                        usuario:         state.usuarioReal,
+                        circulos:        state.circulosReal,
+                        circuloActivoId: cid,
+                        membresia:       memb
+                    });
+                    // setSesionReal emite → onStateChange en bootstrap
+                    // dispara refresh del router, que repinta el Hogar
+                    // (Estado del día, Actividad, etc.) contra el nuevo
+                    // círculo. Y actualizarBarraCirculo se re-llama
+                    // mostrando la nueva pestaña activa.
+                } catch (err) {
+                    console.error('[circulo-tab]', err);
+                    tab.disabled = false;
+                }
+            });
+        });
+    } else {
+        b.classList.remove('circulo-bar--tabs');
+        const nombre = activo.nombre || 'tu círculo';
+        const yaTienePrefijo = /^c[íi]rculo\b/i.test(nombre.trim());
+        const titulo = yaTienePrefijo ? nombre : `Círculo de ${nombre}`;
+        b.innerHTML = `
+            <div class="circulo-bar__inner">
+                <span class="circulo-bar__dot" aria-hidden="true"></span>
+                <span class="circulo-bar__txt">${escapeHtml(titulo)}</span>
+            </div>
+        `;
+    }
 }
 
 function desmontarBarraCirculo() {
     const b = document.getElementById('circulo-bar');
     if (b) b.remove();
+}
+
+/** Nombre corto para una tab: si empieza con "Círculo de X", devuelve
+ *  "X". Si no, devuelve el nombre tal cual. */
+function nombreCortoCirculo(nombre) {
+    if (!nombre) return 'Círculo';
+    const m = String(nombre).trim().match(/^c[íi]rculo de\s+(.+)$/i);
+    return m ? m[1] : nombre;
 }
 
 function escapeHtml(s) {
