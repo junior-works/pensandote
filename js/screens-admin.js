@@ -379,6 +379,34 @@ export async function renderMedicoAdmin($app) {
 // Medicación (admin) — lista, crear, editar, borrar + adherencia hoy
 // =====================================================================
 
+// --- Helpers de fases (compartidos por la lista y el form) ------------
+function addDaysISO(iso, n) {
+    const d = new Date(iso + 'T00:00:00Z');
+    d.setUTCDate(d.getUTCDate() + n);
+    return d.toISOString().slice(0, 10);
+}
+function diasEntreISO(a, b) {
+    return Math.round((Date.parse(b + 'T00:00:00Z') - Date.parse(a + 'T00:00:00Z')) / 86400000);
+}
+// Rango [desde,hasta] ISO de una fase. Shape nuevo: desde_fecha/hasta_fecha.
+// Fallback al viejo (desde_dia/hasta_dia) computado desde fecha_inicio.
+function faseRango(f, fechaInicio) {
+    if (f.desde_fecha && f.hasta_fecha) return { desde: f.desde_fecha, hasta: f.hasta_fecha };
+    if (fechaInicio && f.desde_dia != null && f.hasta_dia != null) {
+        return { desde: addDaysISO(fechaInicio, Number(f.desde_dia) - 1),
+                 hasta: addDaysISO(fechaInicio, Number(f.hasta_dia) - 1) };
+    }
+    return null;
+}
+// Convierte fases (cualquier shape) al shape nuevo de fechas. Las fases
+// viejas (desde_dia/hasta_dia) se migran una sola vez al editar.
+function normalizarFases(fases, fechaInicio) {
+    return (Array.isArray(fases) ? fases : []).map(f => {
+        const r = faseRango(f, fechaInicio);
+        return r ? { desde_fecha: r.desde, hasta_fecha: r.hasta, dosis: f.dosis } : null;
+    }).filter(Boolean);
+}
+
 // Resumen del régimen para la lista: fases (si hay) + rango de fechas.
 function resumenRegimenMed(m) {
     const fmt = (iso) => {
@@ -389,9 +417,12 @@ function resumenRegimenMed(m) {
     const partes = [];
     const fases = Array.isArray(m.fases) ? m.fases : [];
     if (fases.length) {
-        const txt = fases.slice().sort((a, b) => Number(a.desde_dia) - Number(b.desde_dia))
-            .map(f => {
-                const dias = Number(f.hasta_dia) - Number(f.desde_dia) + 1;
+        const txt = fases
+            .map(f => ({ f, r: faseRango(f, m.fecha_inicio) }))
+            .filter(x => x.r)
+            .sort((a, b) => a.r.desde.localeCompare(b.r.desde))
+            .map(({ f, r }) => {
+                const dias = diasEntreISO(r.desde, r.hasta) + 1;
                 return `${f.dosis} × ${dias} día${dias === 1 ? '' : 's'}`;
             }).join(' → ');
         partes.push(`💊 ${txt}`);
@@ -514,7 +545,7 @@ function abrirFormMedicamento(circleId, medExistente, onSaved) {
     const fechaInicioVal = medExistente?.fecha_inicio || hoyISO;
     const fechaFinVal    = medExistente?.fecha_fin || '';
     const indefinido     = editar ? !medExistente.fecha_fin : true;
-    const fasesInicial   = Array.isArray(medExistente?.fases) ? medExistente.fases : [];
+    const fasesInicial   = normalizarFases(medExistente?.fases, fechaInicioVal);
 
     const overlay = document.createElement('div');
     overlay.className = 'modal-overlay';
@@ -556,10 +587,10 @@ function abrirFormMedicamento(circleId, medExistente, onSaved) {
                     <input name="fecha_fin" type="date" class="input-real" value="${h(fechaFinVal)}">
                 </label>
                 <fieldset class="med-fases">
-                    <legend>Fases — dosis que cambia por día (opcional)</legend>
+                    <legend>Fases — dosis que cambia por fechas (opcional)</legend>
                     <p class="muted med-fases__hint">
                         Si la dosis es siempre la misma, dejá esto vacío y usá el campo "Dosis" de arriba.
-                        Si cambia, agregá una fase por tramo: arrancan en el día 1 y no se pisan.
+                        Si cambia, agregá una fase por tramo con sus fechas (de … a …). No se pueden pisar; puede haber huecos.
                     </p>
                     <div id="fases-lista"></div>
                     <button type="button" class="btn btn--mini" id="btn-add-fase">+ Agregar fase</button>
@@ -595,18 +626,13 @@ function abrirFormMedicamento(circleId, medExistente, onSaved) {
     const $chkIndef   = overlay.querySelector('input[name=indefinido]');
     const $inicio     = overlay.querySelector('input[name=fecha_inicio]');
 
-    function addDaysISO(iso, n) {
-        const d = new Date(iso + 'T00:00:00Z');
-        d.setUTCDate(d.getUTCDate() + n);
-        return d.toISOString().slice(0, 10);
-    }
     function filaFaseHTML(f = {}) {
         return `
             <div class="med-fase-row" data-fase>
-                <label class="med-fase-row__f"><span>Desde día</span>
-                    <input type="number" min="1" class="input-real fase-desde" value="${h(f.desde_dia ?? '')}"></label>
-                <label class="med-fase-row__f"><span>Hasta día</span>
-                    <input type="number" min="1" class="input-real fase-hasta" value="${h(f.hasta_dia ?? '')}"></label>
+                <label class="med-fase-row__f"><span>Desde</span>
+                    <input type="date" class="input-real fase-desde" value="${h(f.desde_fecha ?? '')}"></label>
+                <label class="med-fase-row__f"><span>Hasta</span>
+                    <input type="date" class="input-real fase-hasta" value="${h(f.hasta_fecha ?? '')}"></label>
                 <label class="med-fase-row__f med-fase-row__dosis"><span>Dosis</span>
                     <input type="text" class="input-real fase-dosis" value="${h(f.dosis ?? '')}" placeholder="1 gota"></label>
                 <button type="button" class="btn btn--mini btn--danger" data-del-fase title="Quitar">×</button>
@@ -614,30 +640,33 @@ function abrirFormMedicamento(circleId, medExistente, onSaved) {
     }
     function leerFases() {
         return [...$fasesLista.querySelectorAll('[data-fase]')].map(row => ({
-            desde_dia: parseInt(row.querySelector('.fase-desde').value, 10),
-            hasta_dia: parseInt(row.querySelector('.fase-hasta').value, 10),
-            dosis:     String(row.querySelector('.fase-dosis').value || '').trim()
+            desde_fecha: String(row.querySelector('.fase-desde').value || '').trim(),
+            hasta_fecha: String(row.querySelector('.fase-hasta').value || '').trim(),
+            dosis:       String(row.querySelector('.fase-dosis').value || '').trim()
         }));
     }
     function hayFases() { return $fasesLista.querySelector('[data-fase]') != null; }
     function recomputar() {
         const tieneFases = hayFases();
+        // Con fases, la fecha de fin se deriva (última fase); ocultamos los
+        // controles manuales.
         $wrapIndef.style.display = tieneFases ? 'none' : '';
         $wrapFin.style.display   = tieneFases ? 'none' : ($chkIndef.checked ? 'none' : '');
         if (tieneFases) {
-            const fases = leerFases();
-            const maxHasta = Math.max(0, ...fases.map(f => Number(f.hasta_dia) || 0));
-            const inicio = $inicio.value || hoyISO;
-            $fasesFin.textContent = (maxHasta > 0 && inicio)
-                ? `Termina el ${addDaysISO(inicio, maxHasta - 1)} (día ${maxHasta} del tratamiento).`
-                : '';
+            const fin = leerFases().map(f => f.hasta_fecha).filter(Boolean).sort().pop();
+            $fasesFin.textContent = fin ? `Termina el ${fin} (última fase).` : '';
         } else {
             $fasesFin.textContent = '';
         }
     }
     $fasesLista.innerHTML = fasesInicial.map(filaFaseHTML).join('');
     $btnAddFase.addEventListener('click', () => {
-        $fasesLista.insertAdjacentHTML('beforeend', filaFaseHTML());
+        // Default de la nueva fase: arranca el día después de la última, o
+        // en la fecha de inicio si es la primera.
+        const ultimas = leerFases();
+        const ultHasta = ultimas.map(f => f.hasta_fecha).filter(Boolean).sort().pop();
+        const desde = ultHasta ? addDaysISO(ultHasta, 1) : ($inicio.value || hoyISO);
+        $fasesLista.insertAdjacentHTML('beforeend', filaFaseHTML({ desde_fecha: desde }));
         recomputar();
     });
     $fasesLista.addEventListener('click', (e) => {
@@ -649,30 +678,27 @@ function abrirFormMedicamento(circleId, medExistente, onSaved) {
     $chkIndef.addEventListener('change', recomputar);
     recomputar();
 
-    // Valida fases: arrancan en día 1, desde<=hasta, no se solapan.
-    // Devuelve { fases, fechaFin } o lanza Error con mensaje legible.
-    function validarFases(fechaInicio) {
+    // Valida fases: cada una con desde<=hasta y completa; entre fases sin
+    // solapes (puede haber huecos). Devuelve { fases, fechaFin } o lanza
+    // Error con mensaje legible.
+    function validarFases() {
         const crudas = leerFases();
-        // Toda fila tiene que estar completa.
         for (const f of crudas) {
-            if (!Number.isFinite(f.desde_dia) || !Number.isFinite(f.hasta_dia) || !f.dosis) {
+            if (!f.desde_fecha || !f.hasta_fecha || !f.dosis) {
                 throw new Error('Completá las 3 columnas de cada fase (desde, hasta y dosis).');
             }
-            if (f.desde_dia < 1 || f.hasta_dia < f.desde_dia) {
-                throw new Error('En cada fase, "desde" tiene que ser ≥ 1 y "hasta" ≥ "desde".');
+            if (f.hasta_fecha < f.desde_fecha) {
+                throw new Error('En cada fase, "hasta" no puede ser anterior a "desde".');
             }
         }
-        const fases = crudas.slice().sort((a, b) => a.desde_dia - b.desde_dia);
-        if (fases[0].desde_dia !== 1) {
-            throw new Error('La primera fase tiene que arrancar en el día 1.');
-        }
+        const fases = crudas.slice().sort((a, b) => a.desde_fecha.localeCompare(b.desde_fecha));
         for (let i = 1; i < fases.length; i++) {
-            if (fases[i].desde_dia <= fases[i - 1].hasta_dia) {
+            if (fases[i].desde_fecha <= fases[i - 1].hasta_fecha) {
                 throw new Error('Las fases no pueden pisarse (una arranca antes de que termine la anterior).');
             }
         }
-        const maxHasta = Math.max(...fases.map(f => f.hasta_dia));
-        return { fases, fechaFin: addDaysISO(fechaInicio, maxHasta - 1) };
+        const fechaFin = fases.map(f => f.hasta_fecha).sort().pop();
+        return { fases, fechaFin };
     }
 
     overlay.querySelector('#form-med').addEventListener('submit', async (ev) => {
@@ -695,9 +721,9 @@ function abrirFormMedicamento(circleId, medExistente, onSaved) {
         let fases = [];
         let fechaFin = null;
         if (hayFases()) {
-            // Con fases, la fecha de fin se deriva del último día.
+            // Con fases, la fecha de fin se deriva de la última fase.
             try {
-                ({ fases, fechaFin } = validarFases(fechaInicio));
+                ({ fases, fechaFin } = validarFases());
             } catch (err) {
                 await modal({
                     titulo: 'Revisá las fases',

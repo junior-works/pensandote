@@ -54,23 +54,36 @@ function hhmmAMin(s: string): number | null {
     return parseInt(m[1], 10) * 60 + parseInt(m[2], 10);
 }
 
-// Dia del tratamiento (1-based) para una fecha "YYYY-MM-DD" dado el inicio.
-function diaDeTratamiento(inicioISO: string, hoyISO: string): number {
-    const a = new Date(inicioISO + "T00:00:00Z").getTime();
-    const b = new Date(hoyISO + "T00:00:00Z").getTime();
-    return Math.floor((b - a) / 86400000) + 1;
+// Suma n dias a "YYYY-MM-DD".
+function addDaysISO(iso: string, n: number): string {
+    const d = new Date(iso + "T00:00:00Z");
+    d.setUTCDate(d.getUTCDate() + n);
+    return d.toISOString().slice(0, 10);
 }
 
-// Dosis del dia: si hay fases, busca la que cubre el dia actual; si no,
-// la dosis base.
+// Rango [desde,hasta] (ISO) de una fase. Shape nuevo: desde_fecha/hasta_fecha.
+// Fallback al viejo (desde_dia/hasta_dia) computado desde fecha_inicio.
+function faseRango(f: any, inicioISO: string): { desde: string; hasta: string } | null {
+    if (f.desde_fecha && f.hasta_fecha) {
+        return { desde: String(f.desde_fecha), hasta: String(f.hasta_fecha) };
+    }
+    if (inicioISO && f.desde_dia != null && f.hasta_dia != null) {
+        return {
+            desde: addDaysISO(inicioISO, Number(f.desde_dia) - 1),
+            hasta: addDaysISO(inicioISO, Number(f.hasta_dia) - 1),
+        };
+    }
+    return null;
+}
+
+// Dosis del dia: si hay fases, la de la fase cuyo rango de fechas cubre
+// hoy; si no, la dosis base.
 function dosisDelDia(med: any, hoyISO: string): string {
     const fases = Array.isArray(med.fases) ? med.fases : [];
-    if (fases.length) {
-        const inicio = (med.fecha_inicio || String(med.created_at || hoyISO).slice(0, 10));
-        const dia = diaDeTratamiento(inicio, hoyISO);
-        const fase = fases.find((f: any) =>
-            Number(f.desde_dia) <= dia && dia <= Number(f.hasta_dia));
-        if (fase && fase.dosis) return String(fase.dosis);
+    const inicio = med.fecha_inicio || String(med.created_at || hoyISO).slice(0, 10);
+    for (const f of fases) {
+        const r = faseRango(f, inicio);
+        if (r && r.desde <= hoyISO && hoyISO <= r.hasta && f.dosis) return String(f.dosis);
     }
     return med.dosis ? String(med.dosis) : "";
 }

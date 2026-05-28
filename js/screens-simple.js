@@ -497,6 +497,31 @@ function hoyAR() {
     return new Date().toLocaleDateString('en-CA', { timeZone: 'America/Argentina/Buenos_Aires' });
 }
 
+/** Suma n días a una fecha "YYYY-MM-DD" y devuelve "YYYY-MM-DD". */
+function addDaysISO(iso, n) {
+    const d = new Date(iso + 'T00:00:00Z');
+    d.setUTCDate(d.getUTCDate() + n);
+    return d.toISOString().slice(0, 10);
+}
+
+/**
+ * Rango [desde, hasta] (ISO) de una fase. Shape nuevo: desde_fecha /
+ * hasta_fecha. Fallback shape viejo (desde_dia/hasta_dia): computa las
+ * fechas desde fecha_inicio. Devuelve null si no se puede resolver.
+ */
+function faseRango(f, fechaInicio) {
+    if (f.desde_fecha && f.hasta_fecha) {
+        return { desde: f.desde_fecha, hasta: f.hasta_fecha };
+    }
+    if (fechaInicio && f.desde_dia != null && f.hasta_dia != null) {
+        return {
+            desde: addDaysISO(fechaInicio, Number(f.desde_dia) - 1),
+            hasta: addDaysISO(fechaInicio, Number(f.hasta_dia) - 1)
+        };
+    }
+    return null;
+}
+
 /**
  * ¿El medicamento está activo HOY? Respeta fecha_inicio/fecha_fin si
  * existen (medicamentos viejos no las tienen → siempre activo). Espejo
@@ -512,33 +537,19 @@ function medActivoHoy(m) {
 }
 
 /**
- * Dosis del día: si el medicamento tiene fases, la de la fase que cubre
- * el día actual del tratamiento (1-based desde fecha_inicio); si no, la
- * dosis base. Espejo en JS del helper SQL public.dosis_hoy.
+ * Dosis del día: si el medicamento tiene fases, la de la fase cuyo rango
+ * de fechas cubre hoy; si no, la dosis base. Espejo en JS del helper SQL
+ * public.dosis_hoy.
  */
 function dosisDelDia(m) {
     const fases = Array.isArray(m.fases) ? m.fases : [];
     if (!fases.length) return m.dosis || '';
-    const inicio = m.fecha_inicio;
-    if (!inicio) return m.dosis || '';
-    const ms = new Date(hoyAR() + 'T00:00:00Z') - new Date(inicio + 'T00:00:00Z');
-    const dia = Math.floor(ms / 86400000) + 1;
-    const fase = fases.find(f => Number(f.desde_dia) <= dia && dia <= Number(f.hasta_dia));
-    return (fase && fase.dosis) ? fase.dosis : (m.dosis || '');
-}
-
-/** Resumen legible de las fases: "1 gota × 7 días → 2 gotas × 10 días". */
-function resumenFases(m) {
-    const fases = Array.isArray(m.fases) ? m.fases : [];
-    if (!fases.length) return '';
-    return fases
-        .slice()
-        .sort((a, b) => Number(a.desde_dia) - Number(b.desde_dia))
-        .map(f => {
-            const dias = Number(f.hasta_dia) - Number(f.desde_dia) + 1;
-            return `${f.dosis} × ${dias} día${dias === 1 ? '' : 's'}`;
-        })
-        .join(' → ');
+    const hoy = hoyAR();
+    for (const f of fases) {
+        const r = faseRango(f, m.fecha_inicio);
+        if (r && r.desde <= hoy && hoy <= r.hasta && f.dosis) return f.dosis;
+    }
+    return m.dosis || '';
 }
 
 function wireRemediosAviso($app) {
