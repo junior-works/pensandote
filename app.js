@@ -404,4 +404,19 @@ function actualizarBarraCirculo() {
 
 function desmontarBarraCirculo() {
     const b = document.getElementById('circulo-bar');
-    if (b)
+    if (b) b.remove();
+}
+
+/** Nombre corto para una tab: si empieza con "Círculo de X", devuelve
+ *  "X". Si no, devuelve el nombre tal cual. */
+function nombreCortoCirculo(nombre) {
+    if (!nombre) return 'Círculo';
+    const m = String(nombre).trim().match(/^c[íi]rculo de\s+(.+)$/i);
+    return m ? m[1] : nombre;
+}
+
+function escapeHtml(s) {
+    return String(s ?? '')
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
