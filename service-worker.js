@@ -18,7 +18,7 @@
  * correcto en ambos entornos.
  */
 
-const CACHE_NAME = 'pensandote-shell-v0.9.31';
+const CACHE_NAME = 'pensandote-shell-v0.9.32';
 
 const SHELL_FILES = [
     './',
@@ -40,8 +40,10 @@ const SHELL_FILES = [
     './js/screens-admin.js',
     './js/preview.js',
     './js/screens-papa.js',
+    './js/screens-haceme-acordar.js',
     './js/install-prompt.js',
     './js/data-emotiva.js',
+    './js/data-recordatorios.js',
     './js/audio.js',
     './js/auth.js',
     './js/circles.js'
@@ -187,7 +189,4 @@ self.addEventListener('notificationclick', (event) => {
         }
         // Si no hay ninguna abierta, la abrimos.
         if (self.clients.openWindow) {
-            return self.clients.openWindow(targetUrl);
-        }
-    })());
-});
+          

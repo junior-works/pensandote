@@ -137,6 +137,10 @@ export async function renderInicio($app) {
                 <span class="tarjeton__icono">💡</span>
                 <span class="tarjeton__label">Cómo hago…</span>
             </button>
+            <button class="tarjeton tarjeton--familia"     data-go="#/haceme-acordar">
+                <span class="tarjeton__icono">✏️</span>
+                <span class="tarjeton__label">Hacéme acordar</span>
+            </button>
         </nav>
 
         ${(() => {

@@ -29,6 +29,7 @@ import * as Hogar     from './js/screens-hogar.js';
 import * as Admin     from './js/screens-admin.js';
 import * as Preview   from './js/preview.js';
 import * as Papa      from './js/screens-papa.js';
+import * as HacemeAcordar from './js/screens-haceme-acordar.js';
 import { prepararDatosReales, limpiarDatosReales } from './js/preview.js';
 
 const $app = document.getElementById('app');
@@ -96,6 +97,7 @@ function renderRoutePreview(ruta) {
         if (ruta.name === 'como-hago')   return Simple.renderComoHago($app);
         if (ruta.name === 'tutorial')    return Simple.renderTutorial($app, ruta);
         if (ruta.name === 'como-hago-ia') return Simple.renderComoHagoIA($app);
+        if (ruta.name === 'haceme-acordar') return HacemeAcordar.renderHacemeAcordarSimple($app);
         if (ruta.name === 'v2') {
             const sub = ruta.params[0];
             // Historias: usamos el mismo render real (Papa.*) — ya tiene
@@ -207,6 +209,13 @@ function renderRouteReal(ruta) {
         if (ruta.name === 'como-hago')      return Simple.renderComoHago($app);
         if (ruta.name === 'tutorial')       return Simple.renderTutorial($app, ruta);
         if (ruta.name === 'como-hago-ia')   return Simple.renderComoHagoIA($app);
+        // Hacéme acordar — voz + IA. Pantalla distinta según modo.
+        if (ruta.name === 'haceme-acordar') {
+            if (state.membresiaReal?.interface_mode === 'simple') {
+                return HacemeAcordar.renderHacemeAcordarSimple($app);
+            }
+            return HacemeAcordar.renderHacemeAcordarAdmin($app);
+        }
         // #/v2/pense y #/v2/historias en modo real (no preview): pantallas
         // funcionales del papá. En preview el router las desvía/ignora
         // — ver renderRoutePreview más arriba.
@@ -395,19 +404,4 @@ function actualizarBarraCirculo() {
 
 function desmontarBarraCirculo() {
     const b = document.getElementById('circulo-bar');
-    if (b) b.remove();
-}
-
-/** Nombre corto para una tab: si empieza con "Círculo de X", devuelve
- *  "X". Si no, devuelve el nombre tal cual. */
-function nombreCortoCirculo(nombre) {
-    if (!nombre) return 'Círculo';
-    const m = String(nombre).trim().match(/^c[íi]rculo de\s+(.+)$/i);
-    return m ? m[1] : nombre;
-}
-
-function escapeHtml(s) {
-    return String(s ?? '')
-        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-}
+    if (b)
