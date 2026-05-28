@@ -378,6 +378,32 @@ export async function renderMedicoAdmin($app) {
 // =====================================================================
 // Medicación (admin) — lista, crear, editar, borrar + adherencia hoy
 // =====================================================================
+
+// Resumen del régimen para la lista: fases (si hay) + rango de fechas.
+function resumenRegimenMed(m) {
+    const fmt = (iso) => {
+        if (!iso) return '';
+        const p = String(iso).split('-'); // YYYY-MM-DD
+        return p.length === 3 ? `${p[2]}/${p[1]}` : iso;
+    };
+    const partes = [];
+    const fases = Array.isArray(m.fases) ? m.fases : [];
+    if (fases.length) {
+        const txt = fases.slice().sort((a, b) => Number(a.desde_dia) - Number(b.desde_dia))
+            .map(f => {
+                const dias = Number(f.hasta_dia) - Number(f.desde_dia) + 1;
+                return `${f.dosis} × ${dias} día${dias === 1 ? '' : 's'}`;
+            }).join(' → ');
+        partes.push(`💊 ${txt}`);
+    }
+    if (m.fecha_inicio) {
+        partes.push(m.fecha_fin
+            ? `📅 ${fmt(m.fecha_inicio)} → ${fmt(m.fecha_fin)}`
+            : `📅 desde ${fmt(m.fecha_inicio)}`);
+    }
+    return partes.join(' · ');
+}
+
 async function cargarMedicamentos(circleId, $cont) {
     if (!$cont) return;
     let meds = [];
@@ -414,6 +440,7 @@ async function cargarMedicamentos(circleId, $cont) {
                                 <button class="btn btn--mini btn--danger" data-del-med="${h(m.id)}" title="Borrar">×</button>
                             </div>
                         </div>
+                        ${(() => { const r = resumenRegimenMed(m); return r ? `<p class="meds-admin-item__regimen muted">${h(r)}</p>` : ''; })()}
                         ${m.instrucciones ? `<p class="meds-admin-item__inst muted">${h(m.instrucciones)}</p>` : ''}
                         <div class="meds-admin-item__slots">
                             ${horarios.length === 0
@@ -483,6 +510,11 @@ async function cargarMedicamentos(circleId, $cont) {
 function abrirFormMedicamento(circleId, medExistente, onSaved) {
     const editar = !!medExistente;
     const horariosInicial = Array.isArray(medExistente?.horarios) ? medExistente.horarios.join(', ') : '';
+    const hoyISO = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Argentina/Buenos_Aires' });
+    const fechaInicioVal = medExistente?.fecha_inicio || hoyISO;
+    const fechaFinVal    = medExistente?.fecha_fin || '';
+    const indefinido     = editar ? !medExistente.fecha_fin : true;
+    const fasesInicial   = Array.isArray(medExistente?.fases) ? medExistente.fases : [];
 
     const overlay = document.createElement('div');
     overlay.className = 'modal-overlay';
@@ -511,6 +543,28 @@ function abrirFormMedicamento(circleId, medExistente, onSaved) {
                     <input name="horarios" class="input-real" required
                            value="${h(horariosInicial)}" placeholder="08:00, 20:00">
                 </label>
+                <label class="stack">
+                    <span>Fecha de inicio</span>
+                    <input name="fecha_inicio" type="date" class="input-real" value="${h(fechaInicioVal)}">
+                </label>
+                <label class="med-form__check" id="wrap-indefinido">
+                    <input type="checkbox" name="indefinido" ${indefinido ? 'checked' : ''}>
+                    <span>Sin fecha de fin (tratamiento indefinido)</span>
+                </label>
+                <label class="stack" id="wrap-fecha-fin" style="${indefinido ? 'display:none;' : ''}">
+                    <span>Fecha de fin</span>
+                    <input name="fecha_fin" type="date" class="input-real" value="${h(fechaFinVal)}">
+                </label>
+                <fieldset class="med-fases">
+                    <legend>Fases — dosis que cambia por día (opcional)</legend>
+                    <p class="muted med-fases__hint">
+                        Si la dosis es siempre la misma, dejá esto vacío y usá el campo "Dosis" de arriba.
+                        Si cambia, agregá una fase por tramo: arrancan en el día 1 y no se pisan.
+                    </p>
+                    <div id="fases-lista"></div>
+                    <button type="button" class="btn btn--mini" id="btn-add-fase">+ Agregar fase</button>
+                    <p class="muted med-fases__fin" id="fases-fin"></p>
+                </fieldset>
                 <div class="modal__acciones modal__acciones--stack">
                     <button type="submit" class="btn btn--inicio">${editar ? 'Guardar cambios' : 'Crear'}</button>
                     <button type="button" class="btn btn--mini" data-cancel>Cancelar</button>
@@ -532,6 +586,95 @@ function abrirFormMedicamento(circleId, medExistente, onSaved) {
     overlay.querySelector('[data-cancel]').addEventListener('click', cerrar);
     overlay.addEventListener('click', e => { if (e.target === overlay) cerrar(); });
 
+    // ---- Fases dinámicas + fecha de fin ----
+    const $fasesLista = overlay.querySelector('#fases-lista');
+    const $btnAddFase = overlay.querySelector('#btn-add-fase');
+    const $fasesFin   = overlay.querySelector('#fases-fin');
+    const $wrapFin    = overlay.querySelector('#wrap-fecha-fin');
+    const $wrapIndef  = overlay.querySelector('#wrap-indefinido');
+    const $chkIndef   = overlay.querySelector('input[name=indefinido]');
+    const $inicio     = overlay.querySelector('input[name=fecha_inicio]');
+
+    function addDaysISO(iso, n) {
+        const d = new Date(iso + 'T00:00:00Z');
+        d.setUTCDate(d.getUTCDate() + n);
+        return d.toISOString().slice(0, 10);
+    }
+    function filaFaseHTML(f = {}) {
+        return `
+            <div class="med-fase-row" data-fase>
+                <label class="med-fase-row__f"><span>Desde día</span>
+                    <input type="number" min="1" class="input-real fase-desde" value="${h(f.desde_dia ?? '')}"></label>
+                <label class="med-fase-row__f"><span>Hasta día</span>
+                    <input type="number" min="1" class="input-real fase-hasta" value="${h(f.hasta_dia ?? '')}"></label>
+                <label class="med-fase-row__f med-fase-row__dosis"><span>Dosis</span>
+                    <input type="text" class="input-real fase-dosis" value="${h(f.dosis ?? '')}" placeholder="1 gota"></label>
+                <button type="button" class="btn btn--mini btn--danger" data-del-fase title="Quitar">×</button>
+            </div>`;
+    }
+    function leerFases() {
+        return [...$fasesLista.querySelectorAll('[data-fase]')].map(row => ({
+            desde_dia: parseInt(row.querySelector('.fase-desde').value, 10),
+            hasta_dia: parseInt(row.querySelector('.fase-hasta').value, 10),
+            dosis:     String(row.querySelector('.fase-dosis').value || '').trim()
+        }));
+    }
+    function hayFases() { return $fasesLista.querySelector('[data-fase]') != null; }
+    function recomputar() {
+        const tieneFases = hayFases();
+        $wrapIndef.style.display = tieneFases ? 'none' : '';
+        $wrapFin.style.display   = tieneFases ? 'none' : ($chkIndef.checked ? 'none' : '');
+        if (tieneFases) {
+            const fases = leerFases();
+            const maxHasta = Math.max(0, ...fases.map(f => Number(f.hasta_dia) || 0));
+            const inicio = $inicio.value || hoyISO;
+            $fasesFin.textContent = (maxHasta > 0 && inicio)
+                ? `Termina el ${addDaysISO(inicio, maxHasta - 1)} (día ${maxHasta} del tratamiento).`
+                : '';
+        } else {
+            $fasesFin.textContent = '';
+        }
+    }
+    $fasesLista.innerHTML = fasesInicial.map(filaFaseHTML).join('');
+    $btnAddFase.addEventListener('click', () => {
+        $fasesLista.insertAdjacentHTML('beforeend', filaFaseHTML());
+        recomputar();
+    });
+    $fasesLista.addEventListener('click', (e) => {
+        const del = e.target.closest('[data-del-fase]');
+        if (del) { del.closest('[data-fase]').remove(); recomputar(); }
+    });
+    $fasesLista.addEventListener('input', recomputar);
+    $inicio.addEventListener('input', recomputar);
+    $chkIndef.addEventListener('change', recomputar);
+    recomputar();
+
+    // Valida fases: arrancan en día 1, desde<=hasta, no se solapan.
+    // Devuelve { fases, fechaFin } o lanza Error con mensaje legible.
+    function validarFases(fechaInicio) {
+        const crudas = leerFases();
+        // Toda fila tiene que estar completa.
+        for (const f of crudas) {
+            if (!Number.isFinite(f.desde_dia) || !Number.isFinite(f.hasta_dia) || !f.dosis) {
+                throw new Error('Completá las 3 columnas de cada fase (desde, hasta y dosis).');
+            }
+            if (f.desde_dia < 1 || f.hasta_dia < f.desde_dia) {
+                throw new Error('En cada fase, "desde" tiene que ser ≥ 1 y "hasta" ≥ "desde".');
+            }
+        }
+        const fases = crudas.slice().sort((a, b) => a.desde_dia - b.desde_dia);
+        if (fases[0].desde_dia !== 1) {
+            throw new Error('La primera fase tiene que arrancar en el día 1.');
+        }
+        for (let i = 1; i < fases.length; i++) {
+            if (fases[i].desde_dia <= fases[i - 1].hasta_dia) {
+                throw new Error('Las fases no pueden pisarse (una arranca antes de que termine la anterior).');
+            }
+        }
+        const maxHasta = Math.max(...fases.map(f => f.hasta_dia));
+        return { fases, fechaFin: addDaysISO(fechaInicio, maxHasta - 1) };
+    }
+
     overlay.querySelector('#form-med').addEventListener('submit', async (ev) => {
         ev.preventDefault();
         const fd = new FormData(ev.target);
@@ -548,11 +691,41 @@ function abrirFormMedicamento(circleId, medExistente, onSaved) {
             });
             return;
         }
+        const fechaInicio = String(fd.get('fecha_inicio') || '').trim() || hoyISO;
+        let fases = [];
+        let fechaFin = null;
+        if (hayFases()) {
+            // Con fases, la fecha de fin se deriva del último día.
+            try {
+                ({ fases, fechaFin } = validarFases(fechaInicio));
+            } catch (err) {
+                await modal({
+                    titulo: 'Revisá las fases',
+                    cuerpo: `<p>${h(err.message)}</p>`,
+                    acciones: [{ label: 'OK', value: 'ok' }]
+                });
+                return;
+            }
+        } else {
+            // Sin fases: fecha de fin manual salvo "indefinido".
+            fechaFin = $chkIndef.checked ? null : (String(fd.get('fecha_fin') || '').trim() || null);
+        }
+        if (fechaFin && fechaFin < fechaInicio) {
+            await modal({
+                titulo: 'Fechas inválidas',
+                cuerpo: '<p>La fecha de fin no puede ser anterior a la de inicio.</p>',
+                acciones: [{ label: 'OK', value: 'ok' }]
+            });
+            return;
+        }
         const payload = {
             nombre:        String(fd.get('nombre') || '').trim(),
             dosis:         String(fd.get('dosis') || '').trim() || null,
             instrucciones: String(fd.get('instrucciones') || '').trim() || null,
-            horarios
+            horarios,
+            fecha_inicio:  fechaInicio,
+            fecha_fin:     fechaFin,
+            fases
         };
         const btn = ev.target.querySelector('button[type=submit]');
         btn.disabled = true; btn.textContent = 'Guardando…';

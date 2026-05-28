@@ -463,7 +463,7 @@ function wireCheckin($app) {
 // no fueron confirmados. Mostramos todos los past-due en una sola
 // tarjeta arriba, con un botón "Ya la tomé" por cada slot.
 function remediosPendientesAhora() {
-    const meds = (getMedicamentos() || []).filter(m => m.activo);
+    const meds = (getMedicamentos() || []).filter(m => m.activo && medActivoHoy(m));
     if (!meds.length) return [];
     const tomas = getTomasHoy() || [];
     const ahora = horaActualAR(); // "HH:MM"
@@ -474,7 +474,7 @@ function remediosPendientesAhora() {
         for (const horario of horarios) {
             if (yaTomado.has(`${m.id}|${horario}`)) continue;
             if (horario <= ahora) {  // ya llegó la hora
-                pend.push({ medId: m.id, nombre: m.nombre, dosis: m.dosis, horario });
+                pend.push({ medId: m.id, nombre: m.nombre, dosis: dosisDelDia(m), horario });
             }
         }
     }
@@ -490,6 +490,55 @@ function horaActualAR() {
         hour: '2-digit', minute: '2-digit', hour12: false
     });
     return f; // "HH:MM"
+}
+
+/** "YYYY-MM-DD" en zona Argentina (mismo criterio que el backend). */
+function hoyAR() {
+    return new Date().toLocaleDateString('en-CA', { timeZone: 'America/Argentina/Buenos_Aires' });
+}
+
+/**
+ * ¿El medicamento está activo HOY? Respeta fecha_inicio/fecha_fin si
+ * existen (medicamentos viejos no las tienen → siempre activo). Espejo
+ * en JS del helper SQL public.medicamento_activo_hoy.
+ */
+function medActivoHoy(m) {
+    const hoy = hoyAR();
+    const inicio = m.fecha_inicio || null;
+    const fin = m.fecha_fin || null;
+    if (inicio && hoy < inicio) return false;
+    if (fin && hoy > fin) return false;
+    return true;
+}
+
+/**
+ * Dosis del día: si el medicamento tiene fases, la de la fase que cubre
+ * el día actual del tratamiento (1-based desde fecha_inicio); si no, la
+ * dosis base. Espejo en JS del helper SQL public.dosis_hoy.
+ */
+function dosisDelDia(m) {
+    const fases = Array.isArray(m.fases) ? m.fases : [];
+    if (!fases.length) return m.dosis || '';
+    const inicio = m.fecha_inicio;
+    if (!inicio) return m.dosis || '';
+    const ms = new Date(hoyAR() + 'T00:00:00Z') - new Date(inicio + 'T00:00:00Z');
+    const dia = Math.floor(ms / 86400000) + 1;
+    const fase = fases.find(f => Number(f.desde_dia) <= dia && dia <= Number(f.hasta_dia));
+    return (fase && fase.dosis) ? fase.dosis : (m.dosis || '');
+}
+
+/** Resumen legible de las fases: "1 gota × 7 días → 2 gotas × 10 días". */
+function resumenFases(m) {
+    const fases = Array.isArray(m.fases) ? m.fases : [];
+    if (!fases.length) return '';
+    return fases
+        .slice()
+        .sort((a, b) => Number(a.desde_dia) - Number(b.desde_dia))
+        .map(f => {
+            const dias = Number(f.hasta_dia) - Number(f.desde_dia) + 1;
+            return `${f.dosis} × ${dias} día${dias === 1 ? '' : 's'}`;
+        })
+        .join(' → ');
 }
 
 function wireRemediosAviso($app) {
@@ -573,7 +622,7 @@ export function renderSalud($app) {
 
 /** Pantalla "Mis remedios" — lista de medicación con horarios de hoy. */
 export function renderRemedios($app) {
-    const meds = (getMedicamentos() || []).filter(m => m.activo);
+    const meds = (getMedicamentos() || []).filter(m => m.activo && medActivoHoy(m));
     const tomas = getTomasHoy() || [];
     const yaTomado = new Map(); // medId|horario → toma
     for (const t of tomas) yaTomado.set(`${t.medicamento_id}|${t.horario}`, t);
@@ -596,7 +645,7 @@ export function renderRemedios($app) {
                         <li class="remedio-card">
                             <div class="remedio-card__head">
                                 <strong>${h(m.nombre)}</strong>
-                                ${m.dosis ? `<small>${h(m.dosis)}</small>` : ''}
+                                ${dosisDelDia(m) ? `<small>${h(dosisDelDia(m))}</small>` : ''}
                             </div>
                             ${m.instrucciones ? `
                                 <p class="remedio-card__inst">${h(m.instrucciones)}</p>

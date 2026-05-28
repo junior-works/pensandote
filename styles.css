@@ -724,6 +724,19 @@ body[data-mode="simple"] .avisos-mini__txt { font-weight: 700; font-size: var(--
 body[data-mode="simple"] .avisos-mini--bloq { opacity: 0.85; }
 body[data-mode="simple"] .avisos-mini__ayuda { font-size: var(--fs-xs); margin: 0.3rem 0 1rem; }
 
+/* ---- Form de medicamento: fechas + fases de régimen (modal admin) ---- */
+.med-form__check { display: flex; align-items: center; gap: 0.5rem; }
+.med-form__check input { width: auto; }
+.med-fases { border: 1px dashed var(--line); border-radius: var(--r-md); padding: 0.7rem 0.8rem; margin: 0; }
+.med-fases legend { font-weight: 700; padding: 0 0.4rem; }
+.med-fases__hint { font-size: 0.85em; margin: 0 0 0.6rem; }
+.med-fases__fin { font-size: 0.9em; margin: 0.5rem 0 0; }
+.med-fase-row { display: flex; gap: 0.5rem; align-items: flex-end; margin-bottom: 0.5rem; flex-wrap: wrap; }
+.med-fase-row__f { display: flex; flex-direction: column; gap: 0.2rem; flex: 1; min-width: 80px; }
+.med-fase-row__f span { font-size: 0.8em; color: var(--ink-soft); }
+.med-fase-row__dosis { flex: 2; min-width: 120px; }
+.meds-admin-item__regimen { font-size: 0.9em; margin: 0.2rem 0; }
+
 /* Corazón "pensé en vos" sobre cada foto (galería + lightbox) */
 .foto-corazon {
     position: absolute;

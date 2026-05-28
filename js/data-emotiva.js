@@ -875,7 +875,7 @@ export async function ultimosCheckinsPorMiembro(circleId) {
 export async function listarMedicamentos(circleId, { soloActivos = false } = {}) {
     const sb = await sbClient();
     let q = sb.from('medicamentos')
-        .select('id, circle_id, nombre, dosis, instrucciones, horarios, activo, created_at')
+        .select('id, circle_id, nombre, dosis, instrucciones, horarios, activo, created_at, fecha_inicio, fecha_fin, fases')
         .eq('circle_id', circleId);
     if (soloActivos) q = q.eq('activo', true);
     const { data, error } = await q.order('created_at', { ascending: true });
@@ -883,23 +883,29 @@ export async function listarMedicamentos(circleId, { soloActivos = false } = {})
     return data || [];
 }
 
-export async function crearMedicamento(circleId, { nombre, dosis, instrucciones, horarios, activo = true }) {
+export async function crearMedicamento(circleId, { nombre, dosis, instrucciones, horarios, activo = true, fecha_inicio = null, fecha_fin = null, fases = [] }) {
     const sb = await sbClient();
-    const { data, error } = await sb.from('medicamentos').insert({
+    const row = {
         circle_id:     circleId,
         nombre:        String(nombre || '').trim(),
         dosis:         dosis ? String(dosis).trim() : null,
         instrucciones: instrucciones ? String(instrucciones).trim() : null,
         horarios:      Array.isArray(horarios) ? horarios : [],
-        activo:        !!activo
-    }).select().single();
+        activo:        !!activo,
+        fecha_fin:     fecha_fin || null,
+        fases:         Array.isArray(fases) ? fases : []
+    };
+    // fecha_inicio tiene default current_date en la DB — solo la mandamos
+    // si el form la especificó.
+    if (fecha_inicio) row.fecha_inicio = fecha_inicio;
+    const { data, error } = await sb.from('medicamentos').insert(row).select().single();
     if (error) throw enriquecer('insert medicamentos', error);
     return data;
 }
 
 export async function editarMedicamento(id, patch) {
     const sb = await sbClient();
-    const allowed = ['nombre','dosis','instrucciones','horarios','activo'];
+    const allowed = ['nombre','dosis','instrucciones','horarios','activo','fecha_inicio','fecha_fin','fases'];
     const clean = {};
     for (const k of allowed) if (k in patch) clean[k] = patch[k];
     const { data, error } = await sb.from('medicamentos').update(clean)
