@@ -18,7 +18,7 @@
  * correcto en ambos entornos.
  */
 
-const CACHE_NAME = 'pensandote-shell-v0.9.32';
+const CACHE_NAME = 'pensandote-shell-v0.9.33';
 
 const SHELL_FILES = [
     './',
@@ -189,4 +189,7 @@ self.addEventListener('notificationclick', (event) => {
         }
         // Si no hay ninguna abierta, la abrimos.
         if (self.clients.openWindow) {
-          
+            return self.clients.openWindow(targetUrl);
+        }
+    })());
+});
