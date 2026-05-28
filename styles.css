@@ -684,6 +684,46 @@ body[data-mode="dashboard"] .ideas-sugeridas__chip {
 }
 .pense-aviso small { color: var(--ink-soft); }
 
+/* ---- Avisos (Web Push) en el home del papá ----
+   Cartel grande cálido la primera vez (auto-prompt), fila discreta el
+   resto del tiempo. Sólo modo simple. */
+body[data-mode="simple"] #avisos-simple:empty { display: none; }
+body[data-mode="simple"] .avisos-cta {
+    background: #fff4e0;
+    text-align: center;
+    margin: 0 0 1.2rem;
+}
+body[data-mode="simple"] .avisos-cta__titulo { margin: 0 0 0.2rem; line-height: 1.1; }
+body[data-mode="simple"] .avisos-cta__texto {
+    margin: 0 0 0.9rem;
+    font-size: var(--fs-sm);
+    color: var(--ink-soft);
+}
+body[data-mode="simple"] .avisos-cta__no {
+    margin-top: 0.6rem;
+    min-height: 0;
+    padding: 0.5em;
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    font-size: var(--fs-sm);
+    color: var(--ink-soft);
+    text-decoration: underline;
+}
+body[data-mode="simple"] .avisos-mini {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 0.6rem; flex-wrap: wrap;
+    background: #fffaf0;
+    border: var(--bw-s) solid var(--line-s);
+    border-radius: var(--r-s-sm);
+    box-shadow: var(--sh-s-sm);
+    padding: 0.6em 0.9em;
+    margin: 0 0 0.4rem;
+}
+body[data-mode="simple"] .avisos-mini__txt { font-weight: 700; font-size: var(--fs-sm); }
+body[data-mode="simple"] .avisos-mini--bloq { opacity: 0.85; }
+body[data-mode="simple"] .avisos-mini__ayuda { font-size: var(--fs-xs); margin: 0.3rem 0 1rem; }
+
 /* Corazón "pensé en vos" sobre cada foto (galería + lightbox) */
 .foto-corazon {
     position: absolute;
