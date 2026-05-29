@@ -30,8 +30,9 @@ import {
     listarPuntas, crearPunta, borrarPunta,
     ultimosCheckinsPorMiembro,
     estadoAvisos, activarAvisos, desactivarAvisos, probarAviso,
-    actividadReciente
+    actividadReciente, listarEstudios
 } from './data-emotiva.js';
+import { contarEstudiosNoVistos } from './screens-estudios.js';
 import { entrarPreviewVerComoPapa, limpiarDatosReales } from './preview.js';
 
 // LocalStorage key para marcar pensamientos recibidos como "vistos".
@@ -124,6 +125,7 @@ export async function renderHogar($app) {
                 <button class="btn" id="btn-medico">🩺 Datos médicos</button>
                 <button class="btn" id="btn-accesos">🔗 Accesos / Trámites</button>
                 <button class="btn" id="btn-recordatorios">✏️ Recordatorios</button>
+                <button class="btn" id="btn-estudios">📄 Estudios</button>
                 <button class="btn" id="btn-guia">❔ Guía rápida</button>
                 <button class="btn" id="btn-ver-como" style="grid-column:1 / -1;">
                     👀 Ver como lo ve ${h(parentescoSimpleEnCirculo() || 'tu familiar')}
@@ -321,6 +323,7 @@ export async function renderHogar($app) {
         $app.querySelector('#btn-medico').addEventListener('click',    () => go('#/datos-medicos'));
         $app.querySelector('#btn-accesos').addEventListener('click',   () => go('#/accesos-admin'));
         $app.querySelector('#btn-recordatorios').addEventListener('click', () => go('#/haceme-acordar'));
+        $app.querySelector('#btn-estudios').addEventListener('click',  () => go('#/estudios'));
         $app.querySelector('#btn-guia').addEventListener('click',      () => go('#/guia-admin'));
         const btnVerComo = $app.querySelector('#btn-ver-como');
         if (btnVerComo) btnVerComo.addEventListener('click', async () => {
@@ -402,6 +405,9 @@ export async function renderHogar($app) {
 
         // Muro de actividad reciente — merge de eventos de varias tablas.
         cargarActividadReciente(c, $app.querySelector('#sec-actividad'));
+
+        // Badge de estudios nuevos (sin que el admin los haya abierto).
+        pintarBadgeEstudios(c, $app);
 
         // Sección "Ideas para contar" — wire form + cargar cola/sugeridas inicial.
         const $formPunta = $app.querySelector('#form-punta');
@@ -1491,6 +1497,23 @@ async function cargarActividadReciente(c, $cont) {
             `).join('')}
         </ul>
     `;
+}
+
+// =====================================================================
+// Badge de "estudios nuevos" en el botón Estudios del dashboard
+// =====================================================================
+async function pintarBadgeEstudios(c, $app) {
+    const $btn = $app.querySelector('#btn-estudios');
+    if (!$btn) return;
+    try {
+        const estudios = await listarEstudios(c.id);
+        const nuevos = contarEstudiosNoVistos(estudios);
+        if (nuevos > 0) {
+            $btn.innerHTML = `📄 Estudios <span class="badge-nuevo">${nuevos} nuevo${nuevos === 1 ? '' : 's'}</span>`;
+        }
+    } catch (err) {
+        console.warn('[badge estudios]', err);
+    }
 }
 
 // =====================================================================

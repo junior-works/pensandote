@@ -510,6 +510,81 @@ export async function consultarOrganismos(pregunta) {
 }
 
 // =====================================================================
+// Mis estudios — subida + análisis IA (edge function analizar-estudio)
+// =====================================================================
+
+/**
+ * Manda un estudio (foto/PDF en base64) a analizar-estudio. La edge
+ * function lo sube al bucket, lo clasifica y guarda la fila.
+ * @returns { ok:true, estudio } | { ok:false, puede_leer:false, mensaje }
+ */
+export async function analizarEstudio({ circleId, pacienteUserId, archivoBase64, archivoMime, descripcion = '' }) {
+    const cfg = window.PENSANDOTE_CONFIG;
+    const sb = await sbClient();
+    const { data: sess } = await sb.auth.getSession();
+    const token = sess?.session?.access_token;
+    if (!token) throw enriquecer('analizar-estudio', new Error('Tenés que estar logueado.'));
+    const url = `${cfg.SUPABASE_URL}/functions/v1/analizar-estudio`;
+    let resp;
+    try {
+        resp = await fetch(url, {
+            method:  'POST',
+            headers: {
+                'Content-Type':  'application/json',
+                'apikey':        cfg.SUPABASE_ANON_KEY,
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({
+                archivo_base64:       archivoBase64,
+                archivo_mime:         archivoMime,
+                circle_id:            circleId,
+                paciente_user_id:     pacienteUserId,
+                descripcion_opcional: descripcion
+            })
+        });
+    } catch (e) {
+        throw enriquecer('analizar-estudio fetch', e);
+    }
+    const data = await resp.json().catch(() => ({}));
+    if (!resp.ok || data.error) {
+        const e = new Error(data.error || `HTTP ${resp.status}`);
+        e.status = resp.status;
+        e.detalle = data;
+        throw enriquecer('analizar-estudio', e);
+    }
+    return data;
+}
+
+/** Lista los estudios del círculo (más nuevo primero). */
+export async function listarEstudios(circleId) {
+    const sb = await sbClient();
+    const { data, error } = await sb.from('estudios_medicos')
+        .select('*')
+        .eq('circle_id', circleId)
+        .order('created_at', { ascending: false });
+    if (error) throw enriquecer('select estudios', error);
+    return data || [];
+}
+
+/** user_id del miembro en modo simple del círculo (el paciente). null si no hay. */
+export async function userSimpleDelCirculo(circleId) {
+    const sb = await sbClient();
+    const { data, error } = await sb.from('circle_members')
+        .select('user_id')
+        .eq('circle_id', circleId)
+        .eq('interface_mode', 'simple')
+        .limit(1)
+        .maybeSingle();
+    if (error) return null;
+    return data?.user_id || null;
+}
+
+/** blob: URL del archivo de un estudio (bucket privado). El caller revoca. */
+export async function urlEstudio(path) {
+    return descargarComoObjectURL('estudios', path);
+}
+
+// =====================================================================
 // Contactos del círculo (tabla public.contacts)
 // =====================================================================
 export async function listarContactos(circleId) {

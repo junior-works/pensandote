@@ -42,6 +42,7 @@ const SHELL_FILES = [
     './js/screens-papa.js',
     './js/screens-haceme-acordar.js',
     './js/screens-pami-anses.js',
+    './js/screens-estudios.js',
     './js/install-prompt.js',
     './js/data-emotiva.js',
     './js/data-recordatorios.js',

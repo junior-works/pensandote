@@ -737,6 +737,14 @@ body[data-mode="simple"] .avisos-mini__ayuda { font-size: var(--fs-xs); margin: 
 .med-fase-row__dosis { flex: 2; min-width: 120px; }
 .meds-admin-item__regimen { font-size: 0.9em; margin: 0.2rem 0; }
 
+/* Chip "N nuevos" (ej: botón Estudios del dashboard) */
+.badge-nuevo {
+    display: inline-block;
+    background: var(--accent-pense); color: #fff;
+    border-radius: 999px; padding: 0.1em 0.6em;
+    font-size: 0.75em; font-weight: 700; margin-left: 0.4rem;
+}
+
 /* Corazón "pensé en vos" sobre cada foto (galería + lightbox) */
 .foto-corazon {
     position: absolute;
