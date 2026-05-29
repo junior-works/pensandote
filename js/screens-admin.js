@@ -1105,8 +1105,14 @@ function abrirDetalleMedico(circleId, m, onChange) {
     overlay.addEventListener('click', e => { if (e.target === overlay) cerrar(); });
 
     overlay.querySelector('#med-editar').addEventListener('click', () => {
+        // Cerramos el modal de detalle ANTES de abrir el form: cerrar()
+        // dispara un history.back() async (cleanup del back-button). Si
+        // abríamos el form de forma sincrónica, ese back fireaba después
+        // del pushState del form y le cerraba la entry → el form se
+        // abría y se cerraba al toque. setTimeout(0) lo deja para
+        // después del popstate, así el form sobrevive.
         cerrar();
-        abrirFormMedico(circleId, m, onChange);
+        setTimeout(() => abrirFormMedico(circleId, m, onChange), 0);
     });
     overlay.querySelector('#med-borrar').addEventListener('click', async () => {
         const ok = await modal({
