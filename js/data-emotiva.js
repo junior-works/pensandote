@@ -468,6 +468,47 @@ export async function preguntarComoHagoIA(pregunta) {
     return data; // { explicacion, youtube_query }
 }
 
+/**
+ * Consulta a PAMI/ANSES respondida solo con sitios oficiales (edge
+ * function consulta-organismos, que usa web_search restringido).
+ * Devuelve { estado:'ok'|'sin_respuesta'|'fuera_de_tema', respuesta,
+ * fuentes?, telefonos_ayuda? }. Tira error en fallo técnico (con
+ * err.detalle.telefonos_ayuda si vino).
+ */
+export async function consultarOrganismos(pregunta) {
+    const cfg = window.PENSANDOTE_CONFIG;
+    const sb = await sbClient();
+    const { data: sess } = await sb.auth.getSession();
+    const token = sess?.session?.access_token;
+    if (!token) {
+        throw enriquecer('consulta-organismos',
+            new Error('Tenés que estar logueado para usar esta función.'));
+    }
+    const url = `${cfg.SUPABASE_URL}/functions/v1/consulta-organismos`;
+    let resp;
+    try {
+        resp = await fetch(url, {
+            method:  'POST',
+            headers: {
+                'Content-Type':  'application/json',
+                'apikey':        cfg.SUPABASE_ANON_KEY,
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({ pregunta })
+        });
+    } catch (e) {
+        throw enriquecer('consulta-organismos fetch', e);
+    }
+    const data = await resp.json().catch(() => ({}));
+    if (!resp.ok || data.error) {
+        const e = new Error(data.error || `HTTP ${resp.status}`);
+        e.status = resp.status;
+        e.detalle = data;
+        throw enriquecer('consulta-organismos', e);
+    }
+    return data; // { estado, respuesta, fuentes?, telefonos_ayuda? }
+}
+
 // =====================================================================
 // Contactos del círculo (tabla public.contacts)
 // =====================================================================

@@ -626,6 +626,10 @@ export function renderSalud($app) {
                 <span class="tarjeton__icono">💊</span>
                 <span class="tarjeton__label">Mis remedios</span>
             </button>
+            <button class="tarjeton tarjeton--medico" data-go="#/pami-anses">
+                <span class="tarjeton__icono">🏛️</span>
+                <span class="tarjeton__label">PAMI y ANSES</span>
+            </button>
         </div>
     `;
     wireNav($app);

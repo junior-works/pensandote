@@ -30,6 +30,7 @@ import * as Admin     from './js/screens-admin.js';
 import * as Preview   from './js/preview.js';
 import * as Papa      from './js/screens-papa.js';
 import * as HacemeAcordar from './js/screens-haceme-acordar.js';
+import * as PamiAnses from './js/screens-pami-anses.js';
 import { prepararDatosReales, limpiarDatosReales } from './js/preview.js';
 
 const $app = document.getElementById('app');
@@ -47,6 +48,7 @@ const RUTAS = {
     'como-hago':    { simple: Simple.renderComoHago },
     'como-hago-ia': { simple: Simple.renderComoHagoIA },
     'tutorial':     { simple: Simple.renderTutorial },
+    'pami-anses':   { simple: PamiAnses.renderPamiAnses },
     'config':       { dashboard: Dashboard.renderConfig },
 
     'v2': {
@@ -97,6 +99,7 @@ function renderRoutePreview(ruta) {
         if (ruta.name === 'como-hago')   return Simple.renderComoHago($app);
         if (ruta.name === 'tutorial')    return Simple.renderTutorial($app, ruta);
         if (ruta.name === 'como-hago-ia') return Simple.renderComoHagoIA($app);
+        if (ruta.name === 'pami-anses') return PamiAnses.renderPamiAnses($app);
         if (ruta.name === 'haceme-acordar') return HacemeAcordar.renderHacemeAcordarSimple($app);
         if (ruta.name === 'v2') {
             const sub = ruta.params[0];
@@ -209,6 +212,7 @@ function renderRouteReal(ruta) {
         if (ruta.name === 'como-hago')      return Simple.renderComoHago($app);
         if (ruta.name === 'tutorial')       return Simple.renderTutorial($app, ruta);
         if (ruta.name === 'como-hago-ia')   return Simple.renderComoHagoIA($app);
+        if (ruta.name === 'pami-anses')     return PamiAnses.renderPamiAnses($app);
         // Hacéme acordar — voz + IA. Pantalla distinta según modo.
         if (ruta.name === 'haceme-acordar') {
             if (state.membresiaReal?.interface_mode === 'simple') {
