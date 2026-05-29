@@ -12,7 +12,7 @@
  * mover el estado, y el router re-renderiza.
  */
 
-import { onRouteChange, refresh as refreshRouter, currentRoute } from './js/router.js';
+import { onRouteChange, refresh as refreshRouter, currentRoute, go } from './js/router.js';
 import { state, onStateChange, miembroActivo, setSesionReal, setModo } from './js/state.js';
 import { montarDevPanel } from './js/dev-panel.js';
 import { esEntornoDev } from './js/ui.js';
@@ -257,6 +257,17 @@ async function bootstrap() {
     // Cartel "📲 Instalar Pensándote" cuando el browser lo permite.
     montarInstall();
     onStateChange(() => refreshRouter());
+
+    // Deep-link de notificaciones: cuando la app YA está abierta y el
+    // usuario toca un push, el service worker enfoca la pestaña y postea
+    // {type:'push-navigate', url}. Navegamos a esa ruta. Guard para
+    // registrar el listener una sola vez.
+    if ('serviceWorker' in navigator && !window.__pushNavBound) {
+        window.__pushNavBound = true;
+        navigator.serviceWorker.addEventListener('message', (e) => {
+            if (e.data?.type === 'push-navigate' && e.data.url) go(e.data.url);
+        });
+    }
 
     if (configEsReal()) {
         // Procesar el callback si la URL trae tokens del magic link.

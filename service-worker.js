@@ -18,7 +18,7 @@
  * correcto en ambos entornos.
  */
 
-const CACHE_NAME = 'pensandote-shell-v0.9.33';
+const CACHE_NAME = 'pensandote-shell-v0.9.34';
 
 const SHELL_FILES = [
     './',
@@ -189,9 +189,15 @@ self.addEventListener('notificationclick', (event) => {
                 return client.focus();
             }
         }
-        // Si no hay ninguna abierta, la abrimos.
+        // Si no hay ninguna abierta, la abrimos. Resolvemos contra el
+        // scope (la raíz de la app) y NO contra la URL del service worker:
+        // una URL de solo fragmento ('#/inicio') resuelta contra
+        // '.../service-worker.js' abriría el propio SW como documento
+        // (se ve el código fuente). Contra el scope ('.../') carga
+        // index.html con el hash correcto.
         if (self.clients.openWindow) {
-            return self.clients.openWindow(targetUrl);
+            const dest = new URL(targetUrl, self.registration.scope).href;
+            return self.clients.openWindow(dest);
         }
     })());
 });
