@@ -133,7 +133,7 @@ export async function renderContactosAdmin($app) {
 
 function abrirFormContacto(circleId, contacto, onSaved) {
     const editando = !!contacto;
-    const v = contacto || { nombre: '', parentesco: '', telefono: '', foto_url: '', es_emergencia: false, orden: 0 };
+    const v = contacto || { nombre: '', parentesco: '', telefono: '', foto_url: '', es_familia: true, es_emergencia: false, orden: 0 };
 
     const overlay = document.createElement('div');
     overlay.className = 'modal-overlay';
@@ -162,8 +162,12 @@ function abrirFormContacto(circleId, contacto, onSaved) {
                            placeholder="https://…">
                 </label>
                 <label style="display:flex;align-items:center;gap:0.6rem;cursor:pointer;">
+                    <input type="checkbox" name="es_familia" ${v.es_familia !== false ? 'checked' : ''}>
+                    <span>👨‍👩‍👧 Aparece en Familia</span>
+                </label>
+                <label style="display:flex;align-items:center;gap:0.6rem;cursor:pointer;">
                     <input type="checkbox" name="es_emergencia" ${v.es_emergencia ? 'checked' : ''}>
-                    <span>🚨 Contacto de emergencia (aparece en la pantalla Emergencias)</span>
+                    <span>🚨 Aparece en Emergencias</span>
                 </label>
                 <label class="stack">
                     <span>Orden en la lista (más chico aparece primero)</span>
@@ -200,9 +204,18 @@ function abrirFormContacto(circleId, contacto, onSaved) {
             parentesco:    String(fd.get('parentesco') || '').trim() || null,
             telefono:      String(fd.get('telefono') || '').trim(),
             foto_url:      String(fd.get('foto_url') || '').trim() || null,
+            es_familia:    !!fd.get('es_familia'),
             es_emergencia: !!fd.get('es_emergencia'),
             orden:         Number(fd.get('orden') || 0)
         };
+        if (!datos.es_familia && !datos.es_emergencia) {
+            await modal({
+                titulo: 'Falta marcar dónde aparece',
+                cuerpo: '<p>El contacto tiene que aparecer al menos en una pantalla: Familia o Emergencias.</p>',
+                acciones: [{ label: 'OK', clase: 'btn--inicio', value: 'ok' }]
+            });
+            return;
+        }
         const btn = e.target.querySelector('button[type=submit]');
         const orig = btn.textContent;
         btn.disabled = true; btn.textContent = 'Guardando…';

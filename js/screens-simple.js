@@ -947,7 +947,12 @@ export function renderEmergencias($app) {
 // FAMILIA
 // =====================================================================
 export function renderFamilia($app) {
-    const familia = getContactos().filter(c => !c.es_emergencia);
+    // Las flags es_familia y es_emergencia son independientes (un contacto
+    // puede estar en una pantalla, en la otra, o en las dos).
+    // Compat con datos viejos sin la columna: si es_familia viene undefined,
+    // tratamos al contacto como familia si NO es de emergencia.
+    const familia = getContactos().filter(c =>
+        c.es_familia === undefined ? !c.es_emergencia : c.es_familia);
     $app.innerHTML = `
         ${barraVolver('Familia', 'familia')}
 

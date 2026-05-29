@@ -621,12 +621,15 @@ export async function listarContactos(circleId) {
     return data || [];
 }
 
-export async function crearContacto({ circleId, nombre, parentesco, telefono, foto_url, es_emergencia, orden }) {
+export async function crearContacto({ circleId, nombre, parentesco, telefono, foto_url, es_emergencia, es_familia, orden }) {
     const sb = await sbClient();
     const { error } = await sb.from('contacts').insert({
         circle_id:     circleId,
         nombre, parentesco, telefono, foto_url,
         es_emergencia: !!es_emergencia,
+        // Default true: si no lo mandás, va a Familia (matchea el default
+        // de la columna). Las flags son independientes.
+        es_familia:    es_familia === undefined ? true : !!es_familia,
         orden:         Number(orden) || 0
     });
     if (error) throw enriquecer('insert contacts', error);
@@ -634,11 +637,15 @@ export async function crearContacto({ circleId, nombre, parentesco, telefono, fo
 
 export async function actualizarContacto(id, datos) {
     const sb = await sbClient();
-    const { error } = await sb.from('contacts').update({
+    const update = {
         ...datos,
         es_emergencia: !!datos.es_emergencia,
         orden:         Number(datos.orden) || 0
-    }).eq('id', id);
+    };
+    // Solo sobreescribimos es_familia si el caller la mandó (evita
+    // clobberear el flag en updates parciales que no lo incluyen).
+    if ('es_familia' in datos) update.es_familia = !!datos.es_familia;
+    const { error } = await sb.from('contacts').update(update).eq('id', id);
     if (error) throw enriquecer('update contacts', error);
 }
 
