@@ -12,8 +12,18 @@ import { go } from './router.js';
 import { h, modal, wireTTSToggle, stopSpeak } from './ui.js';
 import { esPreview, avisarPreview } from './preview.js';
 import {
-    analizarEstudio, listarEstudios, userSimpleDelCirculo, urlEstudio
+    analizarEstudio, listarEstudios, userSimpleDelCirculo, urlEstudio, eliminarEstudio
 } from './data-emotiva.js';
+
+/** Mini-toast efímero (reusa el estilo global .pense-toast). */
+function toast(texto) {
+    const t = document.createElement('div');
+    t.className = 'pense-toast';
+    t.textContent = texto;
+    document.body.appendChild(t);
+    requestAnimationFrame(() => t.classList.add('is-visible'));
+    setTimeout(() => { t.classList.remove('is-visible'); setTimeout(() => t.remove(), 300); }, 2200);
+}
 
 // Emoji + label por especialidad.
 const ESP = {
@@ -309,6 +319,10 @@ function vistaResultado($app, circleId, e) {
         ` : ''}
 
         <button class="btn btn--xl btn--full" data-go="#/estudios" style="margin-top:1.2rem;">← Volver a mis estudios</button>
+        <button class="btn btn--full btn--danger" id="est-eliminar"
+                style="margin-top:0.6rem;min-height:0;padding:0.5em;font-size:0.9em;">
+            🗑️ Eliminar
+        </button>
     `;
     wireGoButtons($app);
     wireTTSToggle($app.querySelector('#est-leer'), e.explicacion_ia || '');
@@ -328,6 +342,37 @@ function vistaResultado($app, circleId, e) {
             btn.disabled = false; btn.textContent = orig;
         }
     });
+
+    $app.querySelector('#est-eliminar').addEventListener('click', async (ev) => {
+        const ok = await modal({
+            titulo: '¿Eliminar este estudio?',
+            cuerpo: '<p>Esto borra el estudio y no se puede deshacer.</p>',
+            acciones: [
+                { label: 'No', value: 'no' },
+                { label: 'Sí, eliminar', clase: 'btn--danger btn--full', value: 'si' }
+            ]
+        });
+        if (ok !== 'si') return;
+        const btn = ev.currentTarget;
+        btn.disabled = true; btn.textContent = 'Eliminando…';
+        try {
+            stopSpeak();
+            await eliminarEstudio({ id: e.id, archivoPath: e.archivo_path });
+            toast('Estudio eliminado');
+            vistaPrincipal($app, circleId);
+        } catch (err) {
+            console.error('[eliminar estudio]', err, err?.detalle);
+            btn.disabled = false; btn.textContent = '🗑️ Eliminar';
+            await modal({
+                titulo: 'No pude eliminarlo',
+                cuerpo: `<p>${err?.code === 'sin_permiso'
+                    ? 'No tenés permiso para eliminar este estudio.'
+                    : 'Hubo un problema. Probá de nuevo en un momento.'}</p>`,
+                acciones: [{ label: 'Listo', clase: 'btn--familia btn--full', value: 'ok' }]
+            });
+        }
+    });
+
     window.addEventListener('hashchange', () => stopSpeak(), { once: true });
 }
 

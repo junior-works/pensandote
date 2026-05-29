@@ -584,6 +584,29 @@ export async function urlEstudio(path) {
     return descargarComoObjectURL('estudios', path);
 }
 
+/**
+ * Elimina un estudio: archivo del bucket (best-effort) + fila. Si la RLS
+ * no deja borrar la fila (no es el autor ni admin), el delete devuelve 0
+ * filas → lanzamos error con code 'sin_permiso'.
+ */
+export async function eliminarEstudio({ id, archivoPath }) {
+    const sb = await sbClient();
+    if (archivoPath) {
+        // No fatal: si falla, queda un orphan en storage (no se ve).
+        try { await sb.storage.from('estudios').remove([archivoPath]); }
+        catch (err) { console.warn('[eliminarEstudio storage]', err); }
+    }
+    const { data, error } = await sb.from('estudios_medicos')
+        .delete().eq('id', id).select('id');
+    if (error) throw enriquecer('delete estudio', error);
+    if (!data || data.length === 0) {
+        const e = new Error('sin_permiso');
+        e.code = 'sin_permiso';
+        throw e;
+    }
+    return true;
+}
+
 // =====================================================================
 // Contactos del círculo (tabla public.contacts)
 // =====================================================================
