@@ -1466,7 +1466,7 @@ async function cargarActividadReciente(c, $cont) {
     if (!$cont) return;
     let eventos = [];
     try {
-        eventos = await actividadReciente(c.id, { limit: 25 });
+        eventos = await actividadReciente(c.id, { limit: 15 });
     } catch (err) {
         $cont.innerHTML = `<p class="muted">No pude cargar la actividad: ${h(err?.message || err)}</p>`;
         return;

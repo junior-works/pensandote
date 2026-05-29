@@ -826,8 +826,13 @@ body[data-mode="dashboard"] .avisos-feedback {
    Feed compacto: icon a la izquierda, texto en el medio, tiempo
    relativo a la derecha en muted. Hover sutil. */
 body[data-mode="dashboard"] .actividad-lista {
-    list-style: none; padding: 0; margin: 0;
+    list-style: none; margin: 0;
+    padding: 0 6px 0 0;               /* aire para que el scrollbar no pise el texto */
     display: grid; gap: 0.1rem;
+    max-height: 22rem;                /* ~8-9 items; el resto con scroll interno */
+    overflow-y: auto;
+    overscroll-behavior: contain;     /* no encadenar el scroll a la página (mobile) */
+    -webkit-overflow-scrolling: touch;
 }
 body[data-mode="dashboard"] .actividad-item {
     display: grid;
