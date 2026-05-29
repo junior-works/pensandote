@@ -1058,6 +1058,13 @@ body[data-mode="dashboard"] .meds-admin-slot.is-pend { background: #fff8e9; }
     border-radius: 50%;
     background: #fff;
 }
+/* Variante emoji: cuando no hay foto_url, mostramos el ícono del helper
+   de género centrado dentro del mismo círculo del avatar. */
+.contacto-card__foto--emoji {
+    width: 80px; height: 80px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 2.6rem; line-height: 1;
+}
 .contacto-card__info strong { font-size: var(--fs-md); display: block; }
 .contacto-card__info small { color: var(--ink-soft); }
 .contacto-card__acciones {

@@ -23,6 +23,7 @@ import {
 } from './preview.js';
 import { dispararPanico } from './utils/panico.js';
 import { crearDictado } from './utils/dictado.js';
+import { iconoContacto } from './utils/genero.js';
 
 // =====================================================================
 // INICIO
@@ -969,12 +970,12 @@ export function renderFamilia($app) {
                     // whatsapp aparte (usamos teléfono). Defensa para que la
                     // preview no rompa con filas más simples.
                     const tel = (c.telefono || '').replace(/\D/g, '');
-                    const fotoSrc = c.foto_url
-                        || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(c.nombre || 'x')}`;
+                    const avatar = c.foto_url
+                        ? `<img class="contacto-card__foto" src="${h(c.foto_url)}" alt="" width="80" height="80">`
+                        : `<div class="contacto-card__foto contacto-card__foto--emoji" aria-hidden="true">${iconoContacto(c)}</div>`;
                     return `
                     <li class="contacto-card">
-                        <img class="contacto-card__foto" src="${h(fotoSrc)}" alt=""
-                             width="80" height="80">
+                        ${avatar}
                         <div class="contacto-card__info">
                             <strong>${h(c.nombre)}</strong>
                             <small>${h(c.parentesco || '')}</small>

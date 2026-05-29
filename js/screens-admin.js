@@ -29,6 +29,7 @@ import {
     listarMedicos, crearMedico, editarMedico, borrarMedico, medicoCabecera
 } from './data-emotiva.js';
 import { espMeta, ESPECIALIDADES_OPCIONES } from './screens-estudios.js';
+import { iconoContacto } from './utils/genero.js';
 
 // =====================================================================
 // Helpers
@@ -90,7 +91,9 @@ export async function renderContactosAdmin($app) {
             <ul class="contactos-admin-lista">
                 ${lista.map(ct => `
                     <li class="contacto-admin-row ${ct.es_emergencia ? 'is-emerg' : ''}">
-                        <span class="contacto-admin-row__icono">${ct.es_emergencia ? '🚨' : '👤'}</span>
+                        ${ct.foto_url
+                            ? `<img class="contacto-admin-row__icono" src="${h(ct.foto_url)}" alt="" style="object-fit:cover;">`
+                            : `<span class="contacto-admin-row__icono">${iconoContacto(ct)}</span>`}
                         <div class="contacto-admin-row__info">
                             <strong>${h(ct.nombre)}${ct.es_emergencia ? ' <small class="muted">· emergencia</small>' : ''}</strong>
                             <small>${h(ct.parentesco || '')}${ct.parentesco ? ' · ' : ''}<code>${h(ct.telefono)}</code></small>
