@@ -15,7 +15,7 @@
  */
 
 import { state } from './state.js';
-import { go } from './router.js';
+import { go, goBack } from './router.js';
 import {
     h, modal, speakES, stopSpeak,
 } from './ui.js';
@@ -40,15 +40,19 @@ import {
 function barraVolverHTML(titulo, claseColor = 'familia', volverA = '#/inicio') {
     return `
         <header class="barra-volver barra-volver--${claseColor}">
-            <button class="barra-volver__btn" data-go="${h(volverA)}" aria-label="Volver">← Volver</button>
+            <button class="barra-volver__btn" data-back="${h(volverA)}" aria-label="Volver">← Volver</button>
             <h1 class="barra-volver__titulo">${h(titulo)}</h1>
         </header>
     `;
 }
 
 function wireGoButtons($app) {
+    // data-go = navegar adelante; data-back = volver (pop limpio).
     $app.querySelectorAll('[data-go]').forEach(el => {
         el.addEventListener('click', () => go(el.dataset.go));
+    });
+    $app.querySelectorAll('[data-back]').forEach(el => {
+        el.addEventListener('click', () => goBack(el.dataset.back));
     });
 }
 
@@ -101,7 +105,7 @@ export async function renderHacemeAcordarSimple($app) {
             <div id="ha-lista"><p class="muted">Cargando…</p></div>
         </section>
 
-        <button class="btn btn--xl btn--full" data-go="#/inicio" style="margin-top:1.5rem;">
+        <button class="btn btn--xl btn--full" data-back="#/inicio" style="margin-top:1.5rem;">
             ✕ Volver al inicio
         </button>
     `;

@@ -8,7 +8,7 @@
  */
 
 import { state } from './state.js';
-import { go } from './router.js';
+import { go, goBack } from './router.js';
 import { h, modal, wireTTSToggle, stopSpeak } from './ui.js';
 import { esPreview, avisarPreview } from './preview.js';
 import {
@@ -67,14 +67,18 @@ export function contarEstudiosNoVistos(estudios) {
 function barraVolverHTML(titulo, volverA = '#/salud') {
     return `
         <header class="barra-volver barra-volver--medico">
-            <button class="barra-volver__btn" data-go="${h(volverA)}" aria-label="Volver">← Volver</button>
+            <button class="barra-volver__btn" data-back="${h(volverA)}" aria-label="Volver">← Volver</button>
             <h1 class="barra-volver__titulo">${h(titulo)}</h1>
         </header>
     `;
 }
 function wireGoButtons($app) {
+    // data-go = navegar adelante; data-back = volver (pop limpio).
     $app.querySelectorAll('[data-go]').forEach(el => {
         el.addEventListener('click', () => go(el.dataset.go));
+    });
+    $app.querySelectorAll('[data-back]').forEach(el => {
+        el.addEventListener('click', () => goBack(el.dataset.back));
     });
 }
 
@@ -154,7 +158,7 @@ async function vistaPrincipal($app, circleId) {
 
         <section id="est-historico"><p class="muted">Cargando…</p></section>
 
-        <button class="btn btn--xl btn--full" data-go="#/salud" style="margin-top:1.5rem;">✕ Volver</button>
+        <button class="btn btn--xl btn--full" data-back="#/salud" style="margin-top:1.5rem;">✕ Volver</button>
     `;
     wireGoButtons($app);
 
@@ -321,7 +325,7 @@ function vistaResultado($app, circleId, e) {
             </section>
         ` : ''}
 
-        <button class="btn btn--xl btn--full" data-go="#/estudios" style="margin-top:1.2rem;">← Volver a mis estudios</button>
+        <button class="btn btn--xl btn--full" data-back="#/estudios" style="margin-top:1.2rem;">← Volver a mis estudios</button>
         <button class="btn btn--full btn--danger" id="est-eliminar"
                 style="margin-top:0.6rem;min-height:0;padding:0.5em;font-size:0.9em;">
             🗑️ Eliminar
@@ -401,7 +405,7 @@ function vistaListaEspecialidad($app, circleId, especialidad, estudios) {
                 `;
             }).join('')}
         </ul>
-        <button class="btn btn--xl btn--full" data-go="#/estudios" style="margin-top:1.2rem;">← Volver</button>
+        <button class="btn btn--xl btn--full" data-back="#/estudios" style="margin-top:1.2rem;">← Volver</button>
     `;
     wireGoButtons($app);
     $app.querySelectorAll('[data-id]').forEach(btn => {

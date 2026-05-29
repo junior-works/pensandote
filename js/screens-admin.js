@@ -12,7 +12,7 @@
  */
 
 import { state } from './state.js';
-import { go, goReplace } from './router.js';
+import { go, goBack, goReplace } from './router.js';
 import {
     h, modal, speakES, stopSpeak, wireTTSToggle,
     installModalBackButton, cleanupModalBackButton
@@ -75,7 +75,7 @@ export async function renderContactosAdmin($app) {
         </div>
         <div id="contactos-lista">Cargando…</div>
     `;
-    $app.querySelector('#btn-volver').addEventListener('click', () => go('#/inicio'));
+    $app.querySelector('#btn-volver').addEventListener('click', () => goBack('#/inicio'));
     $app.querySelector('#btn-nuevo-contacto').addEventListener('click', () => {
         abrirFormContacto(c.id, null, () => renderContactosAdmin($app));
     });
@@ -331,7 +331,7 @@ export async function renderMedicoAdmin($app) {
             <div id="sec-meds"><p class="muted">Cargando…</p></div>
         </section>
     `;
-    $app.querySelector('#btn-volver').addEventListener('click', () => go('#/inicio'));
+    $app.querySelector('#btn-volver').addEventListener('click', () => goBack('#/inicio'));
     $app.querySelector('#form-medico-admin').addEventListener('submit', async (e) => {
         e.preventDefault();
         const fd = new FormData(e.target);
@@ -862,7 +862,7 @@ export async function renderMedicoSimpleReal($app) {
         ${barraVolverMedicoSimple()}
         ${cuerpoMedicoSimple(datos, accesosMed, mailEmail)}
     `;
-    $app.querySelector('#btn-volver').addEventListener('click', () => go('#/inicio'));
+    $app.querySelector('#btn-volver').addEventListener('click', () => goBack('#/inicio'));
 
     cargarMedicos(c.id, $app.querySelector('#sec-medicos-simple'));
 
@@ -1227,7 +1227,7 @@ export async function renderAccesosAdmin($app) {
         </div>
         <div id="accesos-lista">Cargando…</div>
     `;
-    $app.querySelector('#btn-volver').addEventListener('click', () => go('#/inicio'));
+    $app.querySelector('#btn-volver').addEventListener('click', () => goBack('#/inicio'));
     $app.querySelector('#btn-nuevo-acceso').addEventListener('click', () => {
         abrirFormAcceso(c.id, null, () => renderAccesosAdmin($app));
     });
@@ -1522,7 +1522,7 @@ export function renderGuiaAdmin($app, ruta) {
     wireTTSToggle($app.querySelector('#btn-leer-guia'), paso.texto);
     $app.querySelector('#btn-salir-guia').addEventListener('click', () => {
         stopSpeak();
-        go('#/inicio');
+        goBack('#/inicio');
     });
     // goReplace para no acumular un entry de history por cada paso —
     // así el botón atrás del Android vuelve al hogar de una sola vez
@@ -1540,6 +1540,6 @@ export function renderGuiaAdmin($app, ruta) {
     const fin = $app.querySelector('#btn-fin-guia');
     if (fin) fin.addEventListener('click', () => {
         stopSpeak();
-        go('#/inicio');
+        goBack('#/inicio');
     });
 }

@@ -7,8 +7,11 @@
 
 import { CONTACTOS, MEDICO, TUTORIALES } from './mocks.js';
 import { state, miembroActivo } from './state.js';
-import { go, goReplace } from './router.js';
-import { h, modal, speakES, stopSpeak, wireTTSToggle, renderErrorEstructurado } from './ui.js';
+import { go, goBack, goReplace } from './router.js';
+import {
+    h, modal, speakES, stopSpeak, wireTTSToggle, renderErrorEstructurado,
+    installModalBackButton, cleanupModalBackButton
+} from './ui.js';
 import {
     preguntarComoHagoIA, listarTutoriales, obtenerTutorialPorSlug,
     marcarCheckin, checkinDeHoy, enviarPensamiento,
@@ -774,7 +777,11 @@ function abrirLightboxFotos(fotos, startIdx = 0) {
         }
     });
 
+    let cerrado = false;
     function cerrar() {
+        if (cerrado) return;
+        cerrado = true;
+        cleanupModalBackButton(overlay);
         overlay.remove();
         document.removeEventListener('keydown', onKey);
         // NO revocamos los blob URLs — siguen en uso en la galería de
@@ -787,6 +794,9 @@ function abrirLightboxFotos(fotos, startIdx = 0) {
     }
     document.addEventListener('keydown', onKey);
     overlay.querySelector('.lightbox__close').addEventListener('click', cerrar);
+    // Botón "atrás" del Android cierra el lightbox — mismo patrón que
+    // los modales (ui.js).
+    installModalBackButton(overlay, cerrar);
     // No cerrar al tocar el track — eso es para hacer swipe.
 }
 
@@ -1248,7 +1258,7 @@ export async function renderTutorial($app, ruta) {
     // retroceder paso por paso. Cortamos la voz si estaba leyendo.
     document.getElementById('btn-salir-tutorial').addEventListener('click', () => {
         stopSpeak();
-        go('#/como-hago');
+        goBack('#/como-hago');
     });
 
     // Navegación entre pasos: usa goReplace, así el botón atrás del
@@ -1305,7 +1315,7 @@ export async function renderTutorial($app, ruta) {
 function barraVolver(titulo, acento, destino = '#/inicio') {
     return `
         <header class="barra-volver barra-volver--${acento}">
-            <button class="barra-volver__btn" data-go="${destino}" aria-label="Volver">
+            <button class="barra-volver__btn" data-back="${destino}" aria-label="Volver">
                 ← Volver
             </button>
             <h1 class="barra-volver__titulo">${h(titulo)}</h1>
@@ -1314,8 +1324,13 @@ function barraVolver(titulo, acento, destino = '#/inicio') {
 }
 
 function wireNav($app) {
+    // data-go = navegación adelante (pushea). data-back = volver (pop
+    // real, sin inflar el historial — ver router.goBack).
     $app.querySelectorAll('[data-go]').forEach(el => {
         el.addEventListener('click', () => go(el.dataset.go));
+    });
+    $app.querySelectorAll('[data-back]').forEach(el => {
+        el.addEventListener('click', () => goBack(el.dataset.back));
     });
 }
 
@@ -1355,7 +1370,7 @@ export function renderComoHagoIA($app) {
 
         <div id="ia-resultado"></div>
 
-        <button class="btn btn--xl btn--full" id="btn-salir-ia" data-go="#/como-hago"
+        <button class="btn btn--xl btn--full" id="btn-salir-ia" data-back="#/como-hago"
                 style="margin-top:1.5rem;">
             ✕ Volver a los tutoriales
         </button>

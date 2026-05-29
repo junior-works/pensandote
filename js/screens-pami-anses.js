@@ -13,7 +13,7 @@
  *   - error técnico   → mensaje cálido + los mismos teléfonos
  */
 
-import { go } from './router.js';
+import { go, goBack } from './router.js';
 import { h, wireTTSToggle, stopSpeak } from './ui.js';
 import { crearDictado } from './utils/dictado.js';
 import { esPreview, avisarPreview } from './preview.js';
@@ -22,15 +22,19 @@ import { consultarOrganismos } from './data-emotiva.js';
 function barraVolverHTML(titulo, volverA = '#/salud') {
     return `
         <header class="barra-volver barra-volver--medico">
-            <button class="barra-volver__btn" data-go="${h(volverA)}" aria-label="Volver">← Volver</button>
+            <button class="barra-volver__btn" data-back="${h(volverA)}" aria-label="Volver">← Volver</button>
             <h1 class="barra-volver__titulo">${h(titulo)}</h1>
         </header>
     `;
 }
 
 function wireGoButtons($app) {
+    // data-go = navegar adelante; data-back = volver (pop limpio).
     $app.querySelectorAll('[data-go]').forEach(el => {
         el.addEventListener('click', () => go(el.dataset.go));
+    });
+    $app.querySelectorAll('[data-back]').forEach(el => {
+        el.addEventListener('click', () => goBack(el.dataset.back));
     });
 }
 
@@ -82,7 +86,7 @@ export function renderPamiAnses($app) {
 
         <div id="pa-resultado"></div>
 
-        <button class="btn btn--xl btn--full" data-go="#/salud" style="margin-top:1.5rem;">
+        <button class="btn btn--xl btn--full" data-back="#/salud" style="margin-top:1.5rem;">
             ✕ Volver
         </button>
     `;

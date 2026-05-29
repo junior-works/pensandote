@@ -320,7 +320,82 @@ async function bootstrap() {
         }
     }
 
+    // Coordinador del botón "Atrás" — anchor + popstate + doble-tap
+    // toast para salir desde el home. Corre DESPUÉS de procesarCallback
+    // (que hace replaceState para limpiar tokens del magic-link), así
+    // nuestro marker queda en la entry final.
+    instalarBackCoordinator();
+
     onRouteChange(renderRoute);
+}
+
+// =====================================================================
+// Coordinador del botón "Atrás" del Android (y back del navegador).
+// ---------------------------------------------------------------------
+// Patrón:
+//   1) Anchor: marcamos la entry actual como `pensandote_root` y
+//      pusheamos una segunda entry "home" con la misma URL. El usuario
+//      vive sobre la entry home. Cuando hace back desde el home, pop a
+//      root y nuestro popstate lo atrapa (en vez de cerrar la PWA al
+//      toque).
+//   2) En cada back a root: si NO está armado, mostramos un toast
+//      "Tocá atrás de nuevo para salir" y armamos un flag por 2 s. Si
+//      el siguiente back llega dentro de esa ventana, lo dejamos pasar
+//      (no re-pusheamos) y la PWA sale.
+//   3) Modales: si hay un .modal-overlay vivo, no hacemos nada —
+//      installModalBackButton (ui.js) maneja ese back cerrando el modal.
+//   4) goBack(fallback) en router.js hace history.back() en vez de
+//      pushear, así "← Volver" no infla el historial.
+// =====================================================================
+function instalarBackCoordinator() {
+    if (window.__pdtBackBound) return;
+    window.__pdtBackBound = true;
+
+    // Marca la entry actual como root y pushea una entry "home" arriba
+    // (misma URL → no dispara hashchange ni re-render del router).
+    try {
+        history.replaceState({ pensandote_root: true }, '', location.href);
+        history.pushState({ pensandote_home: true }, '', location.href);
+    } catch (_) { /* no-op si el browser no lo permite */ }
+
+    let exitArmed = false;
+    let exitTimer = null;
+
+    window.addEventListener('popstate', () => {
+        // El listener del modal (ui.js installModalBackButton) ya se
+        // encarga de cerrar; no interferimos. Lo mismo el lightbox de
+        // fotos, que ahora también usa installModalBackButton.
+        if (document.querySelector('.modal-overlay, .lightbox-overlay')) return;
+
+        if (history.state?.pensandote_root === true) {
+            if (exitArmed) {
+                // Segundo back dentro de la ventana: dejamos salir.
+                // No re-pusheamos; el próximo back saldrá del PWA.
+                return;
+            }
+            exitArmed = true;
+            clearTimeout(exitTimer);
+            exitTimer = setTimeout(() => { exitArmed = false; }, 2000);
+            mostrarToastSalida('Tocá atrás de nuevo para salir');
+        } else {
+            // Navegación back normal entre rutas; cancela armado.
+            exitArmed = false;
+            clearTimeout(exitTimer);
+        }
+    });
+}
+
+// Toast efímero estilo .pense-toast — usado solo por el back coordinator.
+function mostrarToastSalida(texto) {
+    const t = document.createElement('div');
+    t.className = 'pense-toast';
+    t.textContent = texto;
+    document.body.appendChild(t);
+    requestAnimationFrame(() => t.classList.add('is-visible'));
+    setTimeout(() => {
+        t.classList.remove('is-visible');
+        setTimeout(() => t.remove(), 300);
+    }, 1800);
 }
 
 bootstrap().catch(err => {

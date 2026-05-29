@@ -59,6 +59,25 @@ export function refresh() {
     _trigger();
 }
 
+/**
+ * Vuelve a la pantalla anterior REAL (pop del historial), sin pushear
+ * otra entrada. Si estamos en el anchor del back-coordinator (raíz de la
+ * app) o no hay historial atrás, cae a goReplace(fallback) — así un
+ * "← Volver" desde home no termina cerrando la PWA, y un deep-link sin
+ * historial igual termina en el fallback.
+ *
+ * Resuelve el bug viejo donde el botón Volver hacía `go(...)` (pusheaba
+ * una entrada extra) y después el Android back tenía que recorrer todo
+ * el historial acumulado.
+ */
+export function goBack(fallback) {
+    if (history.state?.pensandote_root === true || history.length <= 1) {
+        if (fallback) goReplace(fallback);
+        return;
+    }
+    history.back();
+}
+
 function _trigger() {
     if (typeof _renderer === 'function') {
         _renderer(currentRoute());
