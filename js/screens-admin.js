@@ -25,8 +25,10 @@ import {
     listarAccesos, crearAcceso, actualizarAcceso, borrarAcceso,
     listarDocumentos, subirDocumento, borrarDocumento,
     listarMedicamentos, crearMedicamento, editarMedicamento, borrarMedicamento,
-    tomasDeHoy
+    tomasDeHoy,
+    listarMedicos, crearMedico, editarMedico, borrarMedico, medicoCabecera
 } from './data-emotiva.js';
+import { espMeta, ESPECIALIDADES_OPCIONES } from './screens-estudios.js';
 
 // =====================================================================
 // Helpers
@@ -252,18 +254,6 @@ export async function renderMedicoAdmin($app) {
                 <input name="plan" class="input-real" value="${h(datos.plan || '')}">
             </label>
             <label class="stack">
-                <span>Médico de cabecera</span>
-                <input name="medico_nombre" class="input-real" value="${h(datos.medico_nombre || '')}" placeholder="Dr./Dra. …">
-            </label>
-            <label class="stack">
-                <span>Mail del médico</span>
-                <input name="medico_email" type="email" class="input-real" value="${h(datos.medico_email || '')}">
-            </label>
-            <label class="stack">
-                <span>Teléfono del consultorio</span>
-                <input name="medico_telefono" class="input-real" value="${h(datos.medico_telefono || '')}">
-            </label>
-            <label class="stack">
                 <span>Notas (alergias, medicación, lo que sea útil)</span>
                 <textarea name="notas" class="input-real" rows="4">${h(datos.notas || '')}</textarea>
             </label>
@@ -289,6 +279,15 @@ export async function renderMedicoAdmin($app) {
 
             <button type="submit" class="btn btn--inicio">💾 Guardar</button>
         </form>
+
+        <section class="card stack" style="margin-top:1rem;">
+            <h2 style="margin:0;">👨‍⚕️ Médicos</h2>
+            <p class="muted" style="font-size:0.9em; margin:0;">
+                Cargá los médicos por especialidad. El que marques como cabecera
+                es a quien va el mail desde la pantalla del familiar.
+            </p>
+            <div id="sec-medicos-admin"><p class="muted">Cargando…</p></div>
+        </section>
 
         <section class="card stack" style="margin-top:1rem;">
             <h2 style="margin:0;">📎 Documentos</h2>
@@ -324,9 +323,6 @@ export async function renderMedicoAdmin($app) {
             obra_social:     String(fd.get('obra_social') || '').trim()     || null,
             num_afiliado:    String(fd.get('num_afiliado') || '').trim()    || null,
             plan:            String(fd.get('plan') || '').trim()            || null,
-            medico_nombre:   String(fd.get('medico_nombre') || '').trim()   || null,
-            medico_email:    String(fd.get('medico_email') || '').trim()    || null,
-            medico_telefono: String(fd.get('medico_telefono') || '').trim() || null,
             notas:           String(fd.get('notas') || '').trim()           || null,
             mail_asunto:     String(fd.get('mail_asunto') || '').trim()     || null,
             mail_cuerpo:     String(fd.get('mail_cuerpo') || '').trim()     || null
@@ -373,6 +369,9 @@ export async function renderMedicoAdmin($app) {
         abrirFormMedicamento(c.id, null, () => cargarMedicamentos(c.id, $meds));
     });
     cargarMedicamentos(c.id, $meds);
+
+    // Médicos del círculo (lista por especialidad + alta/edición).
+    cargarMedicos(c.id, $app.querySelector('#sec-medicos-admin'));
 }
 
 // =====================================================================
@@ -826,44 +825,33 @@ export async function renderMedicoSimpleReal($app) {
 
     let datos = null;
     let accesosMed = [];
+    let cabecera = null;
     try {
-        // En preview tomamos los accesos de previewData (ya precargados);
-        // en uso real tiramos la query.
-        const [d, accesosTodos] = await Promise.all([
+        const [d, accesosTodos, cab] = await Promise.all([
             leerDatosMedicos(c.id),
-            esPreview() ? Promise.resolve(getAccesos()) : listarAccesos(c.id).catch(() => [])
+            esPreview() ? Promise.resolve(getAccesos()) : listarAccesos(c.id).catch(() => []),
+            esPreview() ? Promise.resolve(null) : medicoCabecera(c.id).catch(() => null)
         ]);
         datos = d;
         accesosMed = (accesosTodos || []).filter(a => a.categoria === 'medico');
+        cabecera = cab;
     } catch (err) {
         console.error('[renderMedicoSimpleReal]', err);
     }
 
-    const hayDatos   = datos && Object.values(datos).filter(Boolean).length > 0;
-    const hayAccesos = accesosMed.length > 0;
-    const sinNada    = !hayDatos && !hayAccesos;
+    // El mail va al cabecera de `medicos`; si no hay, cae al viejo medical_info.
+    const mailEmail = cabecera?.email || datos?.medico_email || null;
 
     $app.innerHTML = `
         ${barraVolverMedicoSimple()}
-        ${sinNada ? cuerpoSinDatos() : cuerpoConDatos(datos, accesosMed)}
+        ${cuerpoMedicoSimple(datos, accesosMed, mailEmail)}
     `;
     $app.querySelector('#btn-volver').addEventListener('click', () => go('#/inicio'));
 
-    if (sinNada) {
-        $app.querySelector('#btn-pedir-ayuda').addEventListener('click', () => {
-            modal({
-                titulo: '🆘 Listo, le avisé a tu familia',
-                cuerpo: `<p>Cuando carguen los datos del médico, vas a ver acá la obra social
-                        y los botones para llamarlo y mandarle mail.</p>`,
-                acciones: [{ label: 'Listo', clase: 'btn--familia btn--full', value: 'ok' }],
-                tono: 'ok'
-            });
-        });
-        return;
-    }
+    cargarMedicos(c.id, $app.querySelector('#sec-medicos-simple'));
 
     const btnMail = $app.querySelector('#btn-mail');
-    if (btnMail) btnMail.addEventListener('click', () => abrirDictadoMail(datos || {}));
+    if (btnMail) btnMail.addEventListener('click', () => abrirDictadoMail({ ...(datos || {}), medico_email: mailEmail }));
 
     // Wirear accesos categoría médico de tipo 'link' (los 'llamar' son <a href=tel:...>).
     $app.querySelectorAll('[data-acceso-link]').forEach(b => {
@@ -879,42 +867,18 @@ export async function renderMedicoSimpleReal($app) {
     });
 }
 
-function barraVolverMedicoSimple() {
-    return `
-        <header class="barra-volver barra-volver--medico">
-            <button class="barra-volver__btn" id="btn-volver" aria-label="Volver">← Volver</button>
-            <h1 class="barra-volver__titulo">Médico</h1>
-        </header>
-    `;
-}
-
-function cuerpoSinDatos() {
-    return `
-        <section class="card stack center">
-            <h2>🩺 Todavía no cargaron los datos del médico</h2>
-            <p>Pedíle a tu familia que los carguen. Mientras tanto no podemos mostrarte la obra social.</p>
-            <button class="btn btn--xl btn--familia btn--full" id="btn-pedir-ayuda">
-                🆘 Pedir ayuda a un familiar
-            </button>
-        </section>
-    `;
-}
-
-function cuerpoConDatos(d, accesosMed) {
+function cuerpoMedicoSimple(d, accesosMed, mailEmail) {
     d = d || {};
     accesosMed = accesosMed || [];
     const filas = [
-        ['Obra social',  d.obra_social],
-        ['N° afiliado',  d.num_afiliado],
-        ['Plan',         d.plan],
-        ['Médico',       d.medico_nombre],
-        ['Teléfono',     d.medico_telefono]
+        ['Obra social', d.obra_social],
+        ['N° afiliado', d.num_afiliado],
+        ['Plan',        d.plan]
     ].filter(([_, v]) => v);
-
-    const tieneAlgunDatoMedico = filas.length > 0 || d.notas;
+    const hayObra = filas.length > 0 || d.notas;
 
     return `
-        ${tieneAlgunDatoMedico ? `
+        ${hayObra ? `
             <section class="card card--info">
                 <h2>Tu obra social</h2>
                 <dl class="info-dl">
@@ -924,30 +888,33 @@ function cuerpoConDatos(d, accesosMed) {
             </section>
         ` : ''}
 
+        <section class="card stack" style="margin-top:0.8rem;">
+            <h2>👨‍⚕️ Mis médicos</h2>
+            <div id="sec-medicos-simple"><p class="muted">Cargando…</p></div>
+        </section>
+
         <div class="stack" style="margin-top:1rem;">
-            ${d.medico_email ? `
+            ${mailEmail ? `
                 <button class="btn btn--xl btn--medico btn--full" id="btn-mail">
                     ✉️ Mandar mail al médico
                 </button>` : ''}
-            <!-- "Llamar al consultorio" oculto a pedido de Charly: no llaman.
-                 El teléfono del médico queda igual en los datos por si
-                 lo necesitan ver, sólo no exponemos el botón. -->
-
             ${accesosMed.map(a => {
                 const emoji = a.emoji || (a.tipo === 'llamar' ? '📞' : '🔗');
                 if (a.tipo === 'llamar') {
-                    return `
-                        <a class="btn btn--xl btn--medico btn--full" href="tel:${h(a.valor)}">
-                            ${emoji} ${h(a.titulo)}
-                        </a>`;
+                    return `<a class="btn btn--xl btn--medico btn--full" href="tel:${h(a.valor)}">${emoji} ${h(a.titulo)}</a>`;
                 }
-                return `
-                    <button class="btn btn--xl btn--medico btn--full"
-                            data-acceso-link="${h(a.valor)}">
-                        ${emoji} ${h(a.titulo)}
-                    </button>`;
+                return `<button class="btn btn--xl btn--medico btn--full" data-acceso-link="${h(a.valor)}">${emoji} ${h(a.titulo)}</button>`;
             }).join('')}
         </div>
+    `;
+}
+
+function barraVolverMedicoSimple() {
+    return `
+        <header class="barra-volver barra-volver--medico">
+            <button class="barra-volver__btn" id="btn-volver" aria-label="Volver">← Volver</button>
+            <h1 class="barra-volver__titulo">Médico</h1>
+        </header>
     `;
 }
 
@@ -1035,6 +1002,187 @@ function abrirDictadoMail(datos) {
         // mailto: dispara el cliente de mail del teléfono.
         window.location.href = `mailto:${datos.medico_email}?subject=${subj}&body=${body}`;
         cerrar();
+    });
+}
+
+// =====================================================================
+// Médicos del círculo (lista por especialidad + alta/edición/borrado).
+// Compartido por la pantalla "Médico" (simple) y el dashboard.
+// =====================================================================
+async function cargarMedicos(circleId, $cont) {
+    if (!$cont) return;
+    if (esPreview()) {
+        $cont.innerHTML = `<p class="muted">En la vista previa no se muestran los médicos reales.</p>`;
+        return;
+    }
+    let medicos = [];
+    try { medicos = await listarMedicos(circleId); }
+    catch (err) { $cont.innerHTML = `<p class="muted">No pude cargar los médicos.</p>`; return; }
+
+    const lista = medicos.length ? `
+        <ul class="medicos-lista" style="list-style:none;padding:0;margin:0;display:grid;gap:0.6rem;">
+            ${medicos.map(m => {
+                const [emoji, label] = espMeta(m.especialidad);
+                return `
+                    <li>
+                        <button class="btn btn--xl btn--full medico-item" data-med="${h(m.id)}"
+                                style="justify-content:flex-start;gap:0.6rem;text-align:left;">
+                            <span style="font-size:1.3em;">${emoji}</span>
+                            <span style="flex:1;min-width:0;">
+                                <strong style="display:block;">${h(m.nombre)}${m.es_cabecera ? ' <span class="medico-chip">⭐ Cabecera</span>' : ''}</strong>
+                                <small class="muted">${h(label)}</small>
+                            </span>
+                        </button>
+                    </li>
+                `;
+            }).join('')}
+        </ul>
+    ` : `<p class="muted">Todavía no hay médicos cargados.</p>`;
+
+    $cont.innerHTML = `
+        ${lista}
+        <button class="btn btn--xl btn--medico btn--full" id="btn-add-medico" style="margin-top:0.8rem;">
+            + Agregar médico
+        </button>
+    `;
+    $cont.querySelector('#btn-add-medico').addEventListener('click',
+        () => abrirFormMedico(circleId, null, () => cargarMedicos(circleId, $cont)));
+    $cont.querySelectorAll('[data-med]').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const m = medicos.find(x => x.id === btn.dataset.med);
+            if (m) abrirDetalleMedico(circleId, m, () => cargarMedicos(circleId, $cont));
+        });
+    });
+}
+
+function abrirDetalleMedico(circleId, m, onChange) {
+    const [emoji, label] = espMeta(m.especialidad);
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    overlay.innerHTML = `
+        <div class="modal" role="dialog" aria-modal="true">
+            <button class="modal__close" aria-label="Cerrar" data-close-x>×</button>
+            <h2 class="modal__titulo">${emoji} ${h(m.nombre)}</h2>
+            <p class="muted">${h(label)}${m.es_cabecera ? ' · ⭐ Médico de cabecera' : ''}</p>
+            <div class="stack">
+                ${m.telefono ? `<a class="btn btn--xl btn--medico btn--full" href="tel:${h(m.telefono)}">📞 Llamar</a>` : ''}
+                ${m.email ? `<a class="btn btn--xl btn--medico btn--full" href="mailto:${h(m.email)}">✉️ Mandar mail</a>` : ''}
+                ${m.direccion ? `<p><strong>Dirección:</strong> ${h(m.direccion)}</p>` : ''}
+                ${m.notas ? `<p class="muted">${h(m.notas)}</p>` : ''}
+            </div>
+            <div class="modal__acciones modal__acciones--stack" style="margin-top:0.8rem;">
+                <button class="btn btn--inicio" id="med-editar">✏️ Editar</button>
+                <button class="btn btn--mini btn--danger" id="med-borrar">🗑️ Borrar</button>
+                <button class="btn btn--mini" data-cancel>Cerrar</button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(overlay);
+    let cerrado = false;
+    function cerrar() {
+        if (cerrado) return; cerrado = true;
+        cleanupModalBackButton(overlay); overlay.remove();
+    }
+    installModalBackButton(overlay, cerrar);
+    overlay.querySelector('[data-close-x]').addEventListener('click', cerrar);
+    overlay.querySelector('[data-cancel]').addEventListener('click', cerrar);
+    overlay.addEventListener('click', e => { if (e.target === overlay) cerrar(); });
+
+    overlay.querySelector('#med-editar').addEventListener('click', () => {
+        cerrar();
+        abrirFormMedico(circleId, m, onChange);
+    });
+    overlay.querySelector('#med-borrar').addEventListener('click', async () => {
+        const ok = await modal({
+            titulo: '¿Borrar este médico?',
+            cuerpo: `<p>Se va a eliminar a ${h(m.nombre)} de la lista.</p>`,
+            acciones: [{ label: 'Cancelar' }, { label: 'Borrar', clase: 'btn--danger', value: 'ok' }]
+        });
+        if (ok !== 'ok') return;
+        try { await borrarMedico(m.id); cerrar(); onChange?.(); }
+        catch (err) {
+            await modal({ titulo: 'No pude borrar', cuerpo: `<pre>${h(err?.message || err)}</pre>`,
+                acciones: [{ label: 'OK', value: 'ok' }] });
+        }
+    });
+}
+
+function abrirFormMedico(circleId, med, onSaved) {
+    const editar = !!med;
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    overlay.innerHTML = `
+        <div class="modal" role="dialog" aria-modal="true">
+            <button class="modal__close" aria-label="Cerrar" data-close-x>×</button>
+            <h2 class="modal__titulo">${editar ? '✏️ Editar médico' : '+ Nuevo médico'}</h2>
+            <form id="form-medico" class="stack">
+                <label class="stack">
+                    <span>Especialidad</span>
+                    <select name="especialidad" class="input-real">
+                        ${ESPECIALIDADES_OPCIONES.map(([v, emoji, label]) =>
+                            `<option value="${v}" ${med?.especialidad === v ? 'selected' : ''}>${emoji} ${label}</option>`).join('')}
+                    </select>
+                </label>
+                <label class="stack">
+                    <span>Nombre</span>
+                    <input name="nombre" class="input-real" required value="${h(med?.nombre || '')}" placeholder="Dr./Dra. …">
+                </label>
+                <label class="stack"><span>Teléfono</span>
+                    <input name="telefono" class="input-real" value="${h(med?.telefono || '')}"></label>
+                <label class="stack"><span>Email</span>
+                    <input name="email" type="email" class="input-real" value="${h(med?.email || '')}"></label>
+                <label class="stack"><span>Dirección</span>
+                    <input name="direccion" class="input-real" value="${h(med?.direccion || '')}"></label>
+                <label class="stack"><span>Notas</span>
+                    <textarea name="notas" class="input-real" rows="2">${h(med?.notas || '')}</textarea></label>
+                <label class="med-form__check">
+                    <input type="checkbox" name="es_cabecera" ${med?.es_cabecera ? 'checked' : ''}>
+                    <span>Es médico de cabecera</span>
+                </label>
+                <div class="modal__acciones modal__acciones--stack">
+                    <button type="submit" class="btn btn--inicio">${editar ? 'Guardar cambios' : 'Crear'}</button>
+                    <button type="button" class="btn btn--mini" data-cancel>Cancelar</button>
+                </div>
+            </form>
+        </div>
+    `;
+    document.body.appendChild(overlay);
+    let cerrado = false;
+    function cerrar() {
+        if (cerrado) return; cerrado = true;
+        cleanupModalBackButton(overlay); overlay.remove();
+    }
+    installModalBackButton(overlay, cerrar);
+    overlay.querySelector('[data-close-x]').addEventListener('click', cerrar);
+    overlay.querySelector('[data-cancel]').addEventListener('click', cerrar);
+    overlay.addEventListener('click', e => { if (e.target === overlay) cerrar(); });
+
+    overlay.querySelector('#form-medico').addEventListener('submit', async (ev) => {
+        ev.preventDefault();
+        const fd = new FormData(ev.target);
+        const nombre = String(fd.get('nombre') || '').trim();
+        if (!nombre) { return; }
+        const payload = {
+            especialidad: String(fd.get('especialidad') || 'otro'),
+            nombre,
+            telefono:  String(fd.get('telefono') || '').trim()  || null,
+            email:     String(fd.get('email') || '').trim()     || null,
+            direccion: String(fd.get('direccion') || '').trim() || null,
+            notas:     String(fd.get('notas') || '').trim()     || null,
+            es_cabecera: !!fd.get('es_cabecera')
+        };
+        const btn = ev.target.querySelector('button[type=submit]');
+        btn.disabled = true; btn.textContent = 'Guardando…';
+        try {
+            if (editar) await editarMedico(med.id, circleId, payload);
+            else        await crearMedico(circleId, payload);
+            cerrar();
+            onSaved?.();
+        } catch (err) {
+            btn.disabled = false; btn.textContent = editar ? 'Guardar cambios' : 'Crear';
+            await modal({ titulo: 'No pude guardarlo', cuerpo: `<pre>${h(err?.message || err)}</pre>`,
+                acciones: [{ label: 'OK', value: 'ok' }] });
+        }
     });
 }
 

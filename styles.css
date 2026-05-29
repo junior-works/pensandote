@@ -745,6 +745,15 @@ body[data-mode="simple"] .avisos-mini__ayuda { font-size: var(--fs-xs); margin: 
     font-size: 0.75em; font-weight: 700; margin-left: 0.4rem;
 }
 
+/* Chip "⭐ Cabecera" en la lista de médicos */
+.medico-chip {
+    display: inline-block;
+    background: var(--accent-inicio); color: var(--ink);
+    border-radius: 999px; padding: 0.05em 0.5em;
+    font-size: 0.7em; font-weight: 700; margin-left: 0.3rem;
+    vertical-align: middle;
+}
+
 /* Corazón "pensé en vos" sobre cada foto (galería + lightbox) */
 .foto-corazon {
     position: absolute;

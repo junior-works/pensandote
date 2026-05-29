@@ -40,7 +40,10 @@ const ESP = {
     otorrinolaringologo: ['👂', 'Otorrino'],
     otro:                ['📄', 'Otros'],
 };
-function espMeta(e) { return ESP[e] || ESP.otro; }
+export function espMeta(e) { return ESP[e] || ESP.otro; }
+
+/** Lista de [valor, emoji, label] para selects de especialidad. */
+export const ESPECIALIDADES_OPCIONES = Object.keys(ESP).map(k => [k, ESP[k][0], ESP[k][1]]);
 
 const VISTOS_KEY = 'pensandote:estudios:vistos';
 function idsVistos() {

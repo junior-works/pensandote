@@ -1123,6 +1123,73 @@ export async function guardarDatosMedicos(circleId, datos) {
 }
 
 // =====================================================================
+// Médicos del círculo (tabla public.medicos) — varios por especialidad
+// =====================================================================
+
+/** Lista de médicos del círculo: cabecera primero, después por especialidad. */
+export async function listarMedicos(circleId) {
+    const sb = await sbClient();
+    const { data, error } = await sb.from('medicos')
+        .select('*')
+        .eq('circle_id', circleId)
+        .order('es_cabecera', { ascending: false })
+        .order('especialidad', { ascending: true })
+        .order('nombre', { ascending: true });
+    if (error) throw enriquecer('select medicos', error);
+    return data || [];
+}
+
+/** El médico de cabecera del círculo (o null). El mail va acá. */
+export async function medicoCabecera(circleId) {
+    const sb = await sbClient();
+    const { data, error } = await sb.from('medicos')
+        .select('*').eq('circle_id', circleId).eq('es_cabecera', true).maybeSingle();
+    if (error) return null;
+    return data || null;
+}
+
+// Si se marca un médico como cabecera, el anterior deja de serlo (hay un
+// índice único parcial: a lo sumo un cabecera por círculo).
+async function destronarCabecera(sb, circleId) {
+    await sb.from('medicos').update({ es_cabecera: false })
+        .eq('circle_id', circleId).eq('es_cabecera', true);
+}
+
+export async function crearMedico(circleId, { especialidad, nombre, telefono, email, direccion, notas, es_cabecera = false }) {
+    const sb = await sbClient();
+    if (es_cabecera) await destronarCabecera(sb, circleId);
+    const { data, error } = await sb.from('medicos').insert({
+        circle_id:    circleId,
+        especialidad: String(especialidad || 'otro'),
+        nombre:       String(nombre || '').trim(),
+        telefono:     telefono ? String(telefono).trim() : null,
+        email:        email ? String(email).trim() : null,
+        direccion:    direccion ? String(direccion).trim() : null,
+        notas:        notas ? String(notas).trim() : null,
+        es_cabecera:  !!es_cabecera
+    }).select().single();
+    if (error) throw enriquecer('insert medicos', error);
+    return data;
+}
+
+export async function editarMedico(id, circleId, patch) {
+    const sb = await sbClient();
+    if (patch.es_cabecera === true) await destronarCabecera(sb, circleId);
+    const allowed = ['especialidad', 'nombre', 'telefono', 'email', 'direccion', 'notas', 'es_cabecera'];
+    const clean = {};
+    for (const k of allowed) if (k in patch) clean[k] = patch[k];
+    const { data, error } = await sb.from('medicos').update(clean).eq('id', id).select().single();
+    if (error) throw enriquecer('update medicos', error);
+    return data;
+}
+
+export async function borrarMedico(id) {
+    const sb = await sbClient();
+    const { error } = await sb.from('medicos').delete().eq('id', id);
+    if (error) throw enriquecer('delete medicos', error);
+}
+
+// =====================================================================
 // Documentos del círculo (DNI, carnet PAMI, etc.) — bucket privado
 // =====================================================================
 //
