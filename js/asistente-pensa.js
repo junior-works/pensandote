@@ -157,6 +157,10 @@ function abrirOverlay() {
         actualizarVisibilidad();
     }
     installModalBackButton($overlay, cerrar);
+    // Exponemos `cerrar` para que ejecutarAccion lo pueda llamar y
+    // aproveche todo el cleanup (dictado, micObs, poll, etc.) en vez de
+    // hacerlo ad-hoc y leakear timers/observers.
+    $overlay.__cerrar = cerrar;
     $overlay.addEventListener('click', e => { if (e.target === $overlay) cerrar(); });
     $overlay.querySelector('[data-cerrar]').addEventListener('click', cerrar);
 
@@ -235,28 +239,32 @@ function renderAccionHTML(acc) {
 
 function ejecutarAccion(acc) {
     stopSpeak();
-    if ($overlay) {
-        cleanupModalBackButton($overlay);
-        $overlay.remove();
-        $overlay = null;
+    // Cerramos completo (dictado/micObs/poll + cleanup del back-button
+    // del modal). cleanup encola un history.back ASYNC. Si llamáramos
+    // go() acá sincrónico, el history.back posterior pop la entry recién
+    // pusheada y la navegación nunca toma efecto (mismo bug que tuvimos
+    // en el modal de detalle del médico — fix con setTimeout(0)).
+    if ($overlay && typeof $overlay.__cerrar === 'function') {
+        try { $overlay.__cerrar(); } catch (_) {}
     }
-    actualizarVisibilidad();
-    if (acc.tipo === 'ir_a' && acc.destino) {
-        go(acc.destino);
-        // Si la acción trae destacar, resaltamos el elemento al llegar.
-        const sel = acc.destacar ? DESTACAR_SELECTORS[acc.destacar] : null;
-        if (sel) {
-            esperarElemento(sel, 2500).then(el => {
-                if (el) destacarElemento(el, { mensaje: 'Acá está lo que buscabas' });
-            });
+    setTimeout(() => {
+        if (acc.tipo === 'ir_a' && acc.destino) {
+            go(acc.destino);
+            // Si la acción trae destacar, resaltamos el elemento al llegar.
+            const sel = acc.destacar ? DESTACAR_SELECTORS[acc.destacar] : null;
+            if (sel) {
+                esperarElemento(sel, 2500).then(el => {
+                    if (el) destacarElemento(el, { mensaje: 'Acá está lo que buscabas' });
+                });
+            }
+        } else if (acc.tipo === 'llamar' && acc.destino) {
+            window.location.href = 'tel:' + String(acc.destino).replace(/[^\d+]/g, '');
+        } else if (acc.tipo === 'mostrar_tutorial' && acc.destino) {
+            go(`#/tutorial/${acc.destino}`);
+        } else if (acc.tipo === 'guia_paso' && acc.destino) {
+            ejecutarGuia(acc.destino);
         }
-    } else if (acc.tipo === 'llamar' && acc.destino) {
-        window.location.href = 'tel:' + String(acc.destino).replace(/[^\d+]/g, '');
-    } else if (acc.tipo === 'mostrar_tutorial' && acc.destino) {
-        go(`#/tutorial/${acc.destino}`);
-    } else if (acc.tipo === 'guia_paso' && acc.destino) {
-        ejecutarGuia(acc.destino);
-    }
+    }, 0);
 }
 
 function construirContexto() {
