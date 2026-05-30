@@ -217,9 +217,10 @@ function renderRespuesta(r, $cont) {
 
 function renderAccionHTML(acc) {
     let label = '';
-    if (acc.tipo === 'ir_a')             label = '✅ Sí, llevame';
-    else if (acc.tipo === 'llamar')      label = '📞 Sí, llamar';
+    if (acc.tipo === 'ir_a')                  label = '✅ Sí, llevame';
+    else if (acc.tipo === 'llamar')           label = '📞 Sí, llamar';
     else if (acc.tipo === 'mostrar_tutorial') label = '📖 Sí, mostrame';
+    else if (acc.tipo === 'guia_paso')        label = '🧭 Sí, guiame';
     else return '';
     return `
         <div class="stack" style="margin-top:0.4rem;">

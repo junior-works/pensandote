@@ -59,13 +59,14 @@ export function crearDictado({ $textarea, $btnMic, $estado, labels = {} }) {
     }
 
     // Estado del ciclo de dictado
-    let recognizer  = null;
-    let userStopped = false;     // ¿el usuario tocó stop?
-    let errorGrave  = false;     // ¿hubo un onerror que justifica no restart?
-    let baseText    = '';        // texto del textarea ANTES del primer start
-    let accumulado  = '';        // texto de sesiones ya cerradas (entre restarts)
-    let sessionText = '';        // texto de la sesión activa (rebuild en cada onresult)
-    let restartCnt  = 0;
+    let recognizer     = null;
+    let userStopped    = false;  // ¿el usuario tocó stop?
+    let errorGrave     = false;  // ¿hubo un onerror que justifica no restart?
+    let baseText       = '';     // texto del textarea ANTES del primer start
+    let accumulado     = '';     // texto de sesiones ya cerradas (entre restarts)
+    let sessionText    = '';     // texto visible de la sesión activa (finales + interim)
+    let sessionFinales = '';     // SOLO los finales de la sesión activa
+    let restartCnt     = 0;
 
     function setMicLabel(s) { if ($btnMic) $btnMic.textContent = s; }
     function setEstado(s)   { if ($estado) $estado.textContent = s; }
@@ -99,14 +100,20 @@ export function crearDictado({ $textarea, $btnMic, $estado, labels = {} }) {
         r.interimResults = true;
 
         r.onresult = (e) => {
-            // Reconstrucción IDEMPOTENTE: tomamos TODO e.results — finales
-            // e interim — y concatenamos por espacio. Si Chrome re-emite
-            // el mismo result o reordena, el output es el mismo.
-            const parts = [];
+            // Reconstrucción IDEMPOTENTE: tomamos TODO e.results de la
+            // sesión actual y SEPARAMOS finales del interim. Necesitamos
+            // sessionFinales aparte para que onend SOLO acumule los
+            // finales — si acumuláramos el interim también, la nueva
+            // sesión re-captura ese audio como final y duplica palabras.
+            let finales = '';
+            let interim = '';
             for (let i = 0; i < e.results.length; i++) {
-                parts.push(e.results[i][0].transcript);
+                const t = e.results[i][0].transcript;
+                if (e.results[i].isFinal) finales += t + ' ';
+                else                       interim += t + ' ';
             }
-            sessionText = parts.join(' ');
+            sessionFinales = finales.replace(/\s+/g, ' ').trim();
+            sessionText    = (finales + interim).replace(/\s+/g, ' ').trim();
             pintar();
         };
 
@@ -124,14 +131,18 @@ export function crearDictado({ $textarea, $btnMic, $estado, labels = {} }) {
         };
 
         r.onend = () => {
-            // Capturamos lo que se haya logrado en esta sesión al buffer
-            // `accumulado` antes de tirar `sessionText` a vacío. Así, si
-            // restartamos, no perdemos lo dictado hasta acá.
-            if (sessionText) {
-                accumulado = (accumulado + ' ' + sessionText).replace(/\s+/g, ' ').trim() + ' ';
-                sessionText = '';
-                pintar();
+            // Acumulamos SOLO los finales de la sesión que se cortó. El
+            // interim (lo que el usuario estaba diciendo cuando Chrome
+            // cortó por silencio) lo dejamos ir — la nueva sesión va a
+            // re-capturar ese audio como final desde cero, sin duplicar.
+            // Si moviéramos el interim también a accumulado, terminábamos
+            // con palabras escritas dos veces.
+            if (sessionFinales) {
+                accumulado = (accumulado + ' ' + sessionFinales).replace(/\s+/g, ' ').trim() + ' ';
             }
+            sessionFinales = '';
+            sessionText    = '';
+            pintar();
 
             if (userStopped || errorGrave) {
                 // Cierre real (usuario o error grave). Reset visual,
@@ -179,11 +190,12 @@ export function crearDictado({ $textarea, $btnMic, $estado, labels = {} }) {
             return;
         }
         // Está parado → arrancar.
-        userStopped = false;
-        errorGrave  = false;
-        accumulado  = '';
-        sessionText = '';
-        restartCnt  = 0;
+        userStopped    = false;
+        errorGrave     = false;
+        accumulado     = '';
+        sessionText    = '';
+        sessionFinales = '';
+        restartCnt     = 0;
         baseText    = $textarea.value
             ? $textarea.value.trim() + (($textarea.value.trim().length && !$textarea.value.endsWith(' ')) ? ' ' : '')
             : '';
