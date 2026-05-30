@@ -783,6 +783,18 @@ body[data-mode="simple"] .pdt-asistente-btn { bottom: 1.6rem; }
 /* Overlay del asistente — hereda .modal-overlay, sólo afinamos el modal */
 .pdt-asistente-modal { max-width: 520px; }
 .pdt-asistente-resp .tutorial-paso__texto { font-size: 1.05rem; line-height: 1.4; }
+/* Banner cuando se usa el asistente desde "ver como papá" — el admin
+   está testeando, las acciones se ejecutan en serio (consume IA). */
+.pdt-asistente-preview-banner {
+    margin: 0 0 0.6rem;
+    padding: 0.45em 0.7em;
+    background: #fff4e0;
+    border: 1px dashed var(--ink-soft);
+    border-radius: 0.5rem;
+    font-size: 0.85em;
+    color: var(--ink-soft);
+    text-align: center;
+}
 
 /* Fase 3: el botón flotante pulsa cuando detecta posible confusión. */
 .pdt-asistente-btn.is-suggesting {

@@ -100,20 +100,39 @@ export function crearDictado({ $textarea, $btnMic, $estado, labels = {} }) {
         r.interimResults = true;
 
         r.onresult = (e) => {
-            // Reconstrucción IDEMPOTENTE: tomamos TODO e.results de la
-            // sesión actual y SEPARAMOS finales del interim. Necesitamos
-            // sessionFinales aparte para que onend SOLO acumule los
-            // finales — si acumuláramos el interim también, la nueva
-            // sesión re-captura ese audio como final y duplica palabras.
-            let finales = '';
-            let interim = '';
+            // Reconstrucción IDEMPOTENTE en CADA evento. Cuidado: Chrome
+            // mobile no se comporta como dice la spec — frecuentemente
+            // emite los interim como entries adicionales por la misma
+            // frase ("donde" → "donde están" → "donde están mis"), y a
+            // veces también los finales aparecen progresivos. Si juntáramos
+            // ingenuamente todo, salía "donde donde donde están donde
+            // están mis donde están mis estudios" (el bug del screenshot
+            // de Charly).
+            //
+            // Solución:
+            //   - INTERIM: solo el ÚLTIMO entry (el "en progreso" actual).
+            //   - FINALES: dedup por prefijo — si el siguiente final
+            //     empieza con el anterior, es la versión extendida y
+            //     reemplaza; si es prefijo del anterior, ignoramos.
+            const finalsArr = [];
             for (let i = 0; i < e.results.length; i++) {
-                const t = e.results[i][0].transcript;
-                if (e.results[i].isFinal) finales += t + ' ';
-                else                       interim += t + ' ';
+                if (!e.results[i].isFinal) continue;
+                const t = (e.results[i][0]?.transcript || '').trim();
+                if (!t) continue;
+                const prev = finalsArr[finalsArr.length - 1];
+                if (prev) {
+                    if (prev.startsWith(t))            continue;            // ya cubierto
+                    if (t.startsWith(prev)) { finalsArr[finalsArr.length - 1] = t; continue; }
+                }
+                finalsArr.push(t);
             }
-            sessionFinales = finales.replace(/\s+/g, ' ').trim();
-            sessionText    = (finales + interim).replace(/\s+/g, ' ').trim();
+            let interim = '';
+            if (e.results.length > 0) {
+                const last = e.results[e.results.length - 1];
+                if (!last.isFinal) interim = (last[0]?.transcript || '').trim();
+            }
+            sessionFinales = finalsArr.join(' ').replace(/\s+/g, ' ').trim();
+            sessionText    = (sessionFinales + ' ' + interim).replace(/\s+/g, ' ').trim();
             pintar();
         };
 

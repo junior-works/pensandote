@@ -29,7 +29,7 @@ import {
     installModalBackButton, cleanupModalBackButton
 } from './ui.js';
 import { crearDictado } from './utils/dictado.js';
-import { esPreview, avisarPreview } from './preview.js';
+import { esPreview } from './preview.js';
 import { consultarAsistente } from './data-emotiva.js';
 
 let $btn        = null;
@@ -93,9 +93,15 @@ function abrirOverlay() {
     if ($overlay) return;
     $overlay = document.createElement('div');
     $overlay.className = 'modal-overlay pdt-asistente-overlay';
+    const enPreview = esPreview();
     $overlay.innerHTML = `
         <div class="modal pdt-asistente-modal" role="dialog" aria-modal="true" aria-label="Asistente">
             <button class="modal__close" aria-label="Cerrar" data-cerrar>×</button>
+            ${enPreview ? `
+                <p class="pdt-asistente-preview-banner">
+                    👀 Vista previa de tu familiar — las respuestas son reales (consumen IA)
+                </p>
+            ` : ''}
             <h2 class="modal__titulo">Hola, ¿en qué te ayudo?</h2>
             <p class="muted center" id="pdt-asistente-estado" style="min-height:1.2em; margin:0.2rem 0 0.6rem;"></p>
 
@@ -159,12 +165,9 @@ function abrirOverlay() {
         if (!pregunta) { $texto.focus(); return; }
         try { dictado.destroy(); } catch (_) {}
         stopSpeak();
-
-        if (esPreview()) {
-            avisarPreview('👀 Vista previa — Asistente',
-                'En la app real esto le contesta a tu familiar con la IA y le ofrece llevarlo a la pantalla que necesita. Acá no se ejecuta.');
-            return;
-        }
+        // En preview SÍ ejecutamos la consulta + acciones reales: el
+        // admin necesita poder testear el asistente desde "ver como papá".
+        // El banner arriba ya le avisa que está consumiendo tokens.
 
         const origLabel = $preg.textContent;
         $preg.disabled = true; $preg.textContent = '🤔 Pensando…';
