@@ -28,18 +28,35 @@ function json(body: unknown, status = 200): Response {
     });
 }
 
-const TIPOS_ACCION = new Set(["ir_a", "llamar", "mostrar_tutorial"]);
+const TIPOS_ACCION = new Set(["ir_a", "llamar", "mostrar_tutorial", "guia_paso"]);
 
 const RUTAS_OK = new Set([
     "#/inicio", "#/emergencias", "#/familia",
     "#/salud", "#/medico", "#/remedios", "#/pami-anses", "#/estudios",
-    "#/haceme-acordar", "#/como-hago",
+    "#/haceme-acordar", "#/como-hago", "#/datos-medicos", "#/contactos",
 ]);
 
 const SLUGS_TUTORIAL = new Set([
     "mandar-foto-whatsapp", "hacer-videollamada", "subir-volumen",
     "borrar-mensaje-whatsapp", "agrandar-letra", "ver-bateria",
     "como-usar-pensandote", "activar-avisos-samsung",
+]);
+
+// Slugs de flujos "andá conmigo" — el cliente tiene la secuencia
+// predefinida; el modelo solo elige el slug (sin selectores arbitrarios).
+const SLUGS_GUIA = new Set([
+    "subir-estudio", "agregar-medico", "agregar-contacto",
+]);
+
+// Claves para destacar visualmente un elemento al llegar a una ruta.
+// El cliente mapea cada clave a un selector seguro. El modelo no manda
+// selectores CSS arbitrarios — solo claves de esta lista.
+const DESTACAR_OK = new Set([
+    "estudios-foto", "estudios-archivo",
+    "medicos-add", "contactos-add",
+    "recordatorios-mic",
+    "salud-tarjeton", "estudios-tarjeton", "pami-anses-tarjeton", "haceme-acordar-tarjeton",
+    "home-checkin",
 ]);
 
 const SYSTEM_PROMPT = `Sos un asistente virtual amistoso para adultos mayores argentinos que usan Pensandote, una app para estar cerca de su familia. Hablas en argentino (voseo), calido, paciente. Tus respuestas se LEEN EN VOZ ALTA, asi que tienen que ser cortas, claras, sin tecnicismos.
@@ -65,20 +82,22 @@ LA APP — que hay y donde:
 
 SI EL USUARIO PREGUNTA:
 - DONDE esta algo -> deci donde + ofrece llevarlo. Accion {tipo:"ir_a", destino:"#/<ruta>"}.
-- COMO hacer algo del telefono (mandar foto, videollamada, subir volumen, etc.) -> ofrece el tutorial si conoces su slug. Accion {tipo:"mostrar_tutorial", destino:"<slug>"}.
-  Slugs disponibles: "mandar-foto-whatsapp", "hacer-videollamada", "subir-volumen", "borrar-mensaje-whatsapp", "agrandar-letra", "ver-bateria", "como-usar-pensandote", "activar-avisos-samsung".
-- LLAMAR a alguien — indicale donde encontrar el contacto (Emergencias o Familia). Solo usas accion {tipo:"llamar", destino:"<telefono>"} si en el contexto te pasan el telefono explicito.
+  Opcionalmente podes agregar "destacar":"<clave>" para que al llegar la app resalte visualmente el elemento. Claves: "estudios-foto", "estudios-archivo", "medicos-add", "contactos-add", "recordatorios-mic", "salud-tarjeton", "estudios-tarjeton", "pami-anses-tarjeton", "haceme-acordar-tarjeton", "home-checkin".
+- COMO hacer algo del telefono (mandar foto, videollamada, subir volumen, etc.) -> ofrece el tutorial. Accion {tipo:"mostrar_tutorial", destino:"<slug>"}.
+  Slugs: "mandar-foto-whatsapp", "hacer-videollamada", "subir-volumen", "borrar-mensaje-whatsapp", "agrandar-letra", "ver-bateria", "como-usar-pensandote", "activar-avisos-samsung".
+- LLAMAR a alguien — indicale donde encontrar el contacto. Solo usas {tipo:"llamar", destino:"<telefono>"} si te pasan el telefono explicito.
+- UN FLUJO MULTI-PASO (ej. "quiero sumar un medico", "quiero subir un estudio", "sumame un contacto") -> ofrece el modo "anda conmigo" que lo guia paso a paso. Accion {tipo:"guia_paso", destino:"<slug>"}.
+  Slugs: "subir-estudio", "agregar-medico", "agregar-contacto".
 
 FORMATO DE SALIDA — JSON EXACTO, sin texto fuera del JSON, sin bloques de codigo:
 {
   "respuesta": "tu respuesta breve y calida para leer en voz alta",
   "accion": null
 }
-o con accion:
-{
-  "respuesta": "...",
-  "accion": { "tipo": "ir_a", "destino": "#/<ruta>" }
-}`;
+o con accion (ejemplos):
+{ "respuesta": "...", "accion": { "tipo": "ir_a", "destino": "#/estudios" } }
+{ "respuesta": "...", "accion": { "tipo": "ir_a", "destino": "#/estudios", "destacar": "estudios-foto" } }
+{ "respuesta": "Dale, te llevo paso a paso.", "accion": { "tipo": "guia_paso", "destino": "subir-estudio" } }`;
 
 Deno.serve(async (req: Request) => {
     if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
@@ -142,17 +161,24 @@ Deno.serve(async (req: Request) => {
 
         const respuesta = String(parsed?.respuesta || "").trim() || "No te entendi bien, ¿podes repetirlo?";
 
-        // Validar accion: tipo conocido y destino sano.
+        // Validar accion: tipo conocido + destino sano + (opcional) destacar
+        // contra whitelist. El modelo NO manda selectores CSS arbitrarios:
+        // solo claves de DESTACAR_OK que el cliente mapea a selectores.
         let accion: any = null;
         if (parsed?.accion && typeof parsed.accion === "object") {
             const tipo    = String(parsed.accion.tipo || "").toLowerCase();
             const destino = String(parsed.accion.destino || "").trim();
+            const destRaw = parsed.accion.destacar
+                ? String(parsed.accion.destacar).trim() : null;
+            const destacar = (destRaw && DESTACAR_OK.has(destRaw)) ? destRaw : null;
             if (TIPOS_ACCION.has(tipo) && destino) {
                 if (tipo === "ir_a" && RUTAS_OK.has(destino)) {
-                    accion = { tipo, destino };
+                    accion = destacar ? { tipo, destino, destacar } : { tipo, destino };
                 } else if (tipo === "mostrar_tutorial" && SLUGS_TUTORIAL.has(destino)) {
                     accion = { tipo, destino };
                 } else if (tipo === "llamar" && /^[\d+()\-\s]{3,20}$/.test(destino)) {
+                    accion = { tipo, destino };
+                } else if (tipo === "guia_paso" && SLUGS_GUIA.has(destino)) {
                     accion = { tipo, destino };
                 }
             }

@@ -784,6 +784,66 @@ body[data-mode="simple"] .pdt-asistente-btn { bottom: 1.6rem; }
 .pdt-asistente-modal { max-width: 520px; }
 .pdt-asistente-resp .tutorial-paso__texto { font-size: 1.05rem; line-height: 1.4; }
 
+/* Pulso visual cuando el mic está grabando (asistente + cualquier otro
+   .btn con la clase). Sutil para no distraer pero claro. */
+.btn.is-recording {
+    animation: pdt-pulse 1.2s ease-in-out infinite;
+}
+@keyframes pdt-pulse {
+    0%, 100% { box-shadow: 3px 3px 0 var(--line), 0 0 0 0 rgba(108,160,160,0.55); }
+    50%      { box-shadow: 3px 3px 0 var(--line), 0 0 0 14px rgba(108,160,160,0); }
+}
+
+/* ---- Highlight DOM ("acá está lo que buscás") ----
+   Overlay full-screen oscurecido con hueco circular brillante alrededor
+   del elemento. pointer-events:none → el click del usuario llega al
+   elemento real (necesario para esperar_click del modo "andá conmigo"). */
+.pdt-highlight-overlay {
+    position: fixed; inset: 0;
+    pointer-events: none;
+    z-index: 1100;
+}
+.pdt-highlight-callout {
+    position: fixed;
+    max-width: 260px;
+    background: var(--accent-inicio);
+    color: var(--ink);
+    border: 2px solid var(--line);
+    border-radius: 0.7rem;
+    box-shadow: 3px 3px 0 var(--line);
+    padding: 0.55em 0.85em;
+    font-size: 0.95em;
+    font-weight: 600;
+    line-height: 1.3;
+    pointer-events: none;
+}
+
+/* Barra inferior del modo "andá conmigo" */
+.pdt-guia-bar {
+    position: fixed;
+    left: 50%;
+    bottom: 1rem;
+    transform: translateX(-50%);
+    max-width: calc(100vw - 2rem);
+    display: flex; align-items: center; gap: 0.6rem;
+    background: #2a1e12;
+    color: #fff;
+    border-radius: 999px;
+    padding: 0.5em 0.7em 0.5em 1em;
+    box-shadow: 0 6px 18px rgba(0,0,0,0.3);
+    z-index: 1200;
+    font-size: 0.95em;
+}
+.pdt-guia-bar__texto {
+    flex: 1; min-width: 0;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.pdt-guia-bar__salir {
+    flex-shrink: 0;
+    background: #fff;
+    color: var(--ink);
+}
+
 /* Chip "⭐ Cabecera" en la lista de médicos */
 .medico-chip {
     display: inline-block;
