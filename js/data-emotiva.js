@@ -509,6 +509,45 @@ export async function consultarOrganismos(pregunta) {
     return data; // { estado, respuesta, fuentes?, telefonos_ayuda? }
 }
 
+/**
+ * Asistente virtual (edge function asistente-pensa). Mandamos pregunta +
+ * contexto (ruta actual, modo, parentesco) y recibimos {respuesta, accion?}
+ * para leer en voz alta y ofrecer una acción al usuario.
+ */
+export async function consultarAsistente({ texto, contexto = {} }) {
+    const cfg = window.PENSANDOTE_CONFIG;
+    const sb = await sbClient();
+    const { data: sess } = await sb.auth.getSession();
+    const token = sess?.session?.access_token;
+    if (!token) {
+        throw enriquecer('asistente-pensa',
+            new Error('Tenés que estar logueado para usar el asistente.'));
+    }
+    const url = `${cfg.SUPABASE_URL}/functions/v1/asistente-pensa`;
+    let resp;
+    try {
+        resp = await fetch(url, {
+            method:  'POST',
+            headers: {
+                'Content-Type':  'application/json',
+                'apikey':        cfg.SUPABASE_ANON_KEY,
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({ texto, contexto })
+        });
+    } catch (e) {
+        throw enriquecer('asistente-pensa fetch', e);
+    }
+    const data = await resp.json().catch(() => ({}));
+    if (!resp.ok || data.error) {
+        const e = new Error(data.error || `HTTP ${resp.status}`);
+        e.status = resp.status;
+        e.detalle = data;
+        throw enriquecer('asistente-pensa', e);
+    }
+    return data; // { respuesta, accion: null | {tipo, destino} }
+}
+
 // =====================================================================
 // Mis estudios — subida + análisis IA (edge function analizar-estudio)
 // =====================================================================

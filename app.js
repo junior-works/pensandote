@@ -32,6 +32,7 @@ import * as Papa      from './js/screens-papa.js';
 import * as HacemeAcordar from './js/screens-haceme-acordar.js';
 import * as PamiAnses from './js/screens-pami-anses.js';
 import * as Estudios from './js/screens-estudios.js';
+import { montarAsistente } from './js/asistente-pensa.js';
 import { prepararDatosReales, limpiarDatosReales } from './js/preview.js';
 
 const $app = document.getElementById('app');
@@ -338,6 +339,10 @@ async function bootstrap() {
     // (que hace replaceState para limpiar tokens del magic-link), así
     // nuestro marker queda en la entry final.
     instalarBackCoordinator();
+
+    // Asistente virtual flotante (Fase 1). Monta el botón bottom-right
+    // una sola vez; el módulo decide cuándo mostrarlo según el estado.
+    montarAsistente();
 
     onRouteChange(renderRoute);
 }

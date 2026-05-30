@@ -745,6 +745,45 @@ body[data-mode="simple"] .avisos-mini__ayuda { font-size: var(--fs-xs); margin: 
     font-size: 0.75em; font-weight: 700; margin-left: 0.4rem;
 }
 
+/* ---- Asistente flotante (Fase 1) ----
+   Botón circular bottom-right siempre visible (en sesión real). Se
+   oculta solo cuando hay modal/lightbox abierto o cuando el usuario
+   está en el tutorial de onboarding (eso lo maneja el JS). */
+.pdt-asistente-btn {
+    position: fixed;
+    bottom: 1.4rem;
+    right: 1.4rem;
+    width: 56px; height: 56px;
+    border-radius: 50%;
+    background: var(--accent-familia);
+    border: 2px solid var(--line);
+    box-shadow: 3px 3px 0 var(--line);
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer;
+    z-index: 90;          /* sobre el contenido; los modales (overlay) tienen z mayor */
+    padding: 0;
+    transition: transform 120ms ease, box-shadow 120ms ease;
+}
+.pdt-asistente-btn:hover {
+    transform: translate(-1px, -1px);
+    box-shadow: 4px 4px 0 var(--line);
+}
+.pdt-asistente-btn:active {
+    transform: translate(2px, 2px);
+    box-shadow: 1px 1px 0 var(--line);
+}
+.pdt-asistente-btn__emoji {
+    font-size: 1.8rem;
+    line-height: 1;
+}
+/* En modo simple lo subimos un toque para no chocar con el botón "Historias"
+   que aparece al final del home. */
+body[data-mode="simple"] .pdt-asistente-btn { bottom: 1.6rem; }
+
+/* Overlay del asistente — hereda .modal-overlay, sólo afinamos el modal */
+.pdt-asistente-modal { max-width: 520px; }
+.pdt-asistente-resp .tutorial-paso__texto { font-size: 1.05rem; line-height: 1.4; }
+
 /* Chip "⭐ Cabecera" en la lista de médicos */
 .medico-chip {
     display: inline-block;
