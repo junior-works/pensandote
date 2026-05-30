@@ -12,7 +12,7 @@
  * mover el estado, y el router re-renderiza.
  */
 
-import { onRouteChange, refresh as refreshRouter, currentRoute, go } from './js/router.js';
+import { onRouteChange, refresh as refreshRouter, currentRoute, go, goReplace } from './js/router.js';
 import { state, onStateChange, miembroActivo, setSesionReal, setModo } from './js/state.js';
 import { montarDevPanel } from './js/dev-panel.js';
 import { esEntornoDev } from './js/ui.js';
@@ -272,7 +272,7 @@ async function bootstrap() {
                 try { await cambiarCirculoActivo(e.data.circle_id); }
                 catch (err) { console.warn('[push-navigate switch]', err); }
             }
-            go(e.data.url);
+            goReplace(e.data.url);
         });
     }
 
