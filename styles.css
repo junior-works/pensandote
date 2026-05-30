@@ -784,6 +784,31 @@ body[data-mode="simple"] .pdt-asistente-btn { bottom: 1.6rem; }
 .pdt-asistente-modal { max-width: 520px; }
 .pdt-asistente-resp .tutorial-paso__texto { font-size: 1.05rem; line-height: 1.4; }
 
+/* Fase 3: el botón flotante pulsa cuando detecta posible confusión. */
+.pdt-asistente-btn.is-suggesting {
+    animation: pdt-asistente-pulse 1.4s ease-in-out infinite;
+}
+@keyframes pdt-asistente-pulse {
+    0%, 100% { box-shadow: 3px 3px 0 var(--line), 0 0 0 0 rgba(108,160,160,0.55); }
+    50%      { box-shadow: 3px 3px 0 var(--line), 0 0 0 14px rgba(108,160,160,0); }
+}
+/* Tooltip "¿Te ayudo?" sobre el botón flotante. */
+.pdt-asistente-tooltip {
+    position: fixed;
+    bottom: calc(1.4rem + 56px + 8px);
+    right: 1.4rem;
+    background: var(--accent-inicio);
+    color: var(--ink);
+    border: 2px solid var(--line);
+    border-radius: 0.6rem;
+    box-shadow: 3px 3px 0 var(--line);
+    padding: 0.4em 0.8em;
+    font-size: 0.92em;
+    font-weight: 700;
+    z-index: 95;
+    pointer-events: none;
+}
+
 /* Pulso visual cuando el mic está grabando (asistente + cualquier otro
    .btn con la clase). Sutil para no distraer pero claro. */
 .btn.is-recording {

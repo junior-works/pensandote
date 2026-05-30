@@ -46,6 +46,8 @@ export function montarAsistente() {
     // ocultar/mostrar el botón sin que el usuario haga nada.
     new MutationObserver(actualizarVisibilidad).observe(document.body, { childList: true });
     actualizarVisibilidad();
+    // Fase 3 — tracking proactivo de confusión.
+    instalarTrackingProactivo();
 }
 
 function crearBoton() {
@@ -458,4 +460,107 @@ function mostrarBarraGuia(onSalir) {
 function actualizarBarraGuia(bar, texto) {
     const $txt = bar?.querySelector('.pdt-guia-bar__texto');
     if ($txt) $txt.textContent = texto || '';
+}
+
+// =====================================================================
+// Fase 3 — Tracking proactivo de confusión
+// ---------------------------------------------------------------------
+// Señales (lado cliente, sin telemetría):
+//   - Mismo botón tocado 3+ veces seguidas sin cambio de ruta.
+//   - 4+ cambios de hash en 10 s (back/forward thrashing).
+//   - 30 s en una pantalla sin interactuar.
+// En cualquiera de esas: el botón flotante pulsa + tooltip "¿Te ayudo?"
+// por 5 s. Nunca habla por sí solo. Se resetea al primer click del
+// usuario o al abrir el asistente.
+// =====================================================================
+
+let $tooltip = null;
+
+function instalarTrackingProactivo() {
+    if (window.__pdtTrackingBound) return;
+    window.__pdtTrackingBound = true;
+
+    let lastTargetSig = null;
+    let sameTargetCount = 0;
+    let hashTimes = [];
+    let idleTimer = null;
+    const IDLE_MS = 30000;
+
+    function quitarSugerencia() {
+        if ($btn) $btn.classList.remove('is-suggesting');
+        ocultarTooltipAsistente();
+    }
+    function senial() {
+        if (!$btn || $btn.style.display === 'none') return;
+        if ($overlay || guiaActiva) return; // ya está interactuando
+        if (document.querySelector('.modal-overlay, .lightbox-overlay, .pdt-highlight-overlay')) return;
+        $btn.classList.add('is-suggesting');
+        mostrarTooltipAsistente('¿Te ayudo?');
+    }
+    function resetIdle() {
+        clearTimeout(idleTimer);
+        idleTimer = setTimeout(senial, IDLE_MS);
+    }
+
+    document.addEventListener('click', (e) => {
+        // Ignorar clicks dentro del propio asistente o sus pieles.
+        if (e.target.closest('#pdt-asistente-btn, .pdt-asistente-overlay, .pdt-guia-bar, .pdt-highlight-overlay')) {
+            return;
+        }
+        quitarSugerencia();
+        resetIdle();
+        const tgt = e.target.closest('button, a, [data-go], [data-back]');
+        if (!tgt) return;
+        // Firma simple del target para detectar tap repetido.
+        const sig = tgt.id
+            || tgt.getAttribute('data-go')
+            || tgt.getAttribute('data-back')
+            || (tgt.textContent || '').trim().slice(0, 60);
+        if (sig === lastTargetSig) {
+            sameTargetCount++;
+            if (sameTargetCount >= 3) {
+                senial();
+                sameTargetCount = 0;
+            }
+        } else {
+            lastTargetSig = sig;
+            sameTargetCount = 1;
+        }
+    }, true);
+
+    window.addEventListener('hashchange', () => {
+        // Cambio de ruta: cancela tap-repetido y resetea idle.
+        sameTargetCount = 0;
+        lastTargetSig = null;
+        quitarSugerencia();
+        resetIdle();
+        // Thrashing: 4+ cambios en 10 s.
+        const now = Date.now();
+        hashTimes = hashTimes.filter(t => now - t < 10000);
+        hashTimes.push(now);
+        if (hashTimes.length >= 4) {
+            senial();
+            hashTimes = [];
+        }
+    });
+
+    resetIdle();
+}
+
+function mostrarTooltipAsistente(texto) {
+    ocultarTooltipAsistente();
+    if (!$btn) return;
+    $tooltip = document.createElement('div');
+    $tooltip.className = 'pdt-asistente-tooltip';
+    $tooltip.textContent = texto;
+    document.body.appendChild($tooltip);
+    setTimeout(() => {
+        // El pulso queda hasta el próximo click; el tooltip se va más
+        // rápido para no estorbar.
+        ocultarTooltipAsistente();
+    }, 5000);
+}
+
+function ocultarTooltipAsistente() {
+    if ($tooltip) { try { $tooltip.remove(); } catch (_) {} $tooltip = null; }
 }
