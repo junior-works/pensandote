@@ -260,12 +260,18 @@ async function bootstrap() {
 
     // Deep-link de notificaciones: cuando la app YA está abierta y el
     // usuario toca un push, el service worker enfoca la pestaña y postea
-    // {type:'push-navigate', url}. Navegamos a esa ruta. Guard para
-    // registrar el listener una sola vez.
+    // {type:'push-navigate', url, circle_id}. Si viene un circle_id,
+    // cambiamos al círculo correspondiente ANTES de navegar (sino el
+    // user veía la noti de mamá y la app le abría el círculo de papá).
     if ('serviceWorker' in navigator && !window.__pushNavBound) {
         window.__pushNavBound = true;
-        navigator.serviceWorker.addEventListener('message', (e) => {
-            if (e.data?.type === 'push-navigate' && e.data.url) go(e.data.url);
+        navigator.serviceWorker.addEventListener('message', async (e) => {
+            if (e.data?.type !== 'push-navigate' || !e.data.url) return;
+            if (e.data.circle_id) {
+                try { await cambiarCirculoActivo(e.data.circle_id); }
+                catch (err) { console.warn('[push-navigate switch]', err); }
+            }
+            go(e.data.url);
         });
     }
 
@@ -297,7 +303,14 @@ async function bootstrap() {
                 let membresia = null;
                 let circuloActivoId = null;
                 if (circulos.length) {
-                    circuloActivoId = circulos[0].id;
+                    // Si la URL trae ?circle=<uuid> (vino de un push en
+                    // cold start), arrancamos en ese círculo en vez del
+                    // primero. Si el circle_id no está entre los del
+                    // usuario, fallback al primero.
+                    const qCircle = currentRoute().query?.circle;
+                    circuloActivoId = (qCircle && circulos.some(c => c.id === qCircle))
+                        ? qCircle
+                        : circulos[0].id;
                     membresia = await membresiaActiva(usr.id, circuloActivoId);
                 }
                 setSesionReal({
@@ -327,6 +340,33 @@ async function bootstrap() {
     instalarBackCoordinator();
 
     onRouteChange(renderRoute);
+}
+
+/**
+ * Cambia el círculo activo a `circleId` (si es uno del usuario). Refetchea
+ * la membresía y setea sesión real → onStateChange refresca el router.
+ * Devuelve true si lo cambió, false si el círculo no está en la lista del
+ * usuario o algo falló (fallback silencioso, no rompe la navegación que
+ * venga después).
+ */
+async function cambiarCirculoActivo(circleId) {
+    if (!circleId || !state.usuarioReal) return false;
+    if (state.circuloActivoIdReal === circleId) return true;
+    const enLista = state.circulosReal?.some(c => c.id === circleId);
+    if (!enLista) return false;
+    try {
+        const memb = await membresiaActiva(state.usuarioReal.id, circleId);
+        setSesionReal({
+            usuario:         state.usuarioReal,
+            circulos:        state.circulosReal,
+            circuloActivoId: circleId,
+            membresia:       memb
+        });
+        return true;
+    } catch (err) {
+        console.warn('[cambiarCirculoActivo]', err);
+        return false;
+    }
 }
 
 // =====================================================================

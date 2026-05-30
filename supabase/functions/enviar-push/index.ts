@@ -125,7 +125,9 @@ Deno.serve(async (req) => {
             return json({ ok: true, sent: 0, failed: 0, deleted: 0, note: "sin suscripciones para los destinatarios" });
         }
 
-        const payload = JSON.stringify({ title, body: text, url, tag });
+        // circle_id viaja en el payload para que el cliente, al tocar la
+        // notificación, switchee al círculo correcto antes de renderizar.
+        const payload = JSON.stringify({ title, body: text, url, tag, circle_id });
         let sent = 0, failed = 0;
         const toDelete: string[] = [];
 

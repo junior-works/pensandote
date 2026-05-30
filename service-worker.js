@@ -18,7 +18,7 @@
  * correcto en ambos entornos.
  */
 
-const CACHE_NAME = 'pensandote-shell-v0.9.34';
+const CACHE_NAME = 'pensandote-shell-v0.9.35';
 
 const SHELL_FILES = [
     './',
@@ -165,39 +165,51 @@ self.addEventListener('push', (event) => {
         // una sola notificación, evitando spam (ej. "papá no marcó hoy"
         // sobre el mismo círculo durante el día).
         tag:   data.tag || 'pensandote',
-        // url viaja como dato para que `notificationclick` sepa adónde
-        // llevar al usuario al tocarla.
-        data:  { url: data.url || './' }
+        // url + circle_id viajan en data para que `notificationclick`
+        // mande al usuario al círculo correcto, no al último activo.
+        data:  { url: data.url || './', circle_id: data.circle_id || null }
     };
     event.waitUntil(self.registration.showNotification(title, opts));
 });
 
 self.addEventListener('notificationclick', (event) => {
     event.notification.close();
-    const targetUrl = event.notification.data?.url || './';
+    const baseUrl  = event.notification.data?.url || './';
+    const circleId = event.notification.data?.circle_id || null;
     event.waitUntil((async () => {
         const clientList = await self.clients.matchAll({
             type: 'window',
             includeUncontrolled: true
         });
-        // Si la PWA ya está abierta en alguna pestaña, la enfocamos
-        // y navegamos a la URL del aviso (mismo origen — usamos hash
-        // para que sea instantáneo).
+        // Si la PWA ya está abierta en alguna pestaña, la enfocamos y
+        // posteamos el destino + circle_id; app.js cambia el círculo
+        // antes de navegar.
         for (const client of clientList) {
             if ('focus' in client) {
-                try { client.postMessage({ type: 'push-navigate', url: targetUrl }); } catch (_) {}
+                try { client.postMessage({ type: 'push-navigate', url: baseUrl, circle_id: circleId }); } catch (_) {}
                 return client.focus();
             }
         }
-        // Si no hay ninguna abierta, la abrimos. Resolvemos contra el
-        // scope (la raíz de la app) y NO contra la URL del service worker:
-        // una URL de solo fragmento ('#/inicio') resuelta contra
-        // '.../service-worker.js' abriría el propio SW como documento
-        // (se ve el código fuente). Contra el scope ('.../') carga
-        // index.html con el hash correcto.
+        // Cold start: no hay pestaña abierta → openWindow. Embebemos el
+        // circle_id en el query del hash (ej. '#/inicio?circle=<uuid>')
+        // para que el bootstrap lo levante. Resolvemos contra el scope
+        // (no contra la URL del SW) para no abrir el propio SW como
+        // documento (bug viejo de "hoja con código").
         if (self.clients.openWindow) {
-            const dest = new URL(targetUrl, self.registration.scope).href;
+            const finalUrl = circleId ? agregarCircleAlHash(baseUrl, circleId) : baseUrl;
+            const dest = new URL(finalUrl, self.registration.scope).href;
             return self.clients.openWindow(dest);
         }
     })());
 });
+
+// Agrega ?circle=<id> al hash de una URL del estilo '#/inicio' o
+// '#/inicio?p=1' (preservando lo que ya hubiera).
+function agregarCircleAlHash(url, circleId) {
+    const i = url.indexOf('#');
+    if (i < 0) return url + '#?circle=' + encodeURIComponent(circleId);
+    const head = url.slice(0, i);
+    const hash = url.slice(i);
+    const sep  = hash.indexOf('?') < 0 ? '?' : '&';
+    return head + hash + sep + 'circle=' + encodeURIComponent(circleId);
+}
