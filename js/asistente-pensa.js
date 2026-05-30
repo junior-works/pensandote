@@ -23,7 +23,7 @@
  */
 
 import { state, onStateChange } from './state.js';
-import { go } from './router.js';
+import { go, goReplace } from './router.js';
 import {
     h, modal, stopSpeak, speakES,
     installModalBackButton, cleanupModalBackButton
@@ -422,7 +422,7 @@ async function ejecutarGuia(slug) {
         for (const p of pasos) {
             if (cancelado) break;
             if (p.ir_a) {
-                go(p.ir_a);
+                goReplace(p.ir_a);
                 await esperar(180);
             }
             if (p.texto) {
