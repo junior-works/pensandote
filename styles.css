@@ -2632,3 +2632,253 @@ body[data-mode="dashboard"] .admin-pantalla__head h1 {
     grid-template-columns: 1fr;
 }
 
+/* ===================================================================
+   ADMIN — Rediseño visual Etapa A (sistema dark glass + shell)
+   -------------------------------------------------------------------
+   Solo aplica al modo dashboard (familiar admin). El modo simple del
+   adulto mayor NO se toca. Etapa A = sistema de tokens + shell
+   (header sticky + bottom nav glass). Las pantallas internas se
+   rediseñan en Etapa B; por eso los tokens de fondo/card quedan
+   DEFINIDOS acá pero todavía no se pintan sobre #app.
+   Referencia visual (no copia): Spotify dark + AnyTime Fitness.
+   =================================================================== */
+body[data-mode="dashboard"] {
+    /* Fondos */
+    --admin-bg:            #0a0a0f;              /* negro profundo, tinte violeta */
+    --admin-glass:         rgba(255, 255, 255, 0.04);
+    --admin-glass-border:  rgba(255, 255, 255, 0.08);
+    --admin-glass-fallback: rgba(20, 20, 30, 0.85);   /* sin backdrop-filter */
+    /* Texto */
+    --admin-ink:           #f0f0f5;
+    --admin-ink-soft:      #9090a0;
+    /* Acentos neon por categoría (para Etapa B) */
+    --admin-cyan:          #22d3ee;   /* info */
+    --admin-purple:        #a855f7;   /* salud */
+    --admin-lime:          #84cc16;   /* ok */
+    --admin-coral:         #fb7185;   /* alerta */
+    --admin-glow:          0 0 20px rgba(168, 85, 247, 0.3);
+    /* Tipografía de datos / UI del dashboard */
+    --font-admin:          'Plus Jakarta Sans', system-ui, sans-serif;
+    /* Métricas del shell */
+    --admin-header-h:      64px;
+    --admin-nav-h:         64px;
+}
+
+/* El bottom nav fijo tapa el final del contenido: reservamos espacio
+   (alto del nav + safe-area del notch inferior). */
+body[data-mode="dashboard"] #app {
+    padding-bottom: calc(var(--admin-nav-h) + env(safe-area-inset-bottom, 0px) + 1.25rem);
+}
+
+/* El FAB del asistente (👵) sube por encima del nav en dashboard. */
+body[data-mode="dashboard"] .pdt-asistente-btn {
+    bottom: calc(var(--admin-nav-h) + env(safe-area-inset-bottom, 0px) + 1rem);
+    z-index: 95;
+}
+
+/* --------------------------- Header sticky --------------------------- */
+#admin-header {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    height: var(--admin-header-h);
+    background: var(--admin-glass);
+    -webkit-backdrop-filter: blur(20px);
+    backdrop-filter: blur(20px);
+    border-bottom: 1px solid var(--admin-glass-border);
+    color: var(--admin-ink);
+    font-family: var(--font-admin);
+}
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    #admin-header { background: var(--admin-glass-fallback); }
+}
+.admin-header__inner {
+    max-width: 1100px;
+    height: 100%;
+    margin: 0 auto;
+    padding: 0 0.9rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+}
+.admin-header__id {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    min-width: 0;
+}
+.admin-avatar {
+    flex-shrink: 0;
+    width: 40px; height: 40px;
+    border-radius: 50%;
+    display: grid; place-items: center;
+    font-family: var(--font-admin);
+    font-weight: 700;
+    font-size: 1.05rem;
+    color: #fff;
+    background: linear-gradient(135deg, var(--admin-purple), var(--admin-cyan));
+    box-shadow: var(--admin-glow);
+}
+.admin-header__txt { display: flex; flex-direction: column; min-width: 0; line-height: 1.15; }
+.admin-header__nombre {
+    font-weight: 700;
+    font-size: 0.98rem;
+    color: var(--admin-ink);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.admin-header__rol {
+    font-size: 0.72rem;
+    color: var(--admin-ink-soft);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+/* Selector de círculo (chip + dropdown) */
+.admin-circulo { position: relative; flex-shrink: 0; }
+.admin-circulo__chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    max-width: 48vw;
+    padding: 0.4rem 0.7rem;
+    border-radius: 999px;
+    border: 1px solid var(--admin-glass-border);
+    background: var(--admin-glass);
+    color: var(--admin-ink);
+    font-family: var(--font-admin);
+    font-weight: 500;
+    font-size: 0.88rem;
+    line-height: 1;
+    transition: background 140ms ease, border-color 140ms ease;
+}
+.admin-circulo__chip:hover { background: rgba(255, 255, 255, 0.08); }
+.admin-circulo__chip:disabled { cursor: default; opacity: 1; }
+.admin-circulo__nombre {
+    max-width: 38vw;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.admin-circulo__chevron {
+    font-size: 0.7rem;
+    color: var(--admin-ink-soft);
+    transition: transform 180ms ease;
+}
+.admin-circulo.is-open .admin-circulo__chevron { transform: rotate(180deg); }
+
+.admin-circulo__menu {
+    position: absolute;
+    top: calc(100% + 0.5rem);
+    right: 0;
+    min-width: 200px;
+    max-width: 78vw;
+    padding: 0.35rem;
+    background: var(--admin-glass-fallback);
+    -webkit-backdrop-filter: blur(20px);
+    backdrop-filter: blur(20px);
+    border: 1px solid var(--admin-glass-border);
+    border-radius: 14px;
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    z-index: 110;
+}
+.admin-circulo__menu[hidden] { display: none; }
+.admin-circulo__opt {
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    width: 100%;
+    padding: 0.6rem 0.7rem;
+    border: none;
+    border-radius: 10px;
+    background: transparent;
+    color: var(--admin-ink);
+    font-family: var(--font-admin);
+    font-size: 0.9rem;
+    text-align: left;
+    transition: background 120ms ease;
+}
+.admin-circulo__opt:hover:not(:disabled) { background: rgba(255, 255, 255, 0.07); }
+.admin-circulo__opt:disabled { cursor: wait; opacity: 0.6; }
+.admin-circulo__opt .admin-circulo__dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--admin-ink-soft);
+    flex-shrink: 0;
+}
+.admin-circulo__opt.is-activo { background: rgba(168, 85, 247, 0.16); }
+.admin-circulo__opt.is-activo .admin-circulo__dot { background: var(--admin-purple); }
+
+/* ------------------------- Bottom nav glass ------------------------- */
+#admin-nav {
+    position: fixed;
+    left: 0; right: 0; bottom: 0;
+    z-index: 100;
+    height: calc(var(--admin-nav-h) + env(safe-area-inset-bottom, 0px));
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    background: var(--admin-glass);
+    -webkit-backdrop-filter: blur(20px);
+    backdrop-filter: blur(20px);
+    border-top: 1px solid var(--admin-glass-border);
+    font-family: var(--font-admin);
+}
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    #admin-nav { background: var(--admin-glass-fallback); }
+}
+.admin-nav__inner {
+    position: relative;
+    max-width: 760px;
+    height: var(--admin-nav-h);
+    margin: 0 auto;
+    display: flex;
+    align-items: stretch;
+}
+/* Pill animada que se desliza al item activo */
+.admin-nav__pill {
+    position: absolute;
+    top: 8px;
+    bottom: 8px;
+    left: 0;
+    width: calc(100% / var(--admin-nav-count, 5));
+    transform: translateX(calc(var(--admin-nav-active, 0) * 100%));
+    background: rgba(168, 85, 247, 0.15);
+    border-radius: 16px;
+    transition: transform 200ms ease-out;
+    pointer-events: none;
+}
+.admin-nav__item {
+    position: relative;
+    z-index: 1;
+    flex: 1 1 0;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.12rem;
+    border: none;
+    background: transparent;
+    color: var(--admin-ink-soft);
+    font-family: var(--font-admin);
+    font-weight: 500;
+    transition: color 180ms ease;
+}
+.admin-nav__item__icon { font-size: 1.25rem; line-height: 1; }
+.admin-nav__item__label {
+    font-size: 0.66rem;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    white-space: nowrap;
+    overflow: hidden; text-overflow: ellipsis;
+    max-width: 100%;
+}
+.admin-nav__item.is-activo {
+    color: #fff;
+    text-shadow: 0 0 12px rgba(168, 85, 247, 0.5);
+}
+.admin-nav__item:focus-visible {
+    outline: none;
+    color: #fff;
+    box-shadow: inset 0 0 0 2px var(--admin-glass-border);
+    border-radius: 14px;
+}
+

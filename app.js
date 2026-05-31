@@ -79,7 +79,7 @@ function renderRoute(ruta) {
     // La barra sticky del círculo activo se evalúa en cada render —
     // así también se desmonta limpia cuando se cambia a demo o se
     // cierra sesión, no sólo cuando el flow entra a renderRouteReal.
-    actualizarBarraCirculo();
+    actualizarShellAdmin();
 
     if (state.modo === 'real') {
         return renderRouteReal(ruta);
@@ -167,11 +167,11 @@ function renderRouteReal(ruta) {
     // Setear body[data-mode] según la membresía real, para que la CSS
     // scopée los estilos (dashboard moderno / simple grande) correctamente.
     document.body.dataset.mode = state.membresiaReal?.interface_mode || 'dashboard';
-    // Barra sticky del círculo activo: actualizarBarraCirculo() ya
-    // se llama desde renderRoute, pero la re-llamamos acá por si la
+    // Shell del dashboard (header + bottom nav): actualizarShellAdmin()
+    // ya se llama desde renderRoute, pero la re-llamamos acá por si la
     // membresía cambió entre demo↔real sin un onStateChange intermedio
     // (la función es idempotente).
-    actualizarBarraCirculo();
+    actualizarShellAdmin();
 
     // Caso especial: link de invitación. Cae acá venga o no con sesión.
     // Si el token llegó vacío (link mal copiado / parser comió el hash),
@@ -449,14 +449,31 @@ bootstrap().catch(err => {
 });
 
 // ---------------------------------------------------------------------
-// Barra sticky con el círculo activo (sólo dashboard real)
+// Shell del dashboard admin (rediseño Etapa A): header sticky + bottom nav
 // ---------------------------------------------------------------------
 //
-// Vive fuera de #app (mismo patrón que el banner de preview) así
-// sobrevive a los innerHTML rewrites del router cuando el admin
-// navega entre contactos / médico / accesos / etc. Sticky top así
-// no pierde de vista contra qué círculo está cargando datos.
-function actualizarBarraCirculo() {
+// Reemplaza la vieja barra sticky del círculo (#circulo-bar). Vive fuera
+// de #app (mismo patrón que el banner de preview) así sobrevive a los
+// innerHTML rewrites del router cuando el admin navega entre Hogar /
+// contactos / salud / etc. Dos piezas:
+//   - #admin-header : avatar + nombre del familiar + selector de círculo
+//                     (chip con dropdown si hay 2+ círculos). Sticky top.
+//   - #admin-nav    : bottom nav glass con pill animada. Fixed bottom.
+// Sólo en modo real, dashboard, con círculo activo (igual que la vieja
+// barra). En modo simple / preview / demo se desmonta limpio.
+
+// Items del bottom nav. `match` lista las rutas que dejan ese item activo
+// (así #/medico o #/remedios también prenden "Salud"). El orden define la
+// posición de la pill.
+const ADMIN_NAV_ITEMS = [
+    { href: '#/inicio',         icon: '🏠', label: 'Inicio',     match: ['inicio', 'cuenta'] },
+    { href: '#/contactos',      icon: '📇', label: 'Contactos',  match: ['contactos'] },
+    { href: '#/datos-medicos',  icon: '🩺', label: 'Salud',      match: ['datos-medicos', 'medico', 'salud', 'remedios'] },
+    { href: '#/haceme-acordar', icon: '⏰', label: 'Recordá',    match: ['haceme-acordar'] },
+    { href: '#/accesos-admin',  icon: '🔗', label: 'Accesos',    match: ['accesos-admin', 'estudios', 'guia-admin'] }
+];
+
+function actualizarShellAdmin() {
     const debeMostrar =
         state.modo === 'real' &&
         !state.modoPreview &&
@@ -464,86 +481,182 @@ function actualizarBarraCirculo() {
         state.circuloActivoIdReal &&
         state.circulosReal.length > 0;
 
-    if (!debeMostrar) { desmontarBarraCirculo(); return; }
+    if (!debeMostrar) { desmontarShellAdmin(); return; }
 
     const activo = state.circulosReal.find(x => x.id === state.circuloActivoIdReal);
-    if (!activo) { desmontarBarraCirculo(); return; }
+    if (!activo) { desmontarShellAdmin(); return; }
 
-    let b = document.getElementById('circulo-bar');
-    if (!b) {
-        b = document.createElement('div');
-        b.id = 'circulo-bar';
+    montarHeaderAdmin(activo);
+    montarBottomNavAdmin();
+}
+
+function desmontarShellAdmin() {
+    document.getElementById('admin-header')?.remove();
+    document.getElementById('admin-nav')?.remove();
+}
+
+// --- Header: avatar + nombre + selector de círculo --------------------
+function montarHeaderAdmin(activo) {
+    let h = document.getElementById('admin-header');
+    if (!h) {
+        h = document.createElement('header');
+        h.id = 'admin-header';
         // Antes de #app y DESPUÉS del install-banner / preview-banner
         // si existen — así no le pisan el lugar.
-        document.body.insertBefore(b, document.getElementById('app'));
+        document.body.insertBefore(h, document.getElementById('app'));
     }
 
-    // 2+ círculos → tabs (segmented control) para saltar de uno a otro
-    // de un toque. 1 solo → label estático (como antes).
-    if (state.circulosReal.length >= 2) {
-        b.classList.add('circulo-bar--tabs');
-        b.innerHTML = `
-            <div class="circulo-bar__inner circulo-bar__tabs" role="tablist" aria-label="Cambiar de círculo">
-                ${state.circulosReal.map(c => {
-                    const esActivo = c.id === state.circuloActivoIdReal;
-                    return `
-                        <button class="circulo-tab${esActivo ? ' is-activo' : ''}"
-                                role="tab"
-                                aria-selected="${esActivo}"
-                                data-circulo-tab="${escapeHtml(c.id)}"
-                                ${esActivo ? 'tabindex="0"' : 'tabindex="-1"'}>
-                            <span class="circulo-tab__dot" aria-hidden="true"></span>
-                            <span class="circulo-tab__txt">${escapeHtml(nombreCortoCirculo(c.nombre))}</span>
-                        </button>
-                    `;
-                }).join('')}
+    const nombre   = nombreUsuario();
+    const inicial  = (nombre[0] || '·').toUpperCase();
+    const rol      = state.membresiaReal?.parentesco || '';
+    const variosCirc = state.circulosReal.length >= 2;
+
+    h.innerHTML = `
+        <div class="admin-header__inner">
+            <div class="admin-header__id">
+                <span class="admin-avatar" aria-hidden="true">${escapeHtml(inicial)}</span>
+                <div class="admin-header__txt">
+                    <span class="admin-header__nombre">${escapeHtml(nombre)}</span>
+                    ${rol ? `<span class="admin-header__rol">${escapeHtml(rol)}</span>` : ''}
+                </div>
             </div>
-        `;
-        // Wire de los clicks — al tocar otra pestaña: refetch membresía
-        // del usuario en ese círculo + setSesionReal + refresh. Mismo
-        // efecto que el botón "Activar" de "Tus círculos" pero a un toque.
-        b.querySelectorAll('[data-circulo-tab]').forEach(tab => {
-            tab.addEventListener('click', async () => {
-                const cid = tab.dataset.circuloTab;
-                if (cid === state.circuloActivoIdReal) return;
-                if (!state.usuarioReal) return;
-                tab.disabled = true;
-                try {
-                    const memb = await membresiaActiva(state.usuarioReal.id, cid);
-                    setSesionReal({
-                        usuario:         state.usuarioReal,
-                        circulos:        state.circulosReal,
-                        circuloActivoId: cid,
-                        membresia:       memb
-                    });
-                    // setSesionReal emite → onStateChange en bootstrap
-                    // dispara refresh del router, que repinta el Hogar
-                    // (Estado del día, Actividad, etc.) contra el nuevo
-                    // círculo. Y actualizarBarraCirculo se re-llama
-                    // mostrando la nueva pestaña activa.
-                } catch (err) {
-                    console.error('[circulo-tab]', err);
-                    tab.disabled = false;
-                }
-            });
+            <div class="admin-circulo">
+                <button class="admin-circulo__chip" type="button"
+                        ${variosCirc ? 'aria-haspopup="listbox" aria-expanded="false"' : 'disabled'}
+                        data-circulo-chip>
+                    <span class="admin-circulo__nombre">${escapeHtml(nombreCortoCirculo(activo.nombre))}</span>
+                    ${variosCirc ? '<span class="admin-circulo__chevron" aria-hidden="true">▼</span>' : ''}
+                </button>
+                ${variosCirc ? `
+                    <div class="admin-circulo__menu" role="listbox" aria-label="Cambiar de círculo" hidden>
+                        ${state.circulosReal.map(c => {
+                            const esActivo = c.id === state.circuloActivoIdReal;
+                            return `
+                                <button class="admin-circulo__opt${esActivo ? ' is-activo' : ''}"
+                                        role="option" aria-selected="${esActivo}"
+                                        data-circulo-opt="${escapeHtml(c.id)}">
+                                    <span class="admin-circulo__dot" aria-hidden="true"></span>
+                                    <span>${escapeHtml(c.nombre)}</span>
+                                </button>
+                            `;
+                        }).join('')}
+                    </div>
+                ` : ''}
+            </div>
+        </div>
+    `;
+
+    if (variosCirc) wireSelectorCirculo(h);
+}
+
+function wireSelectorCirculo(h) {
+    const cont = h.querySelector('.admin-circulo');
+    const chip = h.querySelector('[data-circulo-chip]');
+    const menu = h.querySelector('.admin-circulo__menu');
+    if (!cont || !chip || !menu) return;
+
+    const cerrar = () => {
+        cont.classList.remove('is-open');
+        menu.hidden = true;
+        chip.setAttribute('aria-expanded', 'false');
+    };
+    const abrir = () => {
+        cont.classList.add('is-open');
+        menu.hidden = false;
+        chip.setAttribute('aria-expanded', 'true');
+    };
+
+    chip.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (menu.hidden) abrir(); else cerrar();
+    });
+
+    menu.querySelectorAll('[data-circulo-opt]').forEach(opt => {
+        opt.addEventListener('click', async () => {
+            const cid = opt.dataset.circuloOpt;
+            cerrar();
+            if (cid === state.circuloActivoIdReal || !state.usuarioReal) return;
+            opt.disabled = true;
+            try {
+                const memb = await membresiaActiva(state.usuarioReal.id, cid);
+                setSesionReal({
+                    usuario:         state.usuarioReal,
+                    circulos:        state.circulosReal,
+                    circuloActivoId: cid,
+                    membresia:       memb
+                });
+                // setSesionReal emite → onStateChange dispara refresh del
+                // router, que repinta el Hogar contra el nuevo círculo y
+                // re-llama actualizarShellAdmin (header + nav actualizados).
+            } catch (err) {
+                console.error('[circulo-opt]', err);
+                opt.disabled = false;
+            }
         });
-    } else {
-        b.classList.remove('circulo-bar--tabs');
-        const nombre = activo.nombre || 'tu círculo';
-        const yaTienePrefijo = /^c[íi]rculo\b/i.test(nombre.trim());
-        const titulo = yaTienePrefijo ? nombre : `Círculo de ${nombre}`;
-        b.innerHTML = `
-            <div class="circulo-bar__inner">
-                <span class="circulo-bar__dot" aria-hidden="true"></span>
-                <span class="circulo-bar__txt">${escapeHtml(titulo)}</span>
-            </div>
-        `;
+    });
+
+    // Cerrar el dropdown al tocar afuera (una sola vez por sesión).
+    if (!window.__pdtCirculoOutsideBound) {
+        window.__pdtCirculoOutsideBound = true;
+        document.addEventListener('click', (e) => {
+            const c = document.querySelector('.admin-circulo.is-open');
+            if (c && !c.contains(e.target)) {
+                c.classList.remove('is-open');
+                c.querySelector('.admin-circulo__menu')?.setAttribute('hidden', '');
+                c.querySelector('[data-circulo-chip]')?.setAttribute('aria-expanded', 'false');
+            }
+        });
     }
 }
 
-function desmontarBarraCirculo() {
-    const b = document.getElementById('circulo-bar');
-    if (b) b.remove();
+// --- Bottom nav glass con pill animada --------------------------------
+function montarBottomNavAdmin() {
+    let nav = document.getElementById('admin-nav');
+    if (!nav) {
+        nav = document.createElement('nav');
+        nav.id = 'admin-nav';
+        nav.setAttribute('aria-label', 'Navegación principal');
+        nav.style.setProperty('--admin-nav-count', String(ADMIN_NAV_ITEMS.length));
+        // Al final del body (fixed bottom) — sobrevive a los rewrites de #app.
+        document.body.appendChild(nav);
+    }
+
+    const rutaActual = currentRoute().name;
+    let activo = ADMIN_NAV_ITEMS.findIndex(it => it.match.includes(rutaActual));
+    if (activo < 0) activo = 0;   // Hogar por defecto.
+
+    nav.style.setProperty('--admin-nav-active', String(activo));
+    nav.innerHTML = `
+        <div class="admin-nav__inner">
+            <span class="admin-nav__pill" aria-hidden="true"></span>
+            ${ADMIN_NAV_ITEMS.map((it, i) => `
+                <button class="admin-nav__item${i === activo ? ' is-activo' : ''}"
+                        type="button"
+                        ${i === activo ? 'aria-current="page"' : ''}
+                        data-nav-href="${escapeHtml(it.href)}">
+                    <span class="admin-nav__item__icon" aria-hidden="true">${it.icon}</span>
+                    <span class="admin-nav__item__label">${escapeHtml(it.label)}</span>
+                </button>
+            `).join('')}
+        </div>
+    `;
+
+    nav.querySelectorAll('[data-nav-href]').forEach(btn => {
+        btn.addEventListener('click', () => go(btn.dataset.navHref));
+    });
+}
+
+/** Nombre a mostrar del familiar logueado: metadata del auth → parentesco
+ *  en el círculo → parte local del mail → "Vos". */
+function nombreUsuario() {
+    const u = state.usuarioReal;
+    const meta = u?.user_metadata || {};
+    const cand =
+        meta.full_name || meta.name || meta.nombre ||
+        state.membresiaReal?.parentesco ||
+        (u?.email ? u.email.split('@')[0] : '') ||
+        'Vos';
+    return String(cand).trim() || 'Vos';
 }
 
 /** Nombre corto para una tab: si empieza con "Círculo de X", devuelve
