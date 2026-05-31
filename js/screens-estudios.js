@@ -8,7 +8,7 @@
  */
 
 import { state } from './state.js';
-import { go, goBack } from './router.js';
+import { go, goBack, currentRoute } from './router.js';
 import { h, modal, wireTTSToggle, stopSpeak } from './ui.js';
 import { esPreview, avisarPreview } from './preview.js';
 import {
@@ -134,6 +134,12 @@ function pacienteUserId(circleId) {
 export async function renderEstudios($app) {
     const c = state.circulosReal.find(x => x.id === state.circuloActivoIdReal);
     if (!c) return go('#/inicio');
+    // Las sub-vistas viven en la MISMA ruta #/estudios con query params,
+    // así cada navegación empuja una entry de historial y el botón atrás
+    // retrocede paso por paso (lista de especialidad → detalle, etc.).
+    const { query } = currentRoute();
+    if (query.id)  return vistaResultadoPorId($app, c.id, query.id);
+    if (query.esp) return vistaListaEspecialidad($app, c.id, query.esp);
     await vistaPrincipal($app, c.id);
 }
 
@@ -202,7 +208,8 @@ async function vistaPrincipal($app, circleId) {
                     const n = grupos[k].length;
                     return `
                         <li>
-                            <button class="btn btn--xl btn--full estudios-grupo" data-esp="${h(k)}"
+                            <button class="btn btn--xl btn--full estudios-grupo"
+                                    data-go="#/estudios?esp=${h(encodeURIComponent(k))}"
                                     style="justify-content:flex-start;gap:0.6rem;">
                                 <span style="font-size:1.4em;">${emoji}</span>
                                 <span>${h(label)}</span>
@@ -213,9 +220,8 @@ async function vistaPrincipal($app, circleId) {
                 }).join('')}
             </ul>
         `;
-        $hist.querySelectorAll('[data-esp]').forEach(btn => {
-            btn.addEventListener('click', () => vistaListaEspecialidad($app, circleId, btn.dataset.esp, grupos[btn.dataset.esp]));
-        });
+        // Los botones de grupo usan data-go (wireGoButtons ya los cablea).
+        wireGoButtons($hist);
     } catch (err) {
         console.error('[estudios histórico]', err, err?.detalle);
         $hist.innerHTML = `<p class="muted">No pude cargar los estudios.</p>`;
@@ -256,7 +262,11 @@ async function handleArchivo($app, circleId, file) {
             });
             return vistaPrincipal($app, circleId);
         }
-        vistaResultado($app, circleId, r.estudio);
+        // Navegamos a la ruta del detalle (empuja entry de historial → el
+        // atrás vuelve a la principal). Cacheamos el estudio recién
+        // analizado para evitar un refetch innecesario.
+        _cacheEstudio = r.estudio;
+        go('#/estudios?id=' + encodeURIComponent(r.estudio.id));
     } catch (err) {
         console.error('[analizar-estudio]', err, err?.detalle);
         await modal({
@@ -284,9 +294,13 @@ function vistaResultado($app, circleId, e) {
     const [emoji, label] = espMeta(e.especialidad);
     const valores = Array.isArray(e.valores_destacados) ? e.valores_destacados : [];
     const fecha = e.fecha_estudio || e.created_at;
+    // Fallback de "atrás" cuando no hay historial: volver a la lista de la
+    // especialidad de este estudio (no a la vista principal).
+    const espKey = ESP[e.especialidad] ? e.especialidad : 'otro';
+    const volverEsp = `#/estudios?esp=${encodeURIComponent(espKey)}`;
 
     $app.innerHTML = `
-        ${barraVolverHTML('Mis estudios', '#/estudios')}
+        ${barraVolverHTML('Mis estudios', volverEsp)}
 
         <section class="card stack">
             <h2>${emoji} ${h(e.titulo || 'Estudio')}</h2>
@@ -325,7 +339,7 @@ function vistaResultado($app, circleId, e) {
             </section>
         ` : ''}
 
-        <button class="btn btn--xl btn--full" data-back="#/estudios" style="margin-top:1.2rem;">← Volver a mis estudios</button>
+        <button class="btn btn--xl btn--full" data-back="${h(volverEsp)}" style="margin-top:1.2rem;">← Volver a mis estudios</button>
         <button class="btn btn--full btn--danger" id="est-eliminar"
                 style="margin-top:0.6rem;min-height:0;padding:0.5em;font-size:0.9em;">
             🗑️ Eliminar
@@ -366,7 +380,7 @@ function vistaResultado($app, circleId, e) {
             stopSpeak();
             await eliminarEstudio({ id: e.id, archivoPath: e.archivo_path });
             toast('Estudio eliminado');
-            vistaPrincipal($app, circleId);
+            go('#/estudios');
         } catch (err) {
             console.error('[eliminar estudio]', err, err?.detalle);
             btn.disabled = false; btn.textContent = '🗑️ Eliminar';
@@ -383,9 +397,27 @@ function vistaResultado($app, circleId, e) {
     window.addEventListener('hashchange', () => stopSpeak(), { once: true });
 }
 
-// --- Lista de estudios de una especialidad ----------------------------
-function vistaListaEspecialidad($app, circleId, especialidad, estudios) {
+// Estudio recién analizado, cacheado para que el detalle ruteado por id
+// lo muestre sin un refetch (read-after-write) innecesario.
+let _cacheEstudio = null;
+
+// --- Lista de estudios de una especialidad (ruta #/estudios?esp=…) -----
+async function vistaListaEspecialidad($app, circleId, especialidad) {
+    if (esPreview()) return go('#/estudios');
     const [emoji, label] = espMeta(especialidad);
+    $app.innerHTML = `${barraVolverHTML(label, '#/estudios')}<p class="muted">Cargando…</p>`;
+    wireGoButtons($app);
+    let estudios;
+    try {
+        const all = await listarEstudios(circleId);
+        marcarVistos(all.map(e => e.id));
+        estudios = all.filter(e => (ESP[e.especialidad] ? e.especialidad : 'otro') === especialidad);
+    } catch (err) {
+        console.error('[estudios lista esp]', err, err?.detalle);
+        return vistaPrincipal($app, circleId);
+    }
+    if (!estudios.length) return vistaPrincipal($app, circleId);
+
     $app.innerHTML = `
         ${barraVolverHTML(label, '#/estudios')}
         <ul class="estudios-lista" style="list-style:none;padding:0;margin:0;display:grid;gap:0.6rem;">
@@ -393,7 +425,8 @@ function vistaListaEspecialidad($app, circleId, especialidad, estudios) {
                 const fecha = e.fecha_estudio ? fmtFecha(e.fecha_estudio) : fmtFecha(String(e.created_at).slice(0, 10));
                 return `
                     <li>
-                        <button class="btn btn--xl btn--full estudio-item" data-id="${h(e.id)}"
+                        <button class="btn btn--xl btn--full estudio-item"
+                                data-go="#/estudios?id=${h(encodeURIComponent(e.id))}"
                                 style="justify-content:flex-start;gap:0.6rem;text-align:left;">
                             <span style="font-size:1.3em;">${emoji}</span>
                             <span style="flex:1;min-width:0;">
@@ -408,10 +441,27 @@ function vistaListaEspecialidad($app, circleId, especialidad, estudios) {
         <button class="btn btn--xl btn--full" data-back="#/estudios" style="margin-top:1.2rem;">← Volver</button>
     `;
     wireGoButtons($app);
-    $app.querySelectorAll('[data-id]').forEach(btn => {
-        btn.addEventListener('click', () => {
-            const e = estudios.find(x => x.id === btn.dataset.id);
-            if (e) vistaResultado($app, circleId, e);
-        });
-    });
+}
+
+// --- Detalle de un estudio por id (ruta #/estudios?id=…) --------------
+async function vistaResultadoPorId($app, circleId, id) {
+    if (esPreview()) return go('#/estudios');
+    // Camino feliz: el estudio recién analizado ya está en memoria.
+    if (_cacheEstudio && _cacheEstudio.id === id) {
+        const e = _cacheEstudio;
+        _cacheEstudio = null;
+        return vistaResultado($app, circleId, e);
+    }
+    $app.innerHTML = `${barraVolverHTML('Mis estudios', '#/estudios')}<p class="muted">Cargando…</p>`;
+    wireGoButtons($app);
+    try {
+        const all = await listarEstudios(circleId);
+        marcarVistos(all.map(e => e.id));
+        const e = all.find(x => x.id === id);
+        if (!e) return vistaPrincipal($app, circleId);
+        vistaResultado($app, circleId, e);
+    } catch (err) {
+        console.error('[estudios detalle]', err, err?.detalle);
+        vistaPrincipal($app, circleId);
+    }
 }
