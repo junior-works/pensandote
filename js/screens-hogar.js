@@ -92,12 +92,15 @@ export async function renderHogar($app) {
 
     $app.innerHTML = `
         <section class="card inicio-hero" id="sec-hero">
-            <p class="muted">Cargando…</p>
+            <div class="skel skel--hero" aria-hidden="true"></div>
         </section>
 
         <section class="card stack hogar-checkin">
             <h2>📅 Estado de hoy</h2>
-            <div id="sec-checkin-estado"><p class="muted">Cargando…</p></div>
+            <div id="sec-checkin-estado">
+                <div class="skel skel--line" aria-hidden="true"></div>
+                <div class="skel skel--line skel--short" aria-hidden="true"></div>
+            </div>
         </section>
 
         <section class="card stack hogar-ultimo-carino" id="sec-ultimo-carino" hidden></section>
@@ -106,7 +109,11 @@ export async function renderHogar($app) {
 
         <section class="card stack hogar-actividad">
             <h2>📋 Actividad reciente</h2>
-            <div id="sec-actividad" class="inicio-feed"><p class="muted">Cargando…</p></div>
+            <div id="sec-actividad" class="inicio-feed">
+                <div class="skel skel--line" aria-hidden="true"></div>
+                <div class="skel skel--line" aria-hidden="true"></div>
+                <div class="skel skel--line skel--short" aria-hidden="true"></div>
+            </div>
         </section>
 
         <section class="card stack inicio-acciones">
@@ -127,12 +134,43 @@ export async function renderHogar($app) {
     cargarActividadReciente(c, $app.querySelector('#sec-actividad'), { limit: 5 });
 
     // Acciones rápidas — atajos a las pantallas que ya hacen cada cosa.
-    // "Mandar cariño" y "Mandar mensaje" llevan a Familia (la sección
-    // "Pensé en vos" es el gesto persona-a-persona dentro de la app).
+    // "Mandar cariño" lleva a Familia (la sección "Pensé en vos" es el
+    // gesto persona-a-persona dentro de la app).
     $app.querySelector('[data-qa="carino"]')?.addEventListener('click', () => go('#/familia'));
-    $app.querySelector('[data-qa="mensaje"]')?.addEventListener('click', () => go('#/familia'));
+    $app.querySelector('[data-qa="mensaje"]')?.addEventListener('click', () => mandarMensajeWhatsApp());
     $app.querySelector('[data-qa="recordatorio"]')?.addEventListener('click', () => go('#/haceme-acordar'));
     $app.querySelector('[data-qa="mail"]')?.addEventListener('click', () => go('#/datos-medicos'));
+}
+
+// "Mandar mensaje 💬": abre WhatsApp directo al adulto mayor (miembro
+// simple del círculo) si tiene teléfono cargado. Si no, explica y ofrece
+// el gesto in-app (Pensé en vos). Reusa _miembrosCache (ya cargado).
+async function mandarMensajeWhatsApp() {
+    const simple = (_miembrosCache || []).find(m => m.interface_mode === 'simple');
+    const tel = (simple?.user?.telefono || '').trim();
+    // wa.me espera sólo dígitos en formato internacional (sin +, espacios ni guiones).
+    const digitos = tel.replace(/[^\d]/g, '');
+    const nombre = (simple?.parentesco || '').trim().toLowerCase() || 'tu familiar';
+
+    if (digitos.length >= 8) {
+        window.open(`https://wa.me/${digitos}`, '_blank', 'noopener');
+        return;
+    }
+
+    const r = await modal({
+        titulo: '💬 Mandar mensaje',
+        cuerpo: `
+            <p>Todavía no tengo guardado el teléfono de
+            <strong>${h(nombre)}</strong>, así que no puedo abrir WhatsApp.</p>
+            <p class="muted">Mientras tanto podés mandarle un cariño dentro
+            de la app — lo ve cuando la abre.</p>
+        `,
+        acciones: [
+            { label: 'Más tarde' },
+            { label: '💜 Mandar cariño', clase: 'btn--pense', value: 'ok' }
+        ]
+    });
+    if (r === 'ok') go('#/familia');
 }
 
 // =====================================================================
@@ -612,6 +650,10 @@ async function cargarUltimoCarino(c, u, $wrap) {
         const autor = (_miembrosCache || []).find(m => m.user_id === p.de_user_id);
         const nombre = autor?.parentesco || 'Alguien';
         $wrap.hidden = false;
+        // Glow coral sólo si el cariño es fresco (≤24 h): novedad real, no
+        // un cariño viejo brillando para siempre.
+        const fresco = (Date.now() - new Date(p.created_at).getTime()) < 86_400_000;
+        $wrap.classList.toggle('card--glow-carino', fresco);
         $wrap.innerHTML = `
             <h2>💛 Último cariño</h2>
             <div class="pense-item is-nuevo" style="margin:0;">
@@ -689,9 +731,11 @@ async function cargarProximasCosas(c, $wrap) {
 
     const tarjetas = [];
     if (med) {
+        // Urgente: la toma vence dentro de la próxima hora → pulso suave.
+        const urgente = med.diff <= 60;
         const enHoras = med.diff < 60 ? `en ${med.diff} min` : `a las ${med.horario}`;
         tarjetas.push(`
-            <article class="proxima-card proxima-card--med">
+            <article class="proxima-card proxima-card--med${urgente ? ' proxima-card--urgente' : ''}">
                 <span class="proxima-card__icon">💊</span>
                 <strong class="proxima-card__titulo">${h(med.nombre)}${med.dosis ? ` · ${h(med.dosis)}` : ''}</strong>
                 <small class="proxima-card__cuando">${h(enHoras)}</small>
@@ -699,8 +743,11 @@ async function cargarProximasCosas(c, $wrap) {
         `);
     }
     if (rec) {
+        // Urgente: el recordatorio vence dentro de la próxima hora.
+        const ms = new Date(rec.fecha_hora_objetivo).getTime() - Date.now();
+        const urgente = isFinite(ms) && ms >= 0 && ms <= 3_600_000;
         tarjetas.push(`
-            <article class="proxima-card proxima-card--rec">
+            <article class="proxima-card proxima-card--rec${urgente ? ' proxima-card--urgente' : ''}">
                 <span class="proxima-card__icon">${emojiPorTipo(rec.tipo)}</span>
                 <strong class="proxima-card__titulo">${h(rec.titulo || 'Recordatorio')}</strong>
                 <small class="proxima-card__cuando">${h(formatearFechaRecordatorio(rec.fecha_hora_objetivo))}</small>
@@ -1086,8 +1133,8 @@ async function onRepreguntaTexto(historiaId, c, $cont) {
     const result = await modal({
         titulo: '💬 Repreguntar con texto',
         cuerpo: `
-            <textarea id="rep-texto" rows="4" placeholder="¿Qué le querés repreguntar?"
-                style="width:100%;padding:0.5em;border:2px solid #111;border-radius:6px;"></textarea>
+            <textarea id="rep-texto" rows="4" class="input-real" placeholder="¿Qué le querés repreguntar?"
+                style="width:100%;"></textarea>
         `,
         acciones: [
             { label: 'Cancelar' },
@@ -1681,17 +1728,42 @@ async function cargarActividadReciente(c, $cont, { limit = 15 } = {}) {
             </div>`;
         return;
     }
+    const ahora = Date.now();
     $cont.innerHTML = `
         <ul class="actividad-lista">
-            ${eventos.map(ev => `
-                <li class="actividad-item">
+            ${eventos.map(ev => {
+                // Fresco = sucedió en la última hora → highlight chico.
+                const ms = ahora - new Date(ev.at).getTime();
+                const fresco = isFinite(ms) && ms >= 0 && ms < 3_600_000;
+                return `
+                <li class="actividad-item${fresco ? ' actividad-item--fresco' : ''}">
                     <span class="actividad-item__icon" aria-hidden="true">${ACT_ICONOS[ev.tipo] || '•'}</span>
                     <span class="actividad-item__texto">${h(actividadTexto(ev))}</span>
                     <span class="actividad-item__hace">${h(tiempoRelativo(ev.at))}</span>
-                </li>
-            `).join('')}
+                </li>`;
+            }).join('')}
         </ul>
     `;
+
+    // El highlight de los items nuevos se desvanece 3 s después del primer
+    // scroll (de la lista o de la página). Si no hay scroll, queda hasta
+    // que el usuario vuelva a entrar — está bien, son novedades.
+    const frescos = $cont.querySelectorAll('.actividad-item--fresco');
+    if (frescos.length) {
+        const lista = $cont.querySelector('.actividad-lista');
+        let disparado = false;
+        const desvanecer = () => {
+            if (disparado) return;
+            disparado = true;
+            setTimeout(() => {
+                frescos.forEach(el => el.classList.remove('actividad-item--fresco'));
+            }, 3000);
+            lista?.removeEventListener('scroll', desvanecer);
+            window.removeEventListener('scroll', desvanecer, true);
+        };
+        lista?.addEventListener('scroll', desvanecer, { passive: true });
+        window.addEventListener('scroll', desvanecer, { passive: true, capture: true });
+    }
 }
 
 // =====================================================================

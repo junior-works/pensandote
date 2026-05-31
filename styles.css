@@ -2703,10 +2703,42 @@ body[data-mode="dashboard"] #app {
     padding-bottom: calc(var(--admin-nav-h) + env(safe-area-inset-bottom, 0px) + 1.25rem);
 }
 
-/* El FAB del asistente (👵) sube por encima del nav en dashboard. */
+/* El FAB del asistente (👵) sube por encima del nav en dashboard y deja
+   el look neobrutalista (sombra dura) por un glow glass acorde al tema. */
 body[data-mode="dashboard"] .pdt-asistente-btn {
     bottom: calc(var(--admin-nav-h) + env(safe-area-inset-bottom, 0px) + 1rem);
     z-index: 95;
+    background: linear-gradient(135deg, var(--admin-purple), var(--admin-cyan));
+    border: 1px solid var(--admin-glass-border);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45), 0 0 18px rgba(168, 85, 247, 0.35);
+}
+@media (hover: hover) {
+    body[data-mode="dashboard"] .pdt-asistente-btn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 12px 30px rgba(0, 0, 0, 0.5), 0 0 26px rgba(168, 85, 247, 0.5);
+    }
+}
+body[data-mode="dashboard"] .pdt-asistente-btn:active {
+    transform: translateY(0);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.45), 0 0 14px rgba(168, 85, 247, 0.3);
+}
+/* Estado proactivo (Fase 3): breath suave 1→1.03 cada 5 s + halo que late.
+   El transform (breath) y el box-shadow (halo) son animaciones separadas,
+   no se pisan. Override del pulso neobrutalista que usa var(--line). */
+body[data-mode="dashboard"] .pdt-asistente-btn.is-suggesting {
+    animation: pdt-fab-breath 5s ease-in-out infinite,
+               pdt-fab-halo 2.4s ease-in-out infinite;
+}
+@keyframes pdt-fab-breath {
+    0%, 100% { transform: scale(1); }
+    50%      { transform: scale(1.03); }
+}
+@keyframes pdt-fab-halo {
+    0%, 100% { box-shadow: 0 8px 24px rgba(0,0,0,0.45), 0 0 0 0 rgba(168,85,247,0.5); }
+    50%      { box-shadow: 0 8px 24px rgba(0,0,0,0.45), 0 0 0 12px rgba(168,85,247,0); }
+}
+@media (prefers-reduced-motion: reduce) {
+    body[data-mode="dashboard"] .pdt-asistente-btn.is-suggesting { animation: none; }
 }
 
 /* --------------------------- Header sticky --------------------------- */
@@ -2865,7 +2897,9 @@ body[data-mode="dashboard"] .pdt-asistente-btn {
     display: flex;
     align-items: stretch;
 }
-/* Pill animada que se desliza al item activo */
+/* Pill animada que se desliza al item activo. El color sale del acento de
+   la tab activa (--admin-accent); el easing spring le da el "lift" al
+   seleccionar. */
 .admin-nav__pill {
     position: absolute;
     top: 8px;
@@ -2873,9 +2907,12 @@ body[data-mode="dashboard"] .pdt-asistente-btn {
     left: 0;
     width: calc(100% / var(--admin-nav-count, 5));
     transform: translateX(calc(var(--admin-nav-active, 0) * 100%));
-    background: rgba(168, 85, 247, 0.15);
+    background: rgba(var(--admin-accent-rgb, 168, 85, 247), 0.16);
+    box-shadow: 0 0 16px rgba(var(--admin-accent-rgb, 168, 85, 247), 0.28),
+                inset 0 0 0 1px rgba(var(--admin-accent-rgb, 168, 85, 247), 0.30);
     border-radius: 16px;
-    transition: transform 200ms ease-out;
+    transition: transform 320ms cubic-bezier(0.34, 1.56, 0.64, 1),
+                background 220ms ease, box-shadow 220ms ease;
     pointer-events: none;
 }
 .admin-nav__item {
@@ -2895,7 +2932,13 @@ body[data-mode="dashboard"] .pdt-asistente-btn {
     font-weight: 500;
     transition: color 180ms ease;
 }
-.admin-nav__item__icon { font-size: 1.25rem; line-height: 1; }
+.admin-nav__item__icon {
+    font-size: 1.25rem;
+    line-height: 1;
+    transition: transform 320ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+/* Lift del ícono activo — acompaña el spring de la pill. */
+.admin-nav__item.is-activo .admin-nav__item__icon { transform: translateY(-2px); }
 .admin-nav__item__label {
     font-size: 0.66rem;
     font-weight: 600;
@@ -2906,7 +2949,7 @@ body[data-mode="dashboard"] .pdt-asistente-btn {
 }
 .admin-nav__item.is-activo {
     color: #fff;
-    text-shadow: 0 0 12px rgba(168, 85, 247, 0.5);
+    text-shadow: 0 0 12px rgba(var(--admin-accent-rgb, 168, 85, 247), 0.55);
 }
 .admin-nav__item:focus-visible {
     outline: none;
@@ -3065,5 +3108,168 @@ body[data-mode="dashboard"] .pense-badge {
 body[data-mode="dashboard"] .miembros-modal-item.is-yo {
     background: rgba(251, 113, 133, 0.14);
     border-color: rgba(251, 113, 133, 0.32);
+}
+
+/* ===================================================================
+   ADMIN — Etapa C: pulido (acentos por tab, glows, microinteracciones)
+   -------------------------------------------------------------------
+   Solo modo dashboard. El acento de color sale del tab activo: app.js
+   setea body[data-admin-tab] y acá derivamos --admin-accent /
+   --admin-accent-rgb. El nav, la línea del header y los glows lo toman.
+   =================================================================== */
+
+/* --- Acento por tab (default = Inicio / cyan) --- */
+body[data-mode="dashboard"] {
+    --admin-accent:     var(--admin-cyan);
+    --admin-accent-rgb: 34, 211, 238;
+}
+body[data-mode="dashboard"][data-admin-tab="inicio"]  { --admin-accent: #22d3ee; --admin-accent-rgb: 34, 211, 238; }
+body[data-mode="dashboard"][data-admin-tab="familia"] { --admin-accent: #d946ef; --admin-accent-rgb: 217, 70, 239; }  /* púrpura caliente 💜 */
+body[data-mode="dashboard"][data-admin-tab="salud"]   { --admin-accent: #a855f7; --admin-accent-rgb: 168, 85, 247; }  /* púrpura */
+body[data-mode="dashboard"][data-admin-tab="recorda"] { --admin-accent: #38bdf8; --admin-accent-rgb: 56, 189, 248; }  /* celeste */
+body[data-mode="dashboard"][data-admin-tab="accesos"] { --admin-accent: #94a3b8; --admin-accent-rgb: 148, 163, 184; } /* gris-azul neutro */
+
+/* --- Línea de acento bajo el header sticky (1px, cambia por tab) --- */
+#admin-header { position: sticky; }   /* (ya lo era; aseguramos para el ::after) */
+#admin-header::after {
+    content: "";
+    position: absolute;
+    left: 0; right: 0; bottom: -1px;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, var(--admin-accent), transparent);
+    opacity: 0.75;
+    transition: background 240ms ease;
+    pointer-events: none;
+}
+
+/* --- Fade-in suave al cambiar de tab (los hijos directos de #app se
+       reinsertan en cada render → la animación se redispara sola) --- */
+@keyframes admin-fade-in {
+    from { opacity: 0; transform: translateY(6px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+body[data-mode="dashboard"] #app > * {
+    animation: admin-fade-in 280ms ease;   /* sin fill-mode: deja libre el transform para el hover */
+}
+
+/* --- Microinteracción: cards con lift + sombra profunda al hover --- */
+@media (hover: hover) {
+    body[data-mode="dashboard"] .card {
+        transition: transform 180ms ease, box-shadow 180ms ease, background 120ms ease, border-color 120ms ease;
+    }
+    body[data-mode="dashboard"] .card:hover {
+        transform: translateY(-2px) scale(1.006);
+        box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
+    }
+    /* Glow del acento en los botones grandes al hover. */
+    body[data-mode="dashboard"] .btn--xl:hover {
+        box-shadow: var(--sh-d-hover), 0 0 18px rgba(var(--admin-accent-rgb), 0.40);
+    }
+    /* Avatar del header: rotación sutil al hover. */
+    .admin-avatar:hover { transform: rotate(-6deg) scale(1.06); }
+}
+.admin-avatar { transition: transform 240ms ease; }
+/* Glow al tap (mobile, sin :hover). */
+body[data-mode="dashboard"] .btn--xl:active {
+    box-shadow: var(--sh-d), 0 0 14px rgba(var(--admin-accent-rgb), 0.35);
+}
+
+/* --- Glow de novedad: último cariño fresco (≤24 h) --- */
+body[data-mode="dashboard"] .card--glow-carino {
+    border-color: rgba(251, 113, 133, 0.45);
+    box-shadow: var(--sh-d-card), 0 0 16px rgba(251, 113, 133, 0.40);
+}
+
+/* --- Próximas cosas urgentes (vencen ≤1 h): pulso suave coral --- */
+body[data-mode="dashboard"] .proxima-card--urgente {
+    border-color: rgba(251, 113, 133, 0.50);
+    animation: admin-pulse-urgente 2s ease-in-out infinite;
+}
+@keyframes admin-pulse-urgente {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(251, 113, 133, 0); }
+    50%      { box-shadow: 0 0 16px 0 rgba(251, 113, 133, 0.45); }
+}
+
+/* --- Feed: highlight de items nuevos (última hora) que se desvanece --- */
+body[data-mode="dashboard"] .actividad-item {
+    /* transición más larga que la base para que el fade-out se note al
+       quitar la clase --fresco (override del 120ms de más arriba). */
+    transition: background 320ms ease, box-shadow 320ms ease;
+}
+body[data-mode="dashboard"] .actividad-item--fresco {
+    background: rgba(var(--admin-accent-rgb), 0.12);
+    box-shadow: inset 3px 0 0 0 rgba(var(--admin-accent-rgb), 0.70);
+}
+
+/* --- Skeleton loaders con shimmer (reemplazan el "Cargando…" plano) --- */
+body[data-mode="dashboard"] .skel {
+    position: relative;
+    overflow: hidden;
+    background: var(--admin-surface-strong);
+    border-radius: 8px;
+}
+body[data-mode="dashboard"] .skel::after {
+    content: "";
+    position: absolute; inset: 0;
+    transform: translateX(-100%);
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.08), transparent);
+    animation: admin-shimmer 1.4s ease-in-out infinite;
+}
+@keyframes admin-shimmer { 100% { transform: translateX(100%); } }
+body[data-mode="dashboard"] .skel--hero  { width: 100%; aspect-ratio: 16 / 9; border-radius: 12px; }
+body[data-mode="dashboard"] .skel--line  { height: 0.95rem; margin: 0.45rem 0; }
+body[data-mode="dashboard"] .skel--short { width: 55%; }
+
+/* --- Themear lo que quedaba claro: <pre> de modales de error --- */
+body[data-mode="dashboard"] .modal pre {
+    background: var(--admin-surface-strong);
+    border: 1px solid var(--line-d);
+    border-radius: 8px;
+    padding: 0.55em 0.7em;
+    margin: 0.4rem 0 0;
+    color: var(--admin-ink);
+    font-size: 0.82rem;
+    white-space: pre-wrap;
+    word-break: break-word;
+    max-height: 40vh;
+    overflow: auto;
+}
+
+/* --- Chips / pills de estado: pasaban fondos pastel claros sobre el
+       glass oscuro → versiones tintadas translúcidas, legibles en dark --- */
+body[data-mode="dashboard"] .status-chip--ok,
+body[data-mode="dashboard"] .meds-admin-slot.is-ok,
+body[data-mode="dashboard"] .puntas-cola__chip--usada {
+    background: rgba(132, 204, 22, 0.16); border-color: rgba(132, 204, 22, 0.35); color: #bef264;
+}
+body[data-mode="dashboard"] .status-chip--pendiente,
+body[data-mode="dashboard"] .meds-admin-slot.is-pend {
+    background: rgba(251, 191, 36, 0.16); border-color: rgba(251, 191, 36, 0.35); color: #fcd34d;
+}
+body[data-mode="dashboard"] .status-chip--danger {
+    background: rgba(251, 113, 133, 0.16); border-color: rgba(251, 113, 133, 0.38); color: #fda4af;
+}
+body[data-mode="dashboard"] .status-chip--info {
+    background: rgba(34, 211, 238, 0.14); border-color: rgba(34, 211, 238, 0.32); color: #67e8f9;
+}
+body[data-mode="dashboard"] .pill--simple    { background: rgba(251, 191, 36, 0.16); color: #fcd34d; }
+body[data-mode="dashboard"] .pill--dashboard { background: rgba(34, 211, 238, 0.16); color: #67e8f9; }
+body[data-mode="dashboard"] .pill--admin     { background: rgba(168, 85, 247, 0.18); color: #d8b4fe; }
+body[data-mode="dashboard"] .pill--editor    { background: rgba(251, 146, 60, 0.16); color: #fdba74; }
+body[data-mode="dashboard"] .pill--solo_ver  { background: var(--admin-surface-strong); color: var(--admin-ink-soft); }
+body[data-mode="dashboard"] .circulo-card__chip--activo {
+    background: rgba(132, 204, 22, 0.16); border-color: rgba(132, 204, 22, 0.35); color: #bef264;
+}
+
+/* --- Respeto a prefers-reduced-motion: apagamos lo que se mueve solo --- */
+@media (prefers-reduced-motion: reduce) {
+    body[data-mode="dashboard"] #app > *,
+    body[data-mode="dashboard"] .proxima-card--urgente,
+    body[data-mode="dashboard"] .skel::after,
+    .admin-nav__pill,
+    .admin-nav__item.is-activo .admin-nav__item__icon {
+        animation: none !important;
+        transition: none !important;
+    }
 }
 

@@ -477,12 +477,14 @@ bootstrap().catch(err => {
 // Items del bottom nav. `match` lista las rutas que dejan ese item activo
 // (así #/medico o #/remedios también prenden "Salud"). El orden define la
 // posición de la pill.
+// `key` define el acento de color de la tab (ver --admin-accent en
+// styles.css): el nav, el header y los glows toman el color del tab activo.
 const ADMIN_NAV_ITEMS = [
-    { href: '#/inicio',         icon: '🏠', label: 'Inicio',   match: ['inicio', 'cuenta'] },
-    { href: '#/familia',        icon: '💜', label: 'Familia',  match: ['familia'] },
-    { href: '#/datos-medicos',  icon: '🩺', label: 'Salud',    match: ['datos-medicos', 'medico', 'salud', 'remedios'] },
-    { href: '#/haceme-acordar', icon: '⏰', label: 'Recordá',  match: ['haceme-acordar'] },
-    { href: '#/accesos',        icon: '🔗', label: 'Accesos',  match: ['accesos', 'accesos-admin', 'contactos', 'estudios', 'guia-admin'] }
+    { href: '#/inicio',         icon: '🏠', label: 'Inicio',   key: 'inicio',  match: ['inicio', 'cuenta'] },
+    { href: '#/familia',        icon: '💜', label: 'Familia',  key: 'familia', match: ['familia'] },
+    { href: '#/datos-medicos',  icon: '🩺', label: 'Salud',    key: 'salud',   match: ['datos-medicos', 'medico', 'salud', 'remedios'] },
+    { href: '#/haceme-acordar', icon: '⏰', label: 'Recordá',  key: 'recorda', match: ['haceme-acordar'] },
+    { href: '#/accesos',        icon: '🔗', label: 'Accesos',  key: 'accesos', match: ['accesos', 'accesos-admin', 'contactos', 'estudios', 'guia-admin'] }
 ];
 
 function actualizarShellAdmin() {
@@ -505,6 +507,7 @@ function actualizarShellAdmin() {
 function desmontarShellAdmin() {
     document.getElementById('admin-header')?.remove();
     document.getElementById('admin-nav')?.remove();
+    delete document.body.dataset.adminTab;
 }
 
 // --- Header: avatar + nombre + selector de círculo --------------------
@@ -636,6 +639,11 @@ function montarBottomNavAdmin() {
     const rutaActual = currentRoute().name;
     let activo = ADMIN_NAV_ITEMS.findIndex(it => it.match.includes(rutaActual));
     if (activo < 0) activo = 0;   // Hogar por defecto.
+
+    // Acento de color por tab: el CSS scopea nav-pill, línea del header y
+    // glows con [data-admin-tab]. Se setea en <body> (no en el nav) para
+    // que el header sticky lo herede aunque el nav se remonte aparte.
+    document.body.dataset.adminTab = ADMIN_NAV_ITEMS[activo].key;
 
     nav.style.setProperty('--admin-nav-active', String(activo));
     nav.innerHTML = `

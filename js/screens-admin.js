@@ -49,7 +49,7 @@ async function mostrarErrorEstructurado(err, titulo = 'Algo falló') {
             ${d.hint     ? `<p><strong>Hint:</strong> ${h(d.hint)}</p>` : ''}
             <details style="margin-top:0.6rem;font-size:0.85em;">
                 <summary>JSON</summary>
-                <pre style="white-space:pre-wrap;background:#fff;border:1px solid #ddd;padding:0.5em;border-radius:6px;">${h(JSON.stringify(d, null, 2))}</pre>
+                <pre style="white-space:pre-wrap;">${h(JSON.stringify(d, null, 2))}</pre>
             </details>
         `,
         acciones: [{ label: 'OK', clase: 'btn--inicio', value: 'ok' }]
