@@ -30,10 +30,15 @@ import {
     listarPuntas, crearPunta, borrarPunta,
     ultimosCheckinsPorMiembro,
     estadoAvisos, activarAvisos, desactivarAvisos, probarAviso,
-    actividadReciente, listarEstudios
+    actividadReciente, listarEstudios,
+    listarMedicamentos, tomasDeHoy
 } from './data-emotiva.js';
+import {
+    listarRecordatorios, formatearFechaRecordatorio, emojiPorTipo
+} from './data-recordatorios.js';
 import { contarEstudiosNoVistos } from './screens-estudios.js';
 import { entrarPreviewVerComoPapa, limpiarDatosReales } from './preview.js';
+import { montarSeccionContactos, montarSeccionAccesos } from './screens-admin.js';
 
 // LocalStorage key para marcar pensamientos recibidos como "vistos".
 const LS_LAST_SEEN = (circleId, userId) =>
@@ -73,111 +78,86 @@ let _miembrosCache = null;
 let _fotoUrlActiva = null;
 
 export async function renderHogar($app) {
+    // INICIO — "pulso del día" del familiar (solo dashboard; en modo
+    // simple el routing manda a Simple.renderInicio con tarjetones).
+    // Etapa B: esta pantalla quedó liviana. Lo emotivo (Pensé, Foto,
+    // Historias, Ideas, Calendario) vive ahora en renderFamilia (#/familia);
+    // la administración del círculo + Contactos + Accesos en renderAccesos
+    // (#/accesos).
+    const u = state.usuarioReal;
+    const c = state.circulosReal.find(x => x.id === state.circuloActivoIdReal);
+    if (!c) { go('#/inicio'); return; }
+
+    _miembrosCache = await miembrosDelCirculo(c.id).catch(() => []);
+
+    $app.innerHTML = `
+        <section class="card inicio-hero" id="sec-hero">
+            <p class="muted">Cargando…</p>
+        </section>
+
+        <section class="card stack hogar-checkin">
+            <h2>📅 Estado de hoy</h2>
+            <div id="sec-checkin-estado"><p class="muted">Cargando…</p></div>
+        </section>
+
+        <section class="card stack hogar-ultimo-carino" id="sec-ultimo-carino" hidden></section>
+
+        <section class="inicio-proximas" id="sec-proximas" hidden></section>
+
+        <section class="card stack hogar-actividad">
+            <h2>📋 Actividad reciente</h2>
+            <div id="sec-actividad" class="inicio-feed"><p class="muted">Cargando…</p></div>
+        </section>
+
+        <section class="card stack inicio-acciones">
+            <h2>⚡ Acciones rápidas</h2>
+            <div class="inicio-acciones__grid">
+                <button class="btn btn--xl btn--pense"  data-qa="carino">💜 Mandar cariño</button>
+                <button class="btn btn--xl btn--familia" data-qa="mensaje">💬 Mandar mensaje</button>
+                <button class="btn btn--xl btn--inicio" data-qa="recordatorio">✏️ Agregar recordatorio</button>
+                <button class="btn btn--xl btn--medico" data-qa="mail">✉️ Mail al médico</button>
+            </div>
+        </section>
+    `;
+
+    cargarHeroFoto(c, $app.querySelector('#sec-hero'));
+    cargarCheckinsDelDia(c, $app.querySelector('#sec-checkin-estado'));
+    cargarUltimoCarino(c, u, $app.querySelector('#sec-ultimo-carino'));
+    cargarProximasCosas(c, $app.querySelector('#sec-proximas'));
+    cargarActividadReciente(c, $app.querySelector('#sec-actividad'), { limit: 5 });
+
+    // Acciones rápidas — atajos a las pantallas que ya hacen cada cosa.
+    // "Mandar cariño" y "Mandar mensaje" llevan a Familia (la sección
+    // "Pensé en vos" es el gesto persona-a-persona dentro de la app).
+    $app.querySelector('[data-qa="carino"]')?.addEventListener('click', () => go('#/familia'));
+    $app.querySelector('[data-qa="mensaje"]')?.addEventListener('click', () => go('#/familia'));
+    $app.querySelector('[data-qa="recordatorio"]')?.addEventListener('click', () => go('#/haceme-acordar'));
+    $app.querySelector('[data-qa="mail"]')?.addEventListener('click', () => go('#/datos-medicos'));
+}
+
+}
+
+// =====================================================================
+// FAMILIA (#/familia, dashboard) — lo emotivo del círculo
+// ---------------------------------------------------------------------
+// Pensé en vos · Foto del día · Calendario afectivo · Última vez que
+// hablamos · Ideas para contar · Historias. Movidas desde el viejo
+// renderHogar largo. En modo simple esta ruta la maneja Simple.renderFamilia.
+// =====================================================================
+export async function renderFamilia($app) {
     const u = state.usuarioReal;
     const m = state.membresiaReal;
     const c = state.circulosReal.find(x => x.id === state.circuloActivoIdReal);
     if (!c) { go('#/inicio'); return; }
 
     _miembrosCache = await miembrosDelCirculo(c.id).catch(() => []);
-    const esSimple    = m?.interface_mode === 'simple';
     const puedeEscribir = ['admin','editor'].includes(m?.permission_level);
-    // Narrador del círculo = primer miembro modo simple (papá / mamá).
-    // Lo usamos para personalizar el copy de "Ideas para contar".
     const narradorParentesco = (_miembrosCache.find(x => x.interface_mode === 'simple')?.parentesco || '')
         .trim().toLowerCase() || null;
 
     $app.innerHTML = `
-        <header class="hogar-header card">
-            <div>
-                <small class="muted">${esSimple ? 'Estás en' : 'Círculo'}</small>
-                <h1 class="hogar-header__nombre">${h(c.nombre)}</h1>
-                <small class="muted">${h(m?.parentesco || '')} · ${h(m?.interface_mode || '')}</small>
-            </div>
-            <div class="hogar-header__acciones">
-                ${esEntornoDev() ? `<button class="btn btn--mini" id="btn-demo">🎭 Demo</button>` : ''}
-                <button class="btn btn--mini btn--danger" id="btn-logout">Cerrar sesión</button>
-            </div>
-        </header>
-
-        ${!esSimple ? `
-        <section class="card stack hogar-checkin">
-            <h2>📅 Estado del día</h2>
-            <div id="sec-checkin-estado"><p class="muted">Cargando…</p></div>
-        </section>
-
-        <section class="card stack hogar-actividad">
-            <h2>📋 Actividad reciente</h2>
-            <div id="sec-actividad"><p class="muted">Cargando…</p></div>
-        </section>
-
-        <section class="card stack hogar-avisos" id="hogar-avisos">
-            <div id="sec-avisos-estado"><p class="muted">Cargando avisos…</p></div>
-        </section>
-
-        <section class="card stack hogar-acciones">
-            <h2>⚙️ Acciones del círculo</h2>
-            <div class="hogar-acciones__grid">
-                <button class="btn btn--xl btn--inicio" id="btn-invitar-hogar">
-                    ➕ Invitar a alguien
-                </button>
-                <button class="btn" id="btn-miembros">👥 Miembros</button>
-                <button class="btn" id="btn-contactos">📞 Contactos</button>
-                <button class="btn" id="btn-medico">🩺 Datos médicos</button>
-                <button class="btn" id="btn-accesos">🔗 Accesos / Trámites</button>
-                <button class="btn" id="btn-recordatorios">✏️ Recordatorios</button>
-                <button class="btn" id="btn-estudios">📄 Estudios</button>
-                <button class="btn" id="btn-guia">❔ Guía rápida</button>
-                <button class="btn" id="btn-ver-como" style="grid-column:1 / -1;">
-                    👀 Ver como lo ve ${h(parentescoSimpleEnCirculo() || 'tu familiar')}
-                </button>
-            </div>
-            <p class="muted" style="font-size:0.9em;">
-                Compartí el link de invitación por WhatsApp y se suma al círculo
-                en un click.
-            </p>
-        </section>
-
-        <section class="card stack hogar-circulos">
-            <h2>🔵 Tus círculos</h2>
-            <ul class="circulos-lista">
-                ${state.circulosReal.map(cc => {
-                    const esActivo = cc.id === state.circuloActivoIdReal;
-                    return `
-                        <li class="circulo-card">
-                            <div class="circulo-card__head">
-                                <h3 class="circulo-card__nombre">${h(cc.nombre)}</h3>
-                                ${esActivo
-                                    ? `<span class="circulo-card__chip circulo-card__chip--activo">● Activo</span>`
-                                    : `<button class="btn btn--mini" data-activar-circulo="${h(cc.id)}">Activar</button>`}
-                            </div>
-                            ${esActivo && m ? `
-                                <div class="circulo-card__chips">
-                                    <span class="circulo-card__chip">Parentesco: <strong>${h(m.parentesco || 'Familiar')}</strong></span>
-                                    <span class="circulo-card__chip">Modo: <strong>${h(m.interface_mode || 'dashboard')}</strong></span>
-                                    <span class="circulo-card__chip">Permiso: <strong>${h(m.permission_level || 'viewer')}</strong></span>
-                                </div>
-                                <div class="circulo-card__acciones">
-                                    <button class="btn btn--mini" id="btn-editar-parentesco-hogar">
-                                        ✏️ Editar mi parentesco
-                                    </button>
-                                </div>
-                            ` : ''}
-                        </li>
-                    `;
-                }).join('')}
-            </ul>
-            <button class="btn btn--familia" id="btn-crear-circulo-hogar">
-                ➕ Crear otro círculo
-            </button>
-            <p class="muted" style="font-size:0.9em;">
-                Un círculo por persona simple (papá, mamá, abuela). Cada uno
-                tiene sus contactos, fotos y miembros propios.
-            </p>
-        </section>
-        ` : ''}
-        <!-- NOTA: en modo real simple el papá ve Simple.renderInicio
-             (4 tarjetones independientes), no este Hogar. Quitamos la
-             card combinada que metía Médico+CómoHago en un solo bloque. -->
+        <h1>💜 Familia</h1>
+        <p class="muted">Lo emotivo del círculo: mandá un cariño, subí la foto del día, pedile historias.</p>
 
         <section class="card stack hogar-pense">
             <h2>💛 Pensé en vos</h2>
@@ -242,7 +222,6 @@ export async function renderHogar($app) {
             <p class="muted">Se actualiza solo cuando alguien te manda un pensé.</p>
         </section>
 
-        ${!esSimple ? `
         <section class="card stack hogar-puntas">
             <h2>💡 Ideas para contar</h2>
             <p class="muted">
@@ -274,222 +253,23 @@ export async function renderHogar($app) {
 
             <div id="sec-puntas-cola"><p class="muted">Cargando cola…</p></div>
         </section>
-        ` : ''}
 
         <section class="card stack">
             <h2>📖 Historias</h2>
-            ${esSimple ? `
-                <button class="btn btn--xl btn--anecdota btn--full" id="btn-grabar-historia">
-                    🔴 Contar una anécdota
-                </button>
-            ` : ''}
             <div id="sec-historias">Cargando…</div>
         </section>
     `;
 
-    const btnDemoHogar = $app.querySelector('#btn-demo');
-    if (btnDemoHogar) btnDemoHogar.addEventListener('click', () => { setModo('demo'); go('#/inicio'); });
-    $app.querySelector('#btn-logout').addEventListener('click', async () => {
-        const ok = await modal({
-            titulo: '¿Cerrar sesión?',
-            cuerpo: `<p>Si cerrás sesión vas a tener que volver a entrar
-                      con tu mail (link mágico).</p>
-                     <p class="muted">Tip: si sólo querés volver al panel,
-                      tocá "Cancelar".</p>`,
-            acciones: [
-                { label: 'Cancelar' },
-                { label: 'Cerrar sesión', clase: 'btn--danger', value: 'ok' }
-            ]
-        });
-        if (ok !== 'ok') return;
-        await cerrarSesion();
-        limpiarDatosReales();   // libera blob URLs de fotos + descarta el cache
-        limpiarSesionReal();
-        go('#/inicio');
-    });
-
-    // Sección pensé: populate destinatarios + handler
+    // --- Pensé en vos ---
     poblarDestinatariosPense(u);
     $app.querySelector('#btn-pense').addEventListener('click', () => onPense(c, u, $app));
     cargarPensRecibidos(c, u, $app.querySelector('#sec-pense-recibidos'));
 
-    // Sección "Acciones" (sólo dashboard)
-    if (!esSimple) {
-        $app.querySelector('#btn-invitar-hogar').addEventListener('click',
-            () => abrirModalInvitacion(c.id));
-        $app.querySelector('#btn-miembros').addEventListener('click',
-            () => abrirModalMiembros(c, u));
-        $app.querySelector('#btn-contactos').addEventListener('click', () => go('#/contactos'));
-        $app.querySelector('#btn-medico').addEventListener('click',    () => go('#/datos-medicos'));
-        $app.querySelector('#btn-accesos').addEventListener('click',   () => go('#/accesos-admin'));
-        $app.querySelector('#btn-recordatorios').addEventListener('click', () => go('#/haceme-acordar'));
-        $app.querySelector('#btn-estudios').addEventListener('click',  () => go('#/estudios'));
-        $app.querySelector('#btn-guia').addEventListener('click',      () => go('#/guia-admin'));
-        const btnVerComo = $app.querySelector('#btn-ver-como');
-        if (btnVerComo) btnVerComo.addEventListener('click', async () => {
-            btnVerComo.disabled = true;
-            btnVerComo.textContent = 'Abriendo vista previa…';
-            const ok = await entrarPreviewVerComoPapa(c.id, _miembrosCache);
-            if (ok) {
-                document.body.dataset.mode = 'simple';
-                go('#/inicio');
-            } else {
-                btnVerComo.disabled = false;
-                btnVerComo.textContent = '👀 Ver como lo ve ' + (parentescoSimpleEnCirculo() || 'tu familiar');
-            }
-        });
-
-        // Activar otro círculo: refetch de membresía + setSesionReal con el
-        // nuevo activo + refresh del router (repinta el Hogar entero contra
-        // el círculo nuevo, así contactos/foto/historias salen del que toca).
-        $app.querySelectorAll('[data-activar-circulo]').forEach(btn => {
-            btn.addEventListener('click', async () => {
-                const cid = btn.dataset.activarCirculo;
-                btn.disabled = true;
-                btn.textContent = 'Activando…';
-                try {
-                    const memb = await membresiaActiva(u.id, cid);
-                    setSesionReal({
-                        usuario: u,
-                        circulos: state.circulosReal,
-                        circuloActivoId: cid,
-                        membresia: memb
-                    });
-                    refresh();
-                } catch (err) {
-                    btn.disabled = false;
-                    btn.textContent = 'Activar';
-                    await modal({
-                        titulo: 'No pude cambiar de círculo',
-                        cuerpo: `<pre>${h(err?.message || err)}</pre>`,
-                        acciones: [{ label: 'OK', value: 'ok' }]
-                    });
-                }
-            });
-        });
-
-        // Editar mi parentesco en el círculo activo. Misma idea que en
-        // renderCuenta — duplicamos el botón acá así Charly lo encuentra
-        // sin tener que ir a #/cuenta.
-        const btnEditPar = $app.querySelector('#btn-editar-parentesco-hogar');
-        if (btnEditPar) {
-            btnEditPar.addEventListener('click', async () => {
-                const actual = m?.parentesco || '';
-                const nuevo = await pedirTexto({
-                    titulo: 'Editar mi parentesco',
-                    label:  'Cómo te ven los demás del círculo',
-                    valor:  actual,
-                    placeholder: 'Hijo, Hija, Cuidadora, Tutor…'
-                });
-                if (!nuevo || nuevo === actual) return;
-                try {
-                    await actualizarParentesco(u.id, c.id, nuevo);
-                    await recargarSesion();
-                    refresh();
-                } catch (err) {
-                    await modal({
-                        titulo: 'No pude guardar',
-                        cuerpo: `<pre>${h(err?.message || err)}</pre>`,
-                        acciones: [{ label: 'OK', value: 'ok' }]
-                    });
-                }
-            });
-        }
-
-        // Estado del día (check-in de los miembros simple del círculo).
-        cargarCheckinsDelDia(c, $app.querySelector('#sec-checkin-estado'));
-
-        // Avisos (Web Push) — sólo dashboard. El admin activa una vez
-        // por dispositivo; las pushes las dispara la edge function.
-        pintarAvisos($app.querySelector('#sec-avisos-estado'));
-
-        // Muro de actividad reciente — merge de eventos de varias tablas.
-        cargarActividadReciente(c, $app.querySelector('#sec-actividad'));
-
-        // Badge de estudios nuevos (sin que el admin los haya abierto).
-        pintarBadgeEstudios(c, $app);
-
-        // Sección "Ideas para contar" — wire form + cargar cola/sugeridas inicial.
-        const $formPunta = $app.querySelector('#form-punta');
-        if ($formPunta) {
-            $formPunta.addEventListener('submit', async (ev) => {
-                ev.preventDefault();
-                const $txt = $app.querySelector('#punta-texto');
-                const texto = ($txt.value || '').trim();
-                if (!texto) return;
-                const btn = ev.target.querySelector('button[type="submit"]');
-                btn.disabled = true; btn.textContent = 'Mandando…';
-                try {
-                    await crearPunta(c.id, texto);
-                    $txt.value = '';
-                    await actualizarSeccionPuntas(c, u, $app);
-                } catch (err) {
-                    await modal({
-                        titulo: 'No pude mandarla',
-                        cuerpo: `<pre>${h(err?.message || err)}</pre>`,
-                        acciones: [{ label: 'OK', clase: 'btn--inicio', value: 'ok' }]
-                    });
-                } finally {
-                    btn.disabled = false; btn.textContent = '📤 Mandar idea';
-                }
-            });
-            actualizarSeccionPuntas(c, u, $app);
-        }
-
-        // Crear OTRO círculo desde el panel. Mismo flujo que renderSinCirculos:
-        // pide nombre, llama crearCirculo (que ya hace owner + membresía
-        // dashboard/admin en una transacción client-side), recarga sesión y
-        // deja el nuevo como activo.
-        const btnCrearCirc = $app.querySelector('#btn-crear-circulo-hogar');
-        if (btnCrearCirc) {
-            btnCrearCirc.addEventListener('click', async () => {
-                const nombre = await pedirTexto({
-                    titulo: 'Crear otro círculo',
-                    label:  '¿Cómo se va a llamar?',
-                    placeholder: 'Círculo de mamá'
-                });
-                if (!nombre) return;
-                try {
-                    const nuevo = await crearCirculo(u.id, nombre);
-                    await recargarSesion();
-                    // recargarSesion mantiene el activo previo si sigue
-                    // siendo miembro — forzamos al nuevo a quedar activo.
-                    const memb = await membresiaActiva(u.id, nuevo.id);
-                    setSesionReal({
-                        usuario: u,
-                        circulos: state.circulosReal,
-                        circuloActivoId: nuevo.id,
-                        membresia: memb
-                    });
-                    await modal({
-                        titulo: '✅ Círculo creado',
-                        cuerpo: `<p>Listo. Estás como <strong>admin</strong> de <em>${h(nuevo.nombre)}</em>.</p>
-                                 <p class="muted">Ahora podés invitar a quien corresponda.</p>`,
-                        acciones: [{ label: 'Listo', clase: 'btn--familia btn--full', value: 'ok' }],
-                        tono: 'ok'
-                    });
-                    refresh();
-                } catch (err) {
-                    await modal({
-                        titulo: 'No pude crearlo',
-                        cuerpo: `<pre>${h(err?.message || err)}</pre>`,
-                        acciones: [{ label: 'OK', value: 'ok' }]
-                    });
-                }
-            });
-        }
-    }
-    // Nota: en modo real simple no se llega acá (el routing manda al
-    // Simple.renderInicio con tarjetones); no hace falta wirear botones
-    // específicos para la rama simple del Hogar.
-
+    // --- Foto + Calendario (escritura) ---
     if (puedeEscribir) {
         $app.querySelector('#foto-input').addEventListener('change', (e) => onSubirFoto(c, e, $app));
         $app.querySelector('#form-fecha').addEventListener('submit', (e) => onCrearFecha(c, e, $app));
 
-        // Prompt dinámico del campo "título" según el tipo elegido.
-        // Importante para 'otro': si no aclara, queda como "📌 Otro" sin
-        // info; el placeholder lo invita a escribir DE QUÉ se trata.
         const $tipo  = $app.querySelector('#fecha-tipo');
         const $lbl   = $app.querySelector('#fecha-titulo-label');
         const $tit   = $app.querySelector('#fecha-titulo');
@@ -510,14 +290,431 @@ export async function renderHogar($app) {
         actualizarPrompt();
     }
 
+    // --- Ideas para contar (puntas) ---
+    const $formPunta = $app.querySelector('#form-punta');
+    if ($formPunta) {
+        $formPunta.addEventListener('submit', async (ev) => {
+            ev.preventDefault();
+            const $txt = $app.querySelector('#punta-texto');
+            const texto = ($txt.value || '').trim();
+            if (!texto) return;
+            const btn = ev.target.querySelector('button[type="submit"]');
+            btn.disabled = true; btn.textContent = 'Mandando…';
+            try {
+                await crearPunta(c.id, texto);
+                $txt.value = '';
+                await actualizarSeccionPuntas(c, u, $app);
+            } catch (err) {
+                await modal({
+                    titulo: 'No pude mandarla',
+                    cuerpo: `<pre>${h(err?.message || err)}</pre>`,
+                    acciones: [{ label: 'OK', clase: 'btn--inicio', value: 'ok' }]
+                });
+            } finally {
+                btn.disabled = false; btn.textContent = '📤 Mandar idea';
+            }
+        });
+        actualizarSeccionPuntas(c, u, $app);
+    }
+
     cargarFoto(c, $app.querySelector('#sec-foto'));
     cargarFechas(c, puedeEscribir, $app.querySelector('#sec-fechas'));
     cargarContactosUltimo(c, u, $app.querySelector('#sec-contactos'));
     cargarHistorias(c, m, u, $app.querySelector('#sec-historias'));
+}
 
-    if (esSimple) {
-        $app.querySelector('#btn-grabar-historia').addEventListener('click', () => onGrabarHistoria(c, u, $app));
+// =====================================================================
+// ACCESOS (#/accesos, dashboard) — administración del círculo
+// ---------------------------------------------------------------------
+// Invitar / Miembros / Ver como lo ve / Guía / Mi parentesco · Avisos ·
+// Contactos (sub-sección) · Accesos/Trámites (sub-sección) · Tus círculos ·
+// Cerrar sesión. Movido desde el viejo renderHogar.
+// =====================================================================
+export async function renderAccesos($app) {
+    const u = state.usuarioReal;
+    const m = state.membresiaReal;
+    const c = state.circulosReal.find(x => x.id === state.circuloActivoIdReal);
+    if (!c) { go('#/inicio'); return; }
+
+    _miembrosCache = await miembrosDelCirculo(c.id).catch(() => []);
+
+    $app.innerHTML = `
+        <h1>🔗 Accesos</h1>
+        <p class="muted">Todo lo que administrás del círculo de ${h(c.nombre)}.</p>
+
+        <section class="card stack hogar-acciones">
+            <h2>⚙️ Administración del círculo</h2>
+            <div class="hogar-acciones__grid">
+                <button class="btn btn--xl btn--inicio" id="btn-invitar-hogar">
+                    ➕ Invitar a alguien
+                </button>
+                <button class="btn" id="btn-miembros">👥 Miembros</button>
+                <button class="btn" id="btn-estudios">📄 Estudios</button>
+                <button class="btn" id="btn-guia">❔ Guía rápida</button>
+                <button class="btn" id="btn-editar-parentesco-hogar">✏️ Mi parentesco</button>
+                <button class="btn btn--full" id="btn-ver-como" style="grid-column:1 / -1;">
+                    👀 Ver como lo ve ${h(parentescoSimpleEnCirculo() || 'tu familiar')}
+                </button>
+            </div>
+            <p class="muted" style="font-size:0.9em;">
+                Compartí el link de invitación por WhatsApp y se suma al círculo
+                en un click.
+            </p>
+        </section>
+
+        <section class="card stack hogar-avisos" id="hogar-avisos">
+            <div id="sec-avisos-estado"><p class="muted">Cargando avisos…</p></div>
+        </section>
+
+        <section class="card stack">
+            <h2>📇 Contactos</h2>
+            <p class="muted">Los que ve tu familiar en su pantalla "Familia" y en las emergencias.</p>
+            <div id="sec-contactos-admin"><p class="muted">Cargando…</p></div>
+        </section>
+
+        <section class="card stack">
+            <h2>🔗 Accesos / Trámites</h2>
+            <p class="muted">Botones grandes (PAMI, ANSES, banco) que aparecen en la app de tu familiar.</p>
+            <div id="sec-accesos-admin"><p class="muted">Cargando…</p></div>
+        </section>
+
+        <section class="card stack hogar-circulos">
+            <h2>🔵 Tus círculos</h2>
+            <ul class="circulos-lista">
+                ${state.circulosReal.map(cc => {
+                    const esActivo = cc.id === state.circuloActivoIdReal;
+                    return `
+                        <li class="circulo-card">
+                            <div class="circulo-card__head">
+                                <h3 class="circulo-card__nombre">${h(cc.nombre)}</h3>
+                                ${esActivo
+                                    ? `<span class="circulo-card__chip circulo-card__chip--activo">● Activo</span>`
+                                    : `<button class="btn btn--mini" data-activar-circulo="${h(cc.id)}">Activar</button>`}
+                            </div>
+                            ${esActivo && m ? `
+                                <div class="circulo-card__chips">
+                                    <span class="circulo-card__chip">Parentesco: <strong>${h(m.parentesco || 'Familiar')}</strong></span>
+                                    <span class="circulo-card__chip">Modo: <strong>${h(m.interface_mode || 'dashboard')}</strong></span>
+                                    <span class="circulo-card__chip">Permiso: <strong>${h(m.permission_level || 'viewer')}</strong></span>
+                                </div>
+                            ` : ''}
+                        </li>
+                    `;
+                }).join('')}
+            </ul>
+            <button class="btn btn--familia" id="btn-crear-circulo-hogar">
+                ➕ Crear otro círculo
+            </button>
+            <p class="muted" style="font-size:0.9em;">
+                Un círculo por persona simple (papá, mamá, abuela). Cada uno
+                tiene sus contactos, fotos y miembros propios.
+            </p>
+        </section>
+
+        <section class="card stack hogar-cuenta">
+            <h2>👤 Tu cuenta</h2>
+            <div class="hogar-acciones__grid">
+                ${esEntornoDev() ? `<button class="btn btn--mini" id="btn-demo">🎭 Demo</button>` : ''}
+                <button class="btn btn--danger btn--full" id="btn-logout" style="grid-column:1 / -1;">
+                    Cerrar sesión
+                </button>
+            </div>
+        </section>
+    `;
+
+    // --- Administración ---
+    $app.querySelector('#btn-invitar-hogar').addEventListener('click', () => abrirModalInvitacion(c.id));
+    $app.querySelector('#btn-miembros').addEventListener('click', () => abrirModalMiembros(c, u));
+    $app.querySelector('#btn-estudios').addEventListener('click', () => go('#/estudios'));
+    $app.querySelector('#btn-guia').addEventListener('click', () => go('#/guia-admin'));
+
+    const btnVerComo = $app.querySelector('#btn-ver-como');
+    if (btnVerComo) btnVerComo.addEventListener('click', async () => {
+        btnVerComo.disabled = true;
+        btnVerComo.textContent = 'Abriendo vista previa…';
+        const ok = await entrarPreviewVerComoPapa(c.id, _miembrosCache);
+        if (ok) {
+            document.body.dataset.mode = 'simple';
+            go('#/inicio');
+        } else {
+            btnVerComo.disabled = false;
+            btnVerComo.textContent = '👀 Ver como lo ve ' + (parentescoSimpleEnCirculo() || 'tu familiar');
+        }
+    });
+
+    const btnEditPar = $app.querySelector('#btn-editar-parentesco-hogar');
+    if (btnEditPar) {
+        btnEditPar.addEventListener('click', async () => {
+            const actual = m?.parentesco || '';
+            const nuevo = await pedirTexto({
+                titulo: 'Editar mi parentesco',
+                label:  'Cómo te ven los demás del círculo',
+                valor:  actual,
+                placeholder: 'Hijo, Hija, Cuidadora, Tutor…'
+            });
+            if (!nuevo || nuevo === actual) return;
+            try {
+                await actualizarParentesco(u.id, c.id, nuevo);
+                await recargarSesion();
+                refresh();
+            } catch (err) {
+                await modal({
+                    titulo: 'No pude guardar',
+                    cuerpo: `<pre>${h(err?.message || err)}</pre>`,
+                    acciones: [{ label: 'OK', value: 'ok' }]
+                });
+            }
+        });
     }
+
+    // --- Avisos (Web Push) ---
+    pintarAvisos($app.querySelector('#sec-avisos-estado'));
+
+    // --- Sub-secciones Contactos + Accesos/Trámites (delegadas a screens-admin) ---
+    montarSeccionContactos($app.querySelector('#sec-contactos-admin'), c.id);
+    montarSeccionAccesos($app.querySelector('#sec-accesos-admin'), c.id);
+
+    // --- Badge de estudios nuevos en el botón ---
+    pintarBadgeEstudios(c, $app);
+
+    // --- Tus círculos: activar / crear ---
+    $app.querySelectorAll('[data-activar-circulo]').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            const cid = btn.dataset.activarCirculo;
+            btn.disabled = true;
+            btn.textContent = 'Activando…';
+            try {
+                const memb = await membresiaActiva(u.id, cid);
+                setSesionReal({
+                    usuario: u,
+                    circulos: state.circulosReal,
+                    circuloActivoId: cid,
+                    membresia: memb
+                });
+                refresh();
+            } catch (err) {
+                btn.disabled = false;
+                btn.textContent = 'Activar';
+                await modal({
+                    titulo: 'No pude cambiar de círculo',
+                    cuerpo: `<pre>${h(err?.message || err)}</pre>`,
+                    acciones: [{ label: 'OK', value: 'ok' }]
+                });
+            }
+        });
+    });
+
+    const btnCrearCirc = $app.querySelector('#btn-crear-circulo-hogar');
+    if (btnCrearCirc) {
+        btnCrearCirc.addEventListener('click', async () => {
+            const nombre = await pedirTexto({
+                titulo: 'Crear otro círculo',
+                label:  '¿Cómo se va a llamar?',
+                placeholder: 'Círculo de mamá'
+            });
+            if (!nombre) return;
+            try {
+                const nuevo = await crearCirculo(u.id, nombre);
+                await recargarSesion();
+                const memb = await membresiaActiva(u.id, nuevo.id);
+                setSesionReal({
+                    usuario: u,
+                    circulos: state.circulosReal,
+                    circuloActivoId: nuevo.id,
+                    membresia: memb
+                });
+                await modal({
+                    titulo: '✅ Círculo creado',
+                    cuerpo: `<p>Listo. Estás como <strong>admin</strong> de <em>${h(nuevo.nombre)}</em>.</p>
+                             <p class="muted">Ahora podés invitar a quien corresponda.</p>`,
+                    acciones: [{ label: 'Listo', clase: 'btn--familia btn--full', value: 'ok' }],
+                    tono: 'ok'
+                });
+                refresh();
+            } catch (err) {
+                await modal({
+                    titulo: 'No pude crearlo',
+                    cuerpo: `<pre>${h(err?.message || err)}</pre>`,
+                    acciones: [{ label: 'OK', value: 'ok' }]
+                });
+            }
+        });
+    }
+
+    // --- Tu cuenta: demo + cerrar sesión ---
+    const btnDemoHogar = $app.querySelector('#btn-demo');
+    if (btnDemoHogar) btnDemoHogar.addEventListener('click', () => { setModo('demo'); go('#/inicio'); });
+    $app.querySelector('#btn-logout').addEventListener('click', async () => {
+        const ok = await modal({
+            titulo: '¿Cerrar sesión?',
+            cuerpo: `<p>Si cerrás sesión vas a tener que volver a entrar
+                      con tu mail (link mágico).</p>
+                     <p class="muted">Tip: si sólo querés volver al panel,
+                      tocá "Cancelar".</p>`,
+            acciones: [
+                { label: 'Cancelar' },
+                { label: 'Cerrar sesión', clase: 'btn--danger', value: 'ok' }
+            ]
+        });
+        if (ok !== 'ok') return;
+        await cerrarSesion();
+        limpiarDatosReales();   // libera blob URLs de fotos + descarta el cache
+        limpiarSesionReal();
+        go('#/inicio');
+    });
+}
+
+// =====================================================================
+// INICIO — helpers del "pulso del día"
+// =====================================================================
+
+/** Hero 16:9 con la foto del día + epígrafe + "hace X". Empty state cálido. */
+async function cargarHeroFoto(c, $cont) {
+    if (!$cont) return;
+    try {
+        const f = await ultimaFotoDia(c.id);
+        if (_fotoUrlActiva) {
+            URL.revokeObjectURL(_fotoUrlActiva);
+            _fotoUrlActiva = null;
+        }
+        if (!f) {
+            $cont.innerHTML = `
+                <div class="inicio-hero__empty">
+                    <span class="inicio-hero__empty-icon">📷</span>
+                    <p>Todavía no hay foto del día.<br>Subí una desde <strong>Familia</strong> y aparece acá grande.</p>
+                    <button class="btn btn--mini" data-ir-familia>Ir a Familia</button>
+                </div>`;
+            $cont.querySelector('[data-ir-familia]')?.addEventListener('click', () => go('#/familia'));
+            return;
+        }
+        _fotoUrlActiva = f.url;
+        const hace = tiempoRelativo(f.created_at);
+        $cont.innerHTML = `
+            <figure class="inicio-hero__fig">
+                <img class="inicio-hero__img" src="${h(f.url)}" alt="${h(f.epigrafe || 'Foto del día')}">
+                <figcaption class="inicio-hero__cap">
+                    ${f.epigrafe ? `<strong class="t-emocional">${h(f.epigrafe)}</strong>` : ''}
+                    <small class="muted">${h(hace)}</small>
+                </figcaption>
+            </figure>
+        `;
+    } catch (err) {
+        console.error('[cargarHeroFoto]', err, err?.detalle);
+        $cont.innerHTML = `<p class="muted">No pude cargar la foto del día.</p>`;
+    }
+}
+
+/** Último cariño recibido por el familiar logueado. Oculta la card si no hay. */
+async function cargarUltimoCarino(c, u, $wrap) {
+    if (!$wrap) return;
+    try {
+        const lista = await pensamientosRecibidos(c.id, u.id, 1);
+        if (!lista.length) { $wrap.hidden = true; return; }
+        const p = lista[0];
+        const autor = (_miembrosCache || []).find(m => m.user_id === p.de_user_id);
+        const nombre = autor?.parentesco || 'Alguien';
+        $wrap.hidden = false;
+        $wrap.innerHTML = `
+            <h2>💛 Último cariño</h2>
+            <div class="pense-item is-nuevo" style="margin:0;">
+                <span class="pense-item__emoji">💛</span>
+                <div>
+                    <strong>Tu ${h(nombre)} te está pensando</strong>
+                    <small>${h(tiempoRelativo(p.created_at))}</small>
+                </div>
+            </div>
+        `;
+    } catch (err) {
+        $wrap.hidden = true;
+    }
+}
+
+/** "HH:MM" actual en zona AR → minutos desde medianoche. */
+function minutosAhoraAR() {
+    const fmt = new Intl.DateTimeFormat('en-GB', {
+        timeZone: 'America/Argentina/Buenos_Aires',
+        hour: '2-digit', minute: '2-digit', hour12: false
+    });
+    const parts = fmt.formatToParts(new Date());
+    const get = (t) => Number(parts.find(p => p.type === t)?.value || 0);
+    return get('hour') * 60 + get('minute');
+}
+function hhmmAMin(hhmm) {
+    const m = /^(\d{1,2}):(\d{2})$/.exec(String(hhmm || '').trim());
+    if (!m) return null;
+    return Number(m[1]) * 60 + Number(m[2]);
+}
+
+/** Próxima toma de medicamento dentro de las próximas 6 h (no tomada aún). */
+async function proximoMedicamento(circleId) {
+    const [meds, tomas] = await Promise.all([
+        listarMedicamentos(circleId, { soloActivos: true }).catch(() => []),
+        tomasDeHoy(circleId).catch(() => [])
+    ]);
+    const hoy = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Argentina/Buenos_Aires' });
+    const ahora = minutosAhoraAR();
+    const tomadas = new Set(tomas.map(t => `${t.medicamento_id}|${t.horario}`));
+    let best = null;
+    for (const m of meds) {
+        if (m.fecha_inicio && m.fecha_inicio > hoy) continue;
+        if (m.fecha_fin && m.fecha_fin < hoy) continue;
+        for (const hor of (Array.isArray(m.horarios) ? m.horarios : [])) {
+            if (tomadas.has(`${m.id}|${hor}`)) continue;
+            const min = hhmmAMin(hor);
+            if (min == null) continue;
+            const diff = min - ahora;
+            if (diff >= 0 && diff <= 360 && (!best || diff < best.diff)) {
+                best = { nombre: m.nombre, dosis: m.dosis, horario: hor, diff };
+            }
+        }
+    }
+    return best;
+}
+
+/** Próximo recordatorio futuro pendiente (el más cercano por fecha). */
+async function proximoRecordatorio(circleId) {
+    const items = await listarRecordatorios(circleId, {
+        soloFuturos: true, soloPendientes: true, limit: 20
+    }).catch(() => []);
+    const conFecha = items
+        .filter(r => r.fecha_hora_objetivo)
+        .sort((a, b) => new Date(a.fecha_hora_objetivo) - new Date(b.fecha_hora_objetivo));
+    return conFecha[0] || null;
+}
+
+/** "Próximas cosas" — scroll horizontal. Oculta la sección si no hay nada. */
+async function cargarProximasCosas(c, $wrap) {
+    if (!$wrap) return;
+    let med = null, rec = null;
+    try { [med, rec] = await Promise.all([proximoMedicamento(c.id), proximoRecordatorio(c.id)]); }
+    catch (_) { /* tolerante */ }
+
+    const tarjetas = [];
+    if (med) {
+        const enHoras = med.diff < 60 ? `en ${med.diff} min` : `a las ${med.horario}`;
+        tarjetas.push(`
+            <article class="proxima-card proxima-card--med">
+                <span class="proxima-card__icon">💊</span>
+                <strong class="proxima-card__titulo">${h(med.nombre)}${med.dosis ? ` · ${h(med.dosis)}` : ''}</strong>
+                <small class="proxima-card__cuando">${h(enHoras)}</small>
+            </article>
+        `);
+    }
+    if (rec) {
+        tarjetas.push(`
+            <article class="proxima-card proxima-card--rec">
+                <span class="proxima-card__icon">${emojiPorTipo(rec.tipo)}</span>
+                <strong class="proxima-card__titulo">${h(rec.titulo || 'Recordatorio')}</strong>
+                <small class="proxima-card__cuando">${h(formatearFechaRecordatorio(rec.fecha_hora_objetivo))}</small>
+            </article>
+        `);
+    }
+    if (!tarjetas.length) { $wrap.hidden = true; return; }
+    $wrap.hidden = false;
+    $wrap.innerHTML = `
+        <h2>⏭️ Próximas cosas</h2>
+        <div class="proximas-scroll">${tarjetas.join('')}</div>
+    `;
 }
 
 // =====================================================================
@@ -1468,11 +1665,11 @@ function tiempoRelativo(at) {
     return new Date(at).toLocaleDateString('es-AR');
 }
 
-async function cargarActividadReciente(c, $cont) {
+async function cargarActividadReciente(c, $cont, { limit = 15 } = {}) {
     if (!$cont) return;
     let eventos = [];
     try {
-        eventos = await actividadReciente(c.id, { limit: 15 });
+        eventos = await actividadReciente(c.id, { limit });
     } catch (err) {
         $cont.innerHTML = `<p class="muted">No pude cargar la actividad: ${h(err?.message || err)}</p>`;
         return;

@@ -66,23 +66,42 @@ export async function renderContactosAdmin($app) {
 
     $app.innerHTML = `
         <header class="admin-pantalla__head">
-            <button class="btn btn--mini" id="btn-volver">← Volver al hogar</button>
+            <button class="btn btn--mini" id="btn-volver">← Volver</button>
             <h1>📞 Contactos del círculo</h1>
         </header>
         <p class="muted">Son los que ve tu familiar en su pantalla "Familia" y en las emergencias.</p>
-        <div style="margin: 0.8rem 0;">
-            <button class="btn btn--inicio" id="btn-nuevo-contacto">➕ Agregar contacto</button>
-        </div>
-        <div id="contactos-lista">Cargando…</div>
+        <div id="contactos-seccion"></div>
     `;
-    $app.querySelector('#btn-volver').addEventListener('click', () => goBack('#/inicio'));
-    $app.querySelector('#btn-nuevo-contacto').addEventListener('click', () => {
-        abrirFormContacto(c.id, null, () => renderContactosAdmin($app));
-    });
+    $app.querySelector('#btn-volver').addEventListener('click', () => goBack('#/accesos'));
+    montarSeccionContactos($app.querySelector('#contactos-seccion'), c.id);
+}
 
-    const $lst = $app.querySelector('#contactos-lista');
+/**
+ * Renderiza la gestión de contactos (botón "agregar" + lista CRUD) dentro
+ * del contenedor `$cont`. Reusable: la usa la pantalla #/contactos y la
+ * sub-sección "Contactos" del tab Accesos del dashboard. No toca el resto
+ * del DOM, así puede convivir con otras secciones en la misma pantalla.
+ */
+export async function montarSeccionContactos($cont, circleId) {
+    if (!$cont) return;
+    $cont.innerHTML = `
+        <div style="margin: 0.4rem 0 0.8rem;">
+            <button class="btn btn--inicio" data-nuevo-contacto>➕ Agregar contacto</button>
+        </div>
+        <div data-contactos-lista>Cargando…</div>
+    `;
+    const $lst = $cont.querySelector('[data-contactos-lista]');
+    const recargar = () => pintarListaContactos(circleId, $lst, recargar);
+    $cont.querySelector('[data-nuevo-contacto]').addEventListener('click', () => {
+        abrirFormContacto(circleId, null, recargar);
+    });
+    await pintarListaContactos(circleId, $lst, recargar);
+}
+
+async function pintarListaContactos(circleId, $lst, recargar) {
+    if (!$lst) return;
     try {
-        const lista = await listarContactos(c.id);
+        const lista = await listarContactos(circleId);
         if (!lista.length) {
             $lst.innerHTML = `<p class="muted">No hay contactos cargados todavía. Empezá con uno.</p>`;
             return;
@@ -108,7 +127,7 @@ export async function renderContactosAdmin($app) {
         `;
         $lst.querySelectorAll('[data-edit]').forEach(b => b.addEventListener('click', () => {
             const ct = lista.find(x => x.id === b.dataset.edit);
-            abrirFormContacto(c.id, ct, () => renderContactosAdmin($app));
+            abrirFormContacto(circleId, ct, recargar);
         }));
         $lst.querySelectorAll('[data-del]').forEach(b => b.addEventListener('click', async () => {
             const ct = lista.find(x => x.id === b.dataset.del);
@@ -123,7 +142,7 @@ export async function renderContactosAdmin($app) {
             if (ok !== 'ok') return;
             try {
                 await borrarContacto(ct.id);
-                renderContactosAdmin($app);
+                recargar();
             } catch (err) {
                 await mostrarErrorEstructurado(err, 'No pude borrar el contacto');
             }
@@ -1221,26 +1240,44 @@ export async function renderAccesosAdmin($app) {
 
     $app.innerHTML = `
         <header class="admin-pantalla__head">
-            <button class="btn btn--mini" id="btn-volver">← Volver al hogar</button>
+            <button class="btn btn--mini" id="btn-volver">← Volver</button>
             <h1>🔗 Accesos / Trámites</h1>
         </header>
         <p class="muted">
             Botones grandes que tu familiar ve en su app. Cada uno hace una
             llamada o abre un link (PAMI, ANSES, banco, lo que necesites).
         </p>
-        <div style="margin: 0.8rem 0;">
-            <button class="btn btn--inicio" id="btn-nuevo-acceso">➕ Agregar acceso</button>
-        </div>
-        <div id="accesos-lista">Cargando…</div>
+        <div id="accesos-seccion"></div>
     `;
-    $app.querySelector('#btn-volver').addEventListener('click', () => goBack('#/inicio'));
-    $app.querySelector('#btn-nuevo-acceso').addEventListener('click', () => {
-        abrirFormAcceso(c.id, null, () => renderAccesosAdmin($app));
-    });
+    $app.querySelector('#btn-volver').addEventListener('click', () => goBack('#/accesos'));
+    montarSeccionAccesos($app.querySelector('#accesos-seccion'), c.id);
+}
 
-    const $lst = $app.querySelector('#accesos-lista');
+/**
+ * Renderiza la gestión de accesos/trámites (botón "agregar" + lista CRUD)
+ * dentro de `$cont`. Reusable: pantalla #/accesos-admin y sub-sección del
+ * tab Accesos del dashboard.
+ */
+export async function montarSeccionAccesos($cont, circleId) {
+    if (!$cont) return;
+    $cont.innerHTML = `
+        <div style="margin: 0.4rem 0 0.8rem;">
+            <button class="btn btn--inicio" data-nuevo-acceso>➕ Agregar acceso</button>
+        </div>
+        <div data-accesos-lista>Cargando…</div>
+    `;
+    const $lst = $cont.querySelector('[data-accesos-lista]');
+    const recargar = () => pintarListaAccesos(circleId, $lst, recargar);
+    $cont.querySelector('[data-nuevo-acceso]').addEventListener('click', () => {
+        abrirFormAcceso(circleId, null, recargar);
+    });
+    await pintarListaAccesos(circleId, $lst, recargar);
+}
+
+async function pintarListaAccesos(circleId, $lst, recargar) {
+    if (!$lst) return;
     try {
-        const lista = await listarAccesos(c.id);
+        const lista = await listarAccesos(circleId);
         if (!lista.length) {
             $lst.innerHTML = `<p class="muted">No hay accesos cargados todavía. Empezá con uno.</p>`;
             return;
@@ -1271,7 +1308,7 @@ export async function renderAccesosAdmin($app) {
         `;
         $lst.querySelectorAll('[data-edit]').forEach(b => b.addEventListener('click', () => {
             const a = lista.find(x => x.id === b.dataset.edit);
-            abrirFormAcceso(c.id, a, () => renderAccesosAdmin($app));
+            abrirFormAcceso(circleId, a, recargar);
         }));
         $lst.querySelectorAll('[data-del]').forEach(b => b.addEventListener('click', async () => {
             const a = lista.find(x => x.id === b.dataset.del);
@@ -1286,7 +1323,7 @@ export async function renderAccesosAdmin($app) {
             if (ok !== 'ok') return;
             try {
                 await borrarAcceso(a.id);
-                renderAccesosAdmin($app);
+                recargar();
             } catch (err) {
                 await mostrarErrorEstructurado(err, 'No pude borrar el acceso');
             }

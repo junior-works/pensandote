@@ -1969,16 +1969,31 @@ body[data-mode="dashboard"] .meds-admin-slot.is-pend { background: #fff8e9; }
      tipográfica más ligera.
    =================================================================== */
 body[data-mode="dashboard"] {
-    --line-d:        rgba(17, 17, 17, 0.14);
-    --line-d-soft:   rgba(17, 17, 17, 0.07);
-    --sh-d:          0 1px 2px rgba(0, 0, 0, 0.05), 0 1px 1px rgba(0, 0, 0, 0.03);
-    --sh-d-hover:    0 3px 8px rgba(0, 0, 0, 0.08);
-    --sh-d-card:     0 1px 3px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.025);
-    --r-d-card:      14px;
-    --r-d-input:     8px;
+    /* Etapa B — dark glass. Redefinimos los tokens del skin dashboard a
+       valores oscuros, y además pisamos los tokens base (--bg/--ink/--line)
+       SOLO en este scope: así el fondo del body, las cards (var(--bg-soft)),
+       el texto (var(--ink)) y los bordes (var(--line)) heredan el tema
+       oscuro sin tocar el HTML de cada pantalla. El modo simple no se toca. */
+    --line-d:        rgba(255, 255, 255, 0.10);
+    --line-d-soft:   rgba(255, 255, 255, 0.05);
+    --sh-d:          0 1px 2px rgba(0, 0, 0, 0.4);
+    --sh-d-hover:    0 6px 18px rgba(0, 0, 0, 0.5);
+    --sh-d-card:     0 4px 16px rgba(0, 0, 0, 0.35);
+    --r-d-card:      16px;
+    --r-d-input:     10px;
     --r-d-pill:      999px;
-    --ink-soft-d:    rgba(17, 17, 17, 0.62);
-    --focus-ring:    0 0 0 3px rgba(91, 142, 142, 0.32);
+    --ink-soft-d:    var(--admin-ink-soft);
+    --focus-ring:    0 0 0 3px rgba(168, 85, 247, 0.4);
+    /* superficies glass para cards / inputs / botones */
+    --admin-surface:        rgba(255, 255, 255, 0.045);
+    --admin-surface-strong: rgba(255, 255, 255, 0.075);
+    --admin-surface-hover:  rgba(255, 255, 255, 0.12);
+    /* override de los tokens base (cascada → cards, texto, bordes oscuros) */
+    --bg:        var(--admin-bg);
+    --bg-soft:   var(--admin-surface);
+    --ink:       var(--admin-ink);
+    --ink-soft:  var(--admin-ink-soft);
+    --line:      rgba(255, 255, 255, 0.10);
 }
 
 body[data-mode="dashboard"] {
@@ -2033,16 +2048,16 @@ body[data-mode="dashboard"] .btn {
     font-size: 0.95rem;
     font-weight: 600;
     border: 1px solid var(--line-d);
-    border-radius: 8px;
+    border-radius: 10px;
     box-shadow: var(--sh-d);
-    background: #fff;
+    background: var(--admin-surface-strong);
     color: var(--ink);
     transition: background 120ms ease, box-shadow 120ms ease, transform 120ms ease;
 }
 body[data-mode="dashboard"] .btn:hover {
     transform: translateY(-1px);
     box-shadow: var(--sh-d-hover);
-    background: var(--bg);
+    background: var(--admin-surface-hover);
 }
 body[data-mode="dashboard"] .btn:active {
     transform: translateY(0);
@@ -2075,12 +2090,17 @@ body[data-mode="dashboard"] .btn--familia:hover { background: #5b8e8e; }
 
 /* ---- Cards modernas — radio, sombra y padding parejos en todo el panel ---- */
 body[data-mode="dashboard"] .card {
-    background: #fff;
+    background: var(--admin-surface);
+    -webkit-backdrop-filter: blur(12px);
+    backdrop-filter: blur(12px);
     border: 1px solid var(--line-d);
     border-radius: var(--r-d-card);
     box-shadow: var(--sh-d-card);
     padding: 1.15em 1.3em;
     margin-block: 0.9rem;
+}
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    body[data-mode="dashboard"] .card { background: var(--admin-glass-fallback); }
 }
 body[data-mode="dashboard"] .card + .card { margin-top: 0.9rem; }
 /* Sección dentro de un card (h3 + contenido) — separación sutil. */
@@ -2104,13 +2124,18 @@ body[data-mode="dashboard"] .pill--solo_ver  { background: #eee;    color: #555;
 
 /* ---- Modal moderno (sombra más suave, borde fino) ---- */
 body[data-mode="dashboard"] .modal {
-    border: 1px solid var(--line-d);
-    border-radius: 14px;
-    box-shadow: 0 10px 30px rgba(0,0,0,0.15), 0 2px 6px rgba(0,0,0,0.08);
-    background: #fff;
+    border: 1px solid var(--admin-glass-border);
+    border-radius: 16px;
+    box-shadow: 0 18px 48px rgba(0,0,0,0.6);
+    background: var(--admin-glass-fallback);
+    -webkit-backdrop-filter: blur(24px);
+    backdrop-filter: blur(24px);
+    color: var(--admin-ink);
 }
 body[data-mode="dashboard"] .modal__close {
     border: 1px solid var(--line-d);
+    background: var(--admin-surface-strong);
+    color: var(--admin-ink);
     box-shadow: none;
 }
 
@@ -2121,25 +2146,30 @@ body[data-mode="dashboard"] input[type="text"],
 body[data-mode="dashboard"] input[type="email"],
 body[data-mode="dashboard"] input[type="date"],
 body[data-mode="dashboard"] textarea {
-    background: #fff;
+    background: var(--admin-surface-strong);
+    color: var(--admin-ink);
     border: 1px solid var(--line-d);
-    border-radius: 8px;
+    border-radius: 10px;
     padding: 0.55em 0.75em;
     font-size: 0.95rem;
     transition: border-color 120ms ease, box-shadow 120ms ease;
 }
+body[data-mode="dashboard"] .input-real::placeholder,
+body[data-mode="dashboard"] textarea::placeholder { color: var(--admin-ink-soft); }
+/* el date picker en dark: invertimos el ícono para que se vea */
+body[data-mode="dashboard"] input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(1); opacity: 0.6; }
 body[data-mode="dashboard"] .input-real:focus,
 body[data-mode="dashboard"] select:focus,
 body[data-mode="dashboard"] input:focus,
 body[data-mode="dashboard"] textarea:focus {
-    border-color: var(--ink);
+    border-color: var(--admin-purple);
     outline: none;
-    box-shadow: 0 0 0 3px rgba(17,17,17,0.08);
+    box-shadow: 0 0 0 3px rgba(168, 85, 247, 0.25);
 }
 
 /* ---- Hogar header en dashboard — prolijo, alineado con el resto ---- */
 body[data-mode="dashboard"] .hogar-header {
-    background: #fff;
+    background: var(--admin-surface);
     border: 1px solid var(--line-d);
     border-radius: var(--r-d-card);
     box-shadow: var(--sh-d-card);
@@ -2161,8 +2191,11 @@ body[data-mode="dashboard"] .hogar-header__nombre {
     line-height: 1.2;
 }
 
-/* "Pensé en vos" — fondo suave en dashboard, no compite con las otras cards. */
-body[data-mode="dashboard"] .hogar-pense { background: #fff8f3; }
+/* "Pensé en vos" — tinte coral cálido sobre el glass oscuro. */
+body[data-mode="dashboard"] .hogar-pense {
+    background: linear-gradient(180deg, rgba(251, 113, 133, 0.10), var(--admin-surface));
+    border-color: rgba(251, 113, 133, 0.22);
+}
 
 /* ---- Sticky bar del círculo activo — más integrada, sutil ---- */
 body[data-mode="dashboard"] #circulo-bar {
@@ -2880,5 +2913,157 @@ body[data-mode="dashboard"] .pdt-asistente-btn {
     color: #fff;
     box-shadow: inset 0 0 0 2px var(--admin-glass-border);
     border-radius: 14px;
+}
+
+/* ===================================================================
+   ADMIN — Etapa B: pantallas internas sobre el tema dark glass
+   -------------------------------------------------------------------
+   Componentes nuevos del "pulso del día" (Inicio) + overrides de las
+   superficies que quedaban hardcodeadas en #fff (cards/inputs ya se
+   resolvieron arriba; acá van listas con estilo inline y componentes
+   nuevos). Solo modo dashboard.
+   =================================================================== */
+
+/* ---- Inicio: Hero foto del día (16:9) ---- */
+body[data-mode="dashboard"] .inicio-hero { padding: 0; overflow: hidden; }
+body[data-mode="dashboard"] .inicio-hero__fig { margin: 0; }
+body[data-mode="dashboard"] .inicio-hero__img {
+    display: block;
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    object-fit: cover;
+}
+body[data-mode="dashboard"] .inicio-hero__cap {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    padding: 0.7rem 1rem 0.9rem;
+}
+body[data-mode="dashboard"] .inicio-hero__cap .t-emocional {
+    font-size: 1.5rem;
+    line-height: 1.1;
+    color: var(--admin-ink);
+}
+body[data-mode="dashboard"] .inicio-hero__empty {
+    text-align: center;
+    padding: 1.6rem 1.2rem;
+    color: var(--admin-ink-soft);
+    display: grid;
+    gap: 0.5rem;
+    justify-items: center;
+}
+body[data-mode="dashboard"] .inicio-hero__empty-icon { font-size: 2.2rem; opacity: 0.6; }
+body[data-mode="dashboard"] .inicio-hero__empty p { margin: 0; }
+
+/* ---- Inicio: feed de actividad acotado (scroll interno) ---- */
+body[data-mode="dashboard"] .inicio-feed {
+    max-height: 22rem;
+    overflow-y: auto;
+}
+
+/* ---- Inicio: acciones rápidas (grid de botones grandes) ---- */
+body[data-mode="dashboard"] .inicio-acciones__grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.7rem;
+}
+body[data-mode="dashboard"] .inicio-acciones__grid .btn {
+    min-height: 56px;
+    flex-direction: column;
+    gap: 0.2rem;
+}
+
+/* ---- Inicio: Último cariño ---- */
+body[data-mode="dashboard"] .hogar-ultimo-carino .pense-item {
+    background: rgba(251, 113, 133, 0.10);
+    border: 1px solid rgba(251, 113, 133, 0.22);
+    border-radius: 12px;
+    padding: 0.7rem 0.9rem;
+    display: flex; align-items: center; gap: 0.6rem;
+}
+body[data-mode="dashboard"] .hogar-ultimo-carino .pense-item__emoji { font-size: 1.6rem; }
+
+/* ---- Inicio: Próximas cosas (scroll horizontal) ---- */
+body[data-mode="dashboard"] .inicio-proximas { margin: 0.9rem 0; }
+body[data-mode="dashboard"] .inicio-proximas > h2 { margin: 0 0 0.5rem; }
+body[data-mode="dashboard"] .proximas-scroll {
+    display: flex;
+    gap: 0.7rem;
+    overflow-x: auto;
+    scrollbar-width: none;
+    padding-bottom: 0.2rem;
+}
+body[data-mode="dashboard"] .proximas-scroll::-webkit-scrollbar { display: none; }
+body[data-mode="dashboard"] .proxima-card {
+    flex: 0 0 auto;
+    min-width: 11rem;
+    max-width: 15rem;
+    background: var(--admin-surface);
+    border: 1px solid var(--line-d);
+    border-radius: 14px;
+    padding: 0.8rem 0.95rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+body[data-mode="dashboard"] .proxima-card__icon { font-size: 1.5rem; line-height: 1; }
+body[data-mode="dashboard"] .proxima-card__titulo {
+    font-size: 0.95rem; line-height: 1.2;
+    overflow-wrap: break-word;
+}
+body[data-mode="dashboard"] .proxima-card__cuando { color: var(--admin-ink-soft); font-size: 0.82rem; }
+body[data-mode="dashboard"] .proxima-card--med  { border-left: 3px solid var(--admin-purple); }
+body[data-mode="dashboard"] .proxima-card--rec  { border-left: 3px solid var(--admin-cyan); }
+
+/* ---- Acentos neon por categoría en los encabezados de pantalla ---- */
+body[data-mode="dashboard"] .hogar-acciones > h2 { color: var(--admin-ink); }
+
+/* ---- Tus círculos: card glass ---- */
+body[data-mode="dashboard"] .circulo-card {
+    background: var(--admin-surface);
+    border: 1px solid var(--line-d);
+    box-shadow: none;
+}
+body[data-mode="dashboard"] .circulo-card__chip {
+    background: var(--admin-surface-strong);
+    border-color: var(--admin-glass-border);
+    color: var(--admin-ink-soft);
+}
+body[data-mode="dashboard"] .circulo-card__chip strong { color: var(--admin-ink); }
+
+/* ---- Recordatorios (lista admin con estilo inline #fff/#ccc) ----
+   El <li> trae background:#fff;border:1px solid #ccc inline; un !important
+   gana sin tocar el JS. Aplica a la pantalla #/haceme-acordar dashboard. */
+body[data-mode="dashboard"] .recordatorio-lista > li {
+    background: var(--admin-surface) !important;
+    border: 1px solid var(--line-d) !important;
+    border-radius: 12px !important;
+    color: var(--admin-ink);
+}
+
+/* ---- Médicos: botón-item con texto legible sobre dark ---- */
+body[data-mode="dashboard"] .medico-item small,
+body[data-mode="dashboard"] .docs-lista__nombre { color: var(--admin-ink-soft); }
+
+/* ---- Filas que quedaban en #fff hardcodeado (Familia + Accesos) ---- */
+body[data-mode="dashboard"] .pense-item,
+body[data-mode="dashboard"] .contacto-admin-row,
+body[data-mode="dashboard"] .acceso-admin-row {
+    background: var(--admin-surface-strong);
+    border-color: var(--line-d);
+    color: var(--admin-ink);
+}
+body[data-mode="dashboard"] .pense-item.is-nuevo {
+    background: rgba(251, 191, 36, 0.12);
+    border-color: rgba(251, 191, 36, 0.28);
+}
+body[data-mode="dashboard"] .pense-badge {
+    background: rgba(168, 85, 247, 0.18);
+    border-color: rgba(168, 85, 247, 0.35);
+    color: var(--admin-ink);
+}
+body[data-mode="dashboard"] .miembros-modal-item.is-yo {
+    background: rgba(251, 113, 133, 0.14);
+    border-color: rgba(251, 113, 133, 0.32);
 }
 

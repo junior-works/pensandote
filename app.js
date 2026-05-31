@@ -197,6 +197,12 @@ function renderRouteReal(ruta) {
         if (ruta.name === 'contactos')      return Admin.renderContactosAdmin($app);
         if (ruta.name === 'datos-medicos')  return Admin.renderMedicoAdmin($app);
         if (ruta.name === 'accesos-admin')  return Admin.renderAccesosAdmin($app);
+        // Tab "Accesos" (dashboard): pantalla compuesta — administración del
+        // círculo + Tus círculos + Contactos + Accesos/Trámites. En modo
+        // simple no aplica (el papá no gestiona el círculo).
+        if (ruta.name === 'accesos' && state.membresiaReal?.interface_mode !== 'simple') {
+            return Hogar.renderAccesos($app);
+        }
         if (ruta.name === 'guia-admin')     return Admin.renderGuiaAdmin($app, ruta);
         if (ruta.name === 'medico')         return Admin.renderMedicoSimpleReal($app);
         // Categoría Salud: menú "Médico + Mis remedios", y la lista de
@@ -210,7 +216,13 @@ function renderRouteReal(ruta) {
         // accessors de preview.js ya traen datos reales si bootstrap
         // hizo prepararDatosReales (modo real simple).
         if (ruta.name === 'emergencias')    return Simple.renderEmergencias($app);
-        if (ruta.name === 'familia')        return Simple.renderFamilia($app);
+        // Tab "Familia": en dashboard es la pantalla emotiva del familiar
+        // (Pensé, Foto del día, Historias, Ideas, Calendario, Última vez).
+        // En modo simple sigue siendo la lista de contactos del papá.
+        if (ruta.name === 'familia') {
+            if (state.membresiaReal?.interface_mode === 'simple') return Simple.renderFamilia($app);
+            return Hogar.renderFamilia($app);
+        }
         // Cómo hago + IA — funcional en uso real (la edge function
         // requiere JWT, que tenemos por la sesión).
         if (ruta.name === 'como-hago')      return Simple.renderComoHago($app);
@@ -466,11 +478,11 @@ bootstrap().catch(err => {
 // (así #/medico o #/remedios también prenden "Salud"). El orden define la
 // posición de la pill.
 const ADMIN_NAV_ITEMS = [
-    { href: '#/inicio',         icon: '🏠', label: 'Inicio',     match: ['inicio', 'cuenta'] },
-    { href: '#/contactos',      icon: '📇', label: 'Contactos',  match: ['contactos'] },
-    { href: '#/datos-medicos',  icon: '🩺', label: 'Salud',      match: ['datos-medicos', 'medico', 'salud', 'remedios'] },
-    { href: '#/haceme-acordar', icon: '⏰', label: 'Recordá',    match: ['haceme-acordar'] },
-    { href: '#/accesos-admin',  icon: '🔗', label: 'Accesos',    match: ['accesos-admin', 'estudios', 'guia-admin'] }
+    { href: '#/inicio',         icon: '🏠', label: 'Inicio',   match: ['inicio', 'cuenta'] },
+    { href: '#/familia',        icon: '💜', label: 'Familia',  match: ['familia'] },
+    { href: '#/datos-medicos',  icon: '🩺', label: 'Salud',    match: ['datos-medicos', 'medico', 'salud', 'remedios'] },
+    { href: '#/haceme-acordar', icon: '⏰', label: 'Recordá',  match: ['haceme-acordar'] },
+    { href: '#/accesos',        icon: '🔗', label: 'Accesos',  match: ['accesos', 'accesos-admin', 'contactos', 'estudios', 'guia-admin'] }
 ];
 
 function actualizarShellAdmin() {
