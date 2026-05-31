@@ -2712,6 +2712,13 @@ body[data-mode="dashboard"] .pdt-asistente-btn {
     border: 1px solid var(--admin-glass-border);
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45), 0 0 18px rgba(168, 85, 247, 0.35);
 }
+/* El tooltip "¿Te ayudo?" sigue al botón: en dashboard el FAB sube por
+   encima del bottom-nav, así que el tooltip tiene que partir de esa misma
+   base + alto del botón (56px) + 8px de aire. Sin esto cae sobre la cara. */
+body[data-mode="dashboard"] .pdt-asistente-tooltip {
+    bottom: calc(var(--admin-nav-h) + env(safe-area-inset-bottom, 0px) + 1rem + 56px + 8px);
+    z-index: 96;
+}
 @media (hover: hover) {
     body[data-mode="dashboard"] .pdt-asistente-btn:hover {
         transform: translateY(-2px);
