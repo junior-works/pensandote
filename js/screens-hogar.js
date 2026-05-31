@@ -1838,7 +1838,7 @@ async function abrirModalMiembros(c, u) {
                                                 :                     '👀 sólo ver';
                                 const puedeEditarEste = esYo || puedeEditarOtros;
                                 return `
-                                    <li class="miembros-modal-item ${esYo ? 'is-yo' : ''}">
+                                    <li class="miembros-modal-item">
                                         <span class="miembros-modal-item__emoji">${rolEmoji}</span>
                                         <div class="miembros-modal-item__info">
                                             <strong>${h(nom || par)}${esYo ? ' <small class="muted">(vos)</small>' : ''}</strong>

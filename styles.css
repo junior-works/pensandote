@@ -1169,7 +1169,6 @@ body[data-mode="dashboard"] .meds-admin-slot.is-pend { background: #fff8e9; }
     border: 1px solid var(--line-d, var(--line));
     border-radius: 8px;
 }
-.miembros-modal-item.is-yo { background: #fff8e9; border-color: var(--accent-pense, #c98a5d); }
 .miembros-modal-item__emoji { font-size: 1.6em; line-height: 1; }
 .miembros-modal-item__info { display: flex; flex-direction: column; gap: 0.1rem; min-width: 0; }
 .miembros-modal-item__info small { color: var(--ink-soft); font-size: 0.85em; }
@@ -3105,10 +3104,6 @@ body[data-mode="dashboard"] .pense-badge {
     background: rgba(168, 85, 247, 0.18);
     border-color: rgba(168, 85, 247, 0.35);
     color: var(--admin-ink);
-}
-body[data-mode="dashboard"] .miembros-modal-item.is-yo {
-    background: rgba(251, 113, 133, 0.14);
-    border-color: rgba(251, 113, 133, 0.32);
 }
 
 /* ===================================================================
