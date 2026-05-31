@@ -135,8 +135,6 @@ export async function renderHogar($app) {
     $app.querySelector('[data-qa="mail"]')?.addEventListener('click', () => go('#/datos-medicos'));
 }
 
-}
-
 // =====================================================================
 // FAMILIA (#/familia, dashboard) — lo emotivo del círculo
 // ---------------------------------------------------------------------
