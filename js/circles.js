@@ -95,6 +95,23 @@ export async function actualizarParentesco(userId, circleId, parentesco) {
 }
 
 /**
+ * Actualiza nombre_completo y/o telefono de la fila public.users de un
+ * usuario. La RLS decide si está permitido: users_update_self (uno
+ * mismo) o users_update_admin (admin/editor de un círculo compartido)
+ * — ver migration 0015_users_rls_comembros.sql.
+ *
+ * @param {string} userId  - id de public.users (== auth.users.id)
+ * @param {{nombre_completo?: string, telefono?: string|null}} campos
+ */
+export async function actualizarPerfilUsuario(userId, campos) {
+    const sb = await sbClient();
+    const { error } = await sb.from('users')
+        .update(campos)
+        .eq('id', userId);
+    if (error) throw error;
+}
+
+/**
  * Crea un círculo nuevo. El usuario logueado queda como owner +
  * miembro admin en modo dashboard.
  *

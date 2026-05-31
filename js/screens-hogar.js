@@ -14,9 +14,12 @@ import { go, refresh } from './router.js';
 import { cerrarSesion } from './auth.js';
 import {
     miembrosDelCirculo, membresiaActiva,
-    crearCirculo, actualizarParentesco
+    crearCirculo, actualizarParentesco, actualizarPerfilUsuario
 } from './circles.js';
-import { h, modal, esEntornoDev, renderErrorEstructurado } from './ui.js';
+import {
+    h, modal, esEntornoDev, renderErrorEstructurado,
+    installModalBackButton, cleanupModalBackButton
+} from './ui.js';
 import { nuevaGrabacion } from './audio.js';
 import { abrirModalInvitacion, pedirTexto, recargarSesion } from './screens-real.js';
 import {
@@ -1798,45 +1801,190 @@ async function abrirModalMiembros(c, u) {
         try { lista = await miembrosDelCirculo(c.id); }
         catch (err) { lista = []; }
     }
-    const cuerpo = `
-        ${lista.length === 0 ? `
-            <p class="muted">Todavía no hay miembros registrados en este círculo.</p>
-        ` : `
-            <ul class="miembros-modal-lista">
-                ${lista.map(m => {
-                    const esYo  = m.user_id === u.id;
-                    const par   = (m.parentesco || '').trim() || 'Familiar';
-                    const modo  = m.interface_mode || 'dashboard';
-                    const perm  = m.permission_level || 'viewer';
-                    const rolEmoji  = modo === 'simple' ? '🧓' : '👤';
-                    const permLabel = perm === 'admin'  ? '🛡️ admin'
-                                    : perm === 'editor' ? '✏️ editor'
-                                    :                     '👀 sólo ver';
-                    return `
-                        <li class="miembros-modal-item ${esYo ? 'is-yo' : ''}">
-                            <span class="miembros-modal-item__emoji">${rolEmoji}</span>
-                            <div class="miembros-modal-item__info">
-                                <strong>${h(par)}${esYo ? ' <small class="muted">(vos)</small>' : ''}</strong>
-                                <small>${h(modo)} · ${permLabel}</small>
-                            </div>
-                        </li>
-                    `;
-                }).join('')}
-            </ul>
-            <p class="muted" style="font-size:0.88em; margin-top:0.8rem;">
-                ${lista.length} ${lista.length === 1 ? 'persona' : 'personas'} en este círculo.
-            </p>
-        `}
-    `;
-    const v = await modal({
-        titulo: `👥 Miembros de ${h(c.nombre)}`,
-        cuerpo,
-        acciones: [
-            { label: '➕ Invitar a alguien', clase: 'btn--inicio', value: 'invitar' },
-            { label: 'Cerrar', value: 'cerrar' }
-        ]
+
+    // ¿Puede el viewer editar a OTROS? Sólo admin/editor del círculo.
+    // (cualquiera puede editarse a sí mismo). Tomamos el permiso de la
+    // propia membresía: primero de la lista, fallback a state.membresiaReal.
+    const yo = lista.find(m => m.user_id === u.id);
+    const viewerPerm = yo?.permission_level
+        || state.membresiaReal?.permission_level
+        || 'solo_ver';
+    const puedeEditarOtros = ['admin', 'editor'].includes(viewerPerm);
+
+    // Modal con overlay propio (mismo markup/estilo que ui.modal) para
+    // poder cablear los botones ✏️ por miembro, que modal() no permite.
+    const accion = await new Promise((resolve) => {
+        const overlay = document.createElement('div');
+        overlay.className = 'modal-overlay';
+        overlay.innerHTML = `
+            <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+                <button class="modal__close" aria-label="Cerrar" data-close-x>×</button>
+                <h2 id="modal-title" class="modal__titulo">👥 Miembros de ${h(c.nombre)}</h2>
+                <div class="modal__cuerpo">
+                    ${lista.length === 0 ? `
+                        <p class="muted">Todavía no hay miembros registrados en este círculo.</p>
+                    ` : `
+                        <ul class="miembros-modal-lista">
+                            ${lista.map(m => {
+                                const esYo  = m.user_id === u.id;
+                                const par   = (m.parentesco || '').trim() || 'Familiar';
+                                const nom   = (m.user?.nombre_completo || '').trim();
+                                const tel   = (m.user?.telefono || '').trim();
+                                const modo  = m.interface_mode || 'dashboard';
+                                const perm  = m.permission_level || 'solo_ver';
+                                const rolEmoji  = modo === 'simple' ? '🧓' : '👤';
+                                const permLabel = perm === 'admin'  ? '🛡️ admin'
+                                                : perm === 'editor' ? '✏️ editor'
+                                                :                     '👀 sólo ver';
+                                const puedeEditarEste = esYo || puedeEditarOtros;
+                                return `
+                                    <li class="miembros-modal-item ${esYo ? 'is-yo' : ''}">
+                                        <span class="miembros-modal-item__emoji">${rolEmoji}</span>
+                                        <div class="miembros-modal-item__info">
+                                            <strong>${h(nom || par)}${esYo ? ' <small class="muted">(vos)</small>' : ''}</strong>
+                                            <small>${h(par)} · ${h(modo)} · ${permLabel}</small>
+                                            ${tel ? `<small class="muted">📞 ${h(tel)}</small>` : ''}
+                                        </div>
+                                        ${puedeEditarEste ? `
+                                            <button class="btn btn--mini miembros-modal-item__edit"
+                                                    data-edit="${h(m.user_id)}"
+                                                    aria-label="Editar ${h(nom || par)}">✏️</button>
+                                        ` : ''}
+                                    </li>
+                                `;
+                            }).join('')}
+                        </ul>
+                        <p class="muted" style="font-size:0.88em; margin-top:0.8rem;">
+                            ${lista.length} ${lista.length === 1 ? 'persona' : 'personas'} en este círculo.
+                        </p>
+                    `}
+                </div>
+                <div class="modal__acciones">
+                    <button class="btn btn--inicio" data-act="invitar">➕ Invitar a alguien</button>
+                    <button class="btn" data-act="cerrar">Cerrar</button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(overlay);
+
+        let cerrado = false;
+        function cerrar(v) {
+            if (cerrado) return;
+            cerrado = true;
+            cleanupModalBackButton(overlay);
+            overlay.remove();
+            resolve(v);
+        }
+        installModalBackButton(overlay, () => cerrar(null));
+        overlay.querySelector('[data-close-x]').addEventListener('click', () => cerrar(null));
+        overlay.addEventListener('click', e => { if (e.target === overlay) cerrar(null); });
+        overlay.querySelectorAll('[data-act]').forEach(b =>
+            b.addEventListener('click', () => cerrar(b.dataset.act)));
+        overlay.querySelectorAll('[data-edit]').forEach(b =>
+            b.addEventListener('click', () => cerrar({ editar: b.dataset.edit })));
     });
-    if (v === 'invitar') abrirModalInvitacion(c.id);
+
+    if (accion === 'invitar') { abrirModalInvitacion(c.id); return; }
+    if (accion && accion.editar) {
+        await editarPerfilMiembro(c, accion.editar);
+        // Reabrimos la lista para que se vea el cambio recién guardado.
+        return abrirModalMiembros(c, u);
+    }
+}
+
+// Abre el mini-form para editar nombre/teléfono de un miembro y, si se
+// guarda, persiste en public.users y refresca _miembrosCache (para que
+// "Mandar mensaje 💬" del Inicio agarre el teléfono nuevo).
+async function editarPerfilMiembro(c, userId) {
+    const m = (_miembrosCache || []).find(x => x.user_id === userId);
+    const datos = await pedirPerfilMiembro({
+        nombre:   (m?.user?.nombre_completo || '').trim(),
+        telefono: (m?.user?.telefono || '').trim(),
+        etiqueta: (m?.parentesco || '').trim()
+    });
+    if (!datos) return;
+    try {
+        await actualizarPerfilUsuario(userId, {
+            nombre_completo: datos.nombre,
+            telefono:        datos.telefono || null
+        });
+        _miembrosCache = await miembrosDelCirculo(c.id).catch(() => _miembrosCache);
+    } catch (err) {
+        await modal({
+            titulo: 'No se pudo guardar',
+            cuerpo: `<p class="muted">${h(err?.message || 'Hubo un problema al guardar los cambios. Probá de nuevo.')}</p>`,
+            acciones: [{ label: 'Entendido' }]
+        });
+    }
+}
+
+// Mini-form (modal propio, estilo coherente) con nombre (required) y
+// teléfono (opcional, formato libre acotado). Resuelve {nombre, telefono}
+// o null si se cancela.
+function pedirPerfilMiembro({ nombre = '', telefono = '', etiqueta = '' }) {
+    return new Promise((resolve) => {
+        const overlay = document.createElement('div');
+        overlay.className = 'modal-overlay';
+        overlay.innerHTML = `
+            <div class="modal" role="dialog" aria-modal="true">
+                <button class="modal__close" aria-label="Cerrar" data-close-x>×</button>
+                <h2 class="modal__titulo">✏️ Editar ${etiqueta ? h(etiqueta) : 'miembro'}</h2>
+                <form id="form-perfil" class="stack" style="margin-top:0.5rem;">
+                    <label class="stack">
+                        <span>Nombre</span>
+                        <input id="perfil-nombre" class="input-real" required
+                               value="${h(nombre)}" placeholder="Nombre y apellido"
+                               autocomplete="name">
+                    </label>
+                    <label class="stack">
+                        <span>Teléfono <small class="muted">(opcional)</small></span>
+                        <input id="perfil-tel" class="input-real" type="tel"
+                               value="${h(telefono)}" placeholder="+54 9 11 1234-5678"
+                               autocomplete="tel">
+                    </label>
+                    <p id="perfil-error" class="muted"
+                       style="color:#ff8a8a; display:none; margin:0;"></p>
+                    <div class="modal__acciones modal__acciones--stack">
+                        <button type="submit" class="btn btn--inicio">Guardar</button>
+                        <button type="button" class="btn btn--mini" data-cancel>Cancelar</button>
+                    </div>
+                </form>
+            </div>
+        `;
+        document.body.appendChild(overlay);
+
+        let cerrado = false;
+        function cerrar(v) {
+            if (cerrado) return;
+            cerrado = true;
+            cleanupModalBackButton(overlay);
+            overlay.remove();
+            resolve(v);
+        }
+        installModalBackButton(overlay, () => cerrar(null));
+        overlay.querySelector('[data-close-x]').addEventListener('click', () => cerrar(null));
+        overlay.querySelector('[data-cancel]').addEventListener('click', () => cerrar(null));
+        overlay.addEventListener('click', e => { if (e.target === overlay) cerrar(null); });
+
+        const errEl = overlay.querySelector('#perfil-error');
+        overlay.querySelector('#form-perfil').addEventListener('submit', (e) => {
+            e.preventDefault();
+            const nombreV = overlay.querySelector('#perfil-nombre').value.trim();
+            const telV    = overlay.querySelector('#perfil-tel').value.trim();
+            if (!nombreV) {
+                errEl.textContent = 'El nombre no puede quedar vacío.';
+                errEl.style.display = 'block';
+                return;
+            }
+            if (telV && !/^[+()\d\s-]{6,20}$/.test(telV)) {
+                errEl.textContent = 'El teléfono tiene un formato raro. Usá sólo números, espacios, + ( ) o guiones.';
+                errEl.style.display = 'block';
+                return;
+            }
+            cerrar({ nombre: nombreV, telefono: telV });
+        });
+        setTimeout(() => overlay.querySelector('#perfil-nombre').focus(), 50);
+    });
 }
 
 /** Devuelve el parentesco del primer miembro modo simple del círculo

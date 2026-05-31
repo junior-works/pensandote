@@ -1161,7 +1161,7 @@ body[data-mode="dashboard"] .meds-admin-slot.is-pend { background: #fff8e9; }
 }
 .miembros-modal-item {
     display: grid;
-    grid-template-columns: auto 1fr;
+    grid-template-columns: auto 1fr auto;
     gap: 0.75rem;
     align-items: center;
     padding: 0.6em 0.8em;
@@ -1171,8 +1171,9 @@ body[data-mode="dashboard"] .meds-admin-slot.is-pend { background: #fff8e9; }
 }
 .miembros-modal-item.is-yo { background: #fff8e9; border-color: var(--accent-pense, #c98a5d); }
 .miembros-modal-item__emoji { font-size: 1.6em; line-height: 1; }
-.miembros-modal-item__info { display: flex; flex-direction: column; gap: 0.1rem; }
+.miembros-modal-item__info { display: flex; flex-direction: column; gap: 0.1rem; min-width: 0; }
 .miembros-modal-item__info small { color: var(--ink-soft); font-size: 0.85em; }
+.miembros-modal-item__edit { justify-self: end; padding-inline: 0.6em; }
 
 /* ---------------- Familia (lista de contactos simple) ---------------- */
 .contactos-lista { list-style: none; padding: 0; margin: 0; display: grid; gap: 1rem; }
