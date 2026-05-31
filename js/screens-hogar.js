@@ -1886,9 +1886,15 @@ async function abrirModalMiembros(c, u) {
 
     if (accion === 'invitar') { abrirModalInvitacion(c.id); return; }
     if (accion && accion.editar) {
-        await editarPerfilMiembro(c, accion.editar);
-        // Reabrimos la lista para que se vea el cambio recién guardado.
-        return abrirModalMiembros(c, u);
+        // Diferimos con setTimeout(0): cerrar() del modal padre encoló un
+        // history.back() async; si abrimos el form sincrónicamente, el
+        // popstate de ese back cierra el form recién abierto (parpadeo).
+        // Mismo fix que fc1e8d0 para el editar de médicos.
+        setTimeout(async () => {
+            await editarPerfilMiembro(c, accion.editar);
+            // Reabrimos la lista para que se vea el cambio recién guardado.
+            abrirModalMiembros(c, u);
+        }, 0);
     }
 }
 
