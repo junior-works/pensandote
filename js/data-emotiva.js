@@ -364,14 +364,23 @@ export async function urlInteraccionAudio(storagePath) {
 // algo concreto que contar ("contame cuándo empezaste a trabajar en
 // la verdulería"). La tabla `puntas_historia` ya está creada con RLS
 // (select=es_miembro; insert=es_miembro + de_user_id=auth.uid();
-// update/delete=autor o admin). Order asc por created_at: el papá ve
-// PRIMERO la más vieja sin usar.
-export async function listarPuntas(circleId) {
+// update/delete=autor o admin). Order asc por created_at: la más vieja
+// sin usar va primero.
+//
+// Desde la sección Biografía las puntas se consumen del lado del hijo
+// ("preguntas para mi próxima charla"), no como tarjeta del día del
+// viejo. Por eso, POR DEFAULT la lista trae sólo las PENDIENTES: oculta
+// las ya contadas (usada_at) y las descartadas a mano (descartada_at,
+// agregada en migración 0016). `incluirInactivas: true` las trae igual
+// (p.ej. para un historial futuro).
+export async function listarPuntas(circleId, { incluirInactivas = false } = {}) {
     const sb = await sbClient();
-    const { data, error } = await sb.from('puntas_historia')
-        .select('id, circle_id, de_user_id, texto, usada_at, created_at')
+    let q = sb.from('puntas_historia')
+        .select('id, circle_id, de_user_id, texto, usada_at, descartada_at, created_at')
         .eq('circle_id', circleId)
         .order('created_at', { ascending: true });
+    if (!incluirInactivas) q = q.is('usada_at', null).is('descartada_at', null);
+    const { data, error } = await q;
     if (error) throw enriquecer('listarPuntas', error);
     return data || [];
 }
@@ -401,6 +410,18 @@ export async function borrarPunta(id) {
     const sb = await sbClient();
     const { error } = await sb.from('puntas_historia').delete().eq('id', id);
     if (error) throw enriquecer('borrarPunta', error);
+}
+
+// "Tachar sin gastar": el familiar marca la punta como descartada sin
+// borrarla ni contarla como usada. La fila queda en la base (historial),
+// pero listarPuntas la oculta por default. RLS: autor o admin del
+// círculo (policy puntas_update_descartar, migración 0016).
+export async function descartarPunta(id) {
+    const sb = await sbClient();
+    const { error } = await sb.from('puntas_historia')
+        .update({ descartada_at: new Date().toISOString() })
+        .eq('id', id);
+    if (error) throw enriquecer('descartarPunta', error);
 }
 
 // ---------------------------------------------------------------------
