@@ -2,17 +2,15 @@
  * Pensándote — Biografía (panel del aportador, modo dashboard).
  *
  * Etapa 2: el familiar suma material a la biografía del adulto mayor y lo
- * cura ítem por ítem. Tres sub-pantallas, ruteadas con #/biografia/<sub>:
- *   - panel   → landing con accesos
- *   - sumar   → subir ZIP de WhatsApp / reenviar audio / anotar a mano
- *   - cola    → cola de aprobación (aprobar/rechazar/editar/saltar)
- *   - filtros → reglas personales de filtrado de ZIPs (CRUD)
+ * cura ítem por ítem. Sub-pantallas ruteadas con #/biografia/<sub>:
+ *   - panel     → landing con accesos
+ *   - sumar     → subir ZIP de WhatsApp / reenviar audio / anotar a mano
+ *   - cola      → cola de aprobación (aprobar/rechazar/editar/saltar)
+ *   - filtros   → reglas personales de filtrado de ZIPs (CRUD)
+ *   - capitulos → Etapa 4: armar capítulos narrados con IA y curarlos
  *
  * REGLA FÉRREA: todo scopeado al círculo activo. Cada llamada de datos
  * pasa `c.id`; nunca se mezcla material entre círculos.
- *
- * Sin IA narrativa todavía (eso es Etapa 4): los aprobados quedan como
- * transcripciones literales en bio_aportes.
  */
 
 import { state } from './state.js';
@@ -24,21 +22,26 @@ import {
     saltarItem, listarFiltrosAportador,
     crearFiltro, borrarFiltro, urlAudioBiografia,
     iniciarGrabacionLlamada, finalizarGrabacionLlamada,
-    cancelarGrabacionLlamada, subirAudioLlamadaACola
+    cancelarGrabacionLlamada, subirAudioLlamadaACola,
+    listarAportesBiografia, listarCapitulos, generarCapitulo,
+    publicarCapitulo, editarCapitulo, descartarCapitulo,
+    registrarPedidoReescritura, aportesDeCapitulo, ORDEN_ETAPAS,
+    listarPedidosReescritura
 } from './data-emotiva.js';
 import { grabarLlamada } from './audio.js';
 import { miembrosDelCirculo } from './circles.js';
 import { crearDictado } from './utils/dictado.js';
 
-const SUBS_VALIDAS = ['panel', 'sumar', 'cola', 'filtros'];
+const SUBS_VALIDAS = ['panel', 'sumar', 'cola', 'filtros', 'capitulos'];
 
 export function renderBiografiaDashboard($app, sub) {
     const c = state.circulosReal.find(x => x.id === state.circuloActivoIdReal);
     if (!c) return go('#/inicio');
     const vista = SUBS_VALIDAS.includes(sub) ? sub : 'panel';
-    if (vista === 'sumar')   return renderSumar($app, c);
-    if (vista === 'cola')    return renderCola($app, c);
-    if (vista === 'filtros') return renderFiltros($app, c);
+    if (vista === 'sumar')     return renderSumar($app, c);
+    if (vista === 'cola')      return renderCola($app, c);
+    if (vista === 'filtros')   return renderFiltros($app, c);
+    if (vista === 'capitulos') return renderCapitulos($app, c);
     return renderPanel($app, c);
 }
 
@@ -85,6 +88,7 @@ async function renderPanel($app, c) {
         <section class="card stack">
             <button class="btn btn--xl btn--full" id="bio-sumar">📥 Sumar charlas</button>
             <button class="btn btn--full" id="bio-cola">📋 Mi cola de aprobación<span id="bio-cola-badge"></span></button>
+            <button class="btn btn--xl btn--inicio btn--full" id="bio-capitulos">✨ Armar capítulos con IA</button>
             <button class="btn btn--full" id="bio-filtros">⚙️ Mis reglas de filtro</button>
             <button class="btn btn--inicio btn--full" id="bio-ver">📚 Ver la biografía</button>
         </section>
@@ -92,6 +96,7 @@ async function renderPanel($app, c) {
     montarVolver($app, '#/familia');
     $app.querySelector('#bio-sumar').addEventListener('click', () => go('#/biografia/sumar'));
     $app.querySelector('#bio-cola').addEventListener('click', () => go('#/biografia/cola'));
+    $app.querySelector('#bio-capitulos').addEventListener('click', () => go('#/biografia/capitulos'));
     $app.querySelector('#bio-filtros').addEventListener('click', () => go('#/biografia/filtros'));
     $app.querySelector('#bio-ver').addEventListener('click', () => go('#/v2/historias?tab=biografia'));
 
@@ -691,4 +696,397 @@ async function pintarFiltros($app, c) {
                 }
             });
     });
+}
+
+// =====================================================================
+// Capítulos narrados con IA (Etapa 4)
+// ---------------------------------------------------------------------
+// El aportador selecciona aportes APROBADOS (bio_aportes), la edge
+// `bio-narrar` arma un capítulo en prosa (1ra/3ra persona) y acá se cura:
+// publicar / editar / regenerar / descartar. Todo scopeado al círculo.
+// =====================================================================
+const ETAPAS_LABEL = {
+    ninez: 'Niñez', juventud: 'Juventud', adultez: 'Adultez',
+    familia: 'Familia', trabajo: 'Trabajo', otro: 'Otro'
+};
+const ESTADO_LABEL = {
+    borrador:  '📝 Borrador',
+    publicado: '✅ Publicado',
+    excluido:  '🚫 Excluido'
+};
+const ORIGEN_ICONO = {
+    historia: '📖', whatsapp: '💬', videollamada: '🎥', manual: '✍️'
+};
+
+async function renderCapitulos($app, c) {
+    $app.innerHTML = `
+        ${cabecera('Armar capítulos', '#/biografia')}
+        <p class="muted">Elegí recuerdos aprobados y la IA arma un capítulo en
+           prosa. Vos lo revisás antes de que tu familiar lo lea.</p>
+
+        <section class="card stack">
+            <h2 style="margin:0;">✨ Nuevo capítulo</h2>
+            <div id="bio-cap-aportes"><p class="muted">Cargando recuerdos…</p></div>
+        </section>
+
+        <div id="bio-cap-pedidos"></div>
+
+        <section class="card stack">
+            <h2 style="margin:0;">📚 Capítulos</h2>
+            <div id="bio-cap-lista"><p class="muted">Cargando…</p></div>
+        </section>
+    `;
+    montarVolver($app, '#/biografia');
+    await pintarPedidos($app, c);
+    await pintarSelectorAportes($app, c);
+    await pintarListaCapitulos($app, c);
+}
+
+// Pedidos de "cambiá esto" que dejó el adulto mayor sobre sus capítulos.
+// El aportador los ve acá y puede abrir el capítulo para editar/regenerar.
+async function pintarPedidos($app, c) {
+    const $cont = $app.querySelector('#bio-cap-pedidos');
+    if (!$cont) return;
+    let pedidos;
+    try { pedidos = await listarPedidosReescritura(c.id); }
+    catch (err) { console.warn('[pedidos reescritura]', err); return; }
+    if (!pedidos.length) return;
+    $cont.innerHTML = `
+        <section class="card stack" style="background:#fff8f3; border:2px solid #f0d9c8;">
+            <h2 style="margin:0;">💬 Pedidos de tu familiar</h2>
+            <p class="muted" style="margin:0;">Pidió cambiar estos recuerdos. Abrí el capítulo para editarlo o regenerarlo.</p>
+            ${pedidos.map(p => `
+                <div style="border-top:1px solid #00000014; padding-top:0.5rem;">
+                    <p style="margin:0;"><strong>${h(p.capitulo?.titulo || 'Un recuerdo')}</strong></p>
+                    ${p.nota ? `<p style="margin:0.2rem 0; line-height:1.5;">“${h(p.nota)}”</p>` : ''}
+                    ${p.capitulo_id ? `<button class="btn btn--mini bio-pedido-abrir" data-cap="${p.capitulo_id}">Abrir capítulo</button>` : ''}
+                </div>`).join('')}
+        </section>`;
+    $cont.querySelectorAll('.bio-pedido-abrir').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            const capId = btn.dataset.cap;
+            try {
+                const caps = await listarCapitulos(c.id, { incluirExcluidos: true });
+                const cap = caps.find(x => x.id === capId);
+                if (cap) return onAbrirCapitulo($app, c, cap);
+                await avisar('No encontré el capítulo', '<p>Puede que se haya descartado.</p>', 'error');
+            } catch (err) {
+                await avisar('No pude abrir', `<pre>${h(err?.message || err)}</pre>`, 'error');
+            }
+        });
+    });
+}
+
+function filaAporte(a) {
+    const txt   = (a.transcripcion || '').replace(/\s+/g, ' ').trim();
+    const corto = txt.length > 120 ? txt.slice(0, 120) + '…' : txt;
+    const icono = ORIGEN_ICONO[a.origen] || '•';
+    return `
+        <label style="display:flex; gap:0.5rem; align-items:flex-start; padding:0.45rem;
+                      border:1px solid #00000014; border-radius:8px; cursor:pointer;">
+            <input type="checkbox" class="bio-cap-chk" value="${a.id}" style="margin-top:0.25rem;">
+            <span style="line-height:1.4;"><span class="muted">${icono}</span> ${h(corto || '(sin texto)')}</span>
+        </label>`;
+}
+
+async function pintarSelectorAportes($app, c) {
+    const $cont = $app.querySelector('#bio-cap-aportes');
+    let aportes;
+    try {
+        aportes = await listarAportesBiografia(c.id);
+    } catch (err) {
+        $cont.innerHTML = `<p class="muted">No pude cargar los recuerdos: ${h(err?.message || err)}</p>`;
+        return;
+    }
+    // Sólo aportes con texto narrable.
+    aportes = aportes.filter(a => (a.transcripcion || '').trim());
+    if (!aportes.length) {
+        $cont.innerHTML = `<p class="muted">Todavía no hay recuerdos aprobados con texto.
+            Sumá charlas y aprobá algunas en tu cola.</p>`;
+        return;
+    }
+    $cont.innerHTML = `
+        <p class="muted" style="font-size:0.88em; margin:0;">Tildá los recuerdos que querés juntar en un capítulo.</p>
+        <div style="max-height:340px; overflow:auto; display:flex; flex-direction:column; gap:0.4rem; margin:0.4rem 0;">
+            ${aportes.map(a => filaAporte(a)).join('')}
+        </div>
+        <label class="stack">
+            <span class="muted">Etapa de vida (ordena internamente; no se le muestra a tu familiar)</span>
+            <select id="bio-cap-etapa" class="input-real">
+                ${ORDEN_ETAPAS.map(e => `<option value="${e}">${h(ETAPAS_LABEL[e] || e)}</option>`).join('')}
+            </select>
+        </label>
+        <label class="stack">
+            <span class="muted">Título interno (opcional)</span>
+            <input id="bio-cap-titulo" class="input-real" placeholder="El primer trabajo en la verdulería">
+        </label>
+        <button class="btn btn--inicio btn--full" id="bio-cap-generar-btn" disabled>✨ Generar capítulo</button>
+    `;
+
+    const seleccion = () =>
+        Array.from($cont.querySelectorAll('.bio-cap-chk:checked')).map(i => i.value);
+    const $btn = $cont.querySelector('#bio-cap-generar-btn');
+    function refrescarBtn() {
+        const n = seleccion().length;
+        $btn.disabled = n === 0;
+        $btn.textContent = n
+            ? `✨ Generar capítulo con ${n} recuerdo${n > 1 ? 's' : ''}`
+            : '✨ Generar capítulo';
+    }
+    $cont.querySelectorAll('.bio-cap-chk').forEach(i => i.addEventListener('change', refrescarBtn));
+    refrescarBtn();
+
+    $btn.addEventListener('click', async () => {
+        const aporteIds = seleccion();
+        if (!aporteIds.length) return;
+        const etapa  = $cont.querySelector('#bio-cap-etapa').value;
+        const titulo = ($cont.querySelector('#bio-cap-titulo').value || '').trim();
+        $btn.disabled = true;
+        $btn.textContent = '⏳ La IA está escribiendo… (puede tardar unos segundos)';
+        let res;
+        try {
+            res = await generarCapitulo({ circleId: c.id, aporteIds, etapa, tituloInterno: titulo });
+        } catch (err) {
+            refrescarBtn();
+            await avisar('No pude armar el capítulo', `<pre>${h(err?.message || err)}</pre>`, 'error');
+            return;
+        }
+        pintarDetalle($app, c, {
+            capitulo_id:   res.capitulo_id,
+            titulo:        res.titulo,
+            texto_primera: res.texto_primera,
+            texto_tercera: res.texto_tercera,
+            etapa,
+            estado:        'borrador',
+            aporteIds
+        });
+    });
+}
+
+function tarjetaCapitulo(cap) {
+    const txt   = (cap.texto_tercera || cap.texto_primera || '').replace(/\s+/g, ' ').trim();
+    const corto = txt.length > 140 ? txt.slice(0, 140) + '…' : txt;
+    return `
+        <div class="card stack" data-cap="${cap.id}" style="margin-bottom:0.6rem;">
+            <div class="muted" style="font-size:0.82em;">
+                ${h(ESTADO_LABEL[cap.estado] || cap.estado)} · ${h(ETAPAS_LABEL[cap.etapa] || cap.etapa)}
+            </div>
+            <p style="font-weight:700; margin:0;">${h(cap.titulo || 'Sin título')}</p>
+            <p style="line-height:1.5; margin:0;">${h(corto || '(sin texto todavía)')}</p>
+            <button class="btn btn--mini bio-cap-abrir">Abrir</button>
+        </div>`;
+}
+
+async function pintarListaCapitulos($app, c) {
+    const $cont = $app.querySelector('#bio-cap-lista');
+    let caps;
+    try {
+        caps = await listarCapitulos(c.id, { incluirExcluidos: false });
+    } catch (err) {
+        $cont.innerHTML = `<p class="muted">No pude cargar los capítulos: ${h(err?.message || err)}</p>`;
+        return;
+    }
+    if (!caps.length) {
+        $cont.innerHTML = `<p class="muted">Todavía no armaste ningún capítulo.</p>`;
+        return;
+    }
+    $cont.innerHTML = caps.map(cap => tarjetaCapitulo(cap)).join('');
+    caps.forEach(cap => {
+        $cont.querySelector(`[data-cap="${cap.id}"] .bio-cap-abrir`)
+            ?.addEventListener('click', () => onAbrirCapitulo($app, c, cap));
+    });
+}
+
+async function onAbrirCapitulo($app, c, cap) {
+    let aporteIds = [];
+    try { aporteIds = await aportesDeCapitulo(cap.id); }
+    catch (err) { console.warn('[aportesDeCapitulo]', err); }
+    pintarDetalle($app, c, {
+        capitulo_id:   cap.id,
+        titulo:        cap.titulo,
+        texto_primera: cap.texto_primera,
+        texto_tercera: cap.texto_tercera,
+        etapa:         cap.etapa,
+        estado:        cap.estado,
+        aporteIds
+    });
+}
+
+// Vista de detalle / curaduría de un capítulo (reemplaza el contenido de
+// la pantalla; el "← Volver" reconstruye la lista de capítulos).
+function pintarDetalle($app, c, cap) {
+    let personaActiva = 'tercera'; // 'tercera' | 'primera'
+    $app.innerHTML = `
+        ${cabecera('Revisar capítulo', '#/biografia/capitulos')}
+        <section class="card stack">
+            <p class="muted" style="font-size:0.85em; margin:0;">
+                Título interno (no lo ve tu familiar): <strong>${h(cap.titulo || '—')}</strong>
+            </p>
+            <nav class="tabs" role="tablist" id="bio-cap-tabs">
+                <button class="tabs__tab is-active" data-cap-tab="tercera">Contado sobre él/ella</button>
+                <button class="tabs__tab" data-cap-tab="primera">Contado por él/ella</button>
+            </nav>
+            <div id="bio-cap-texto" style="line-height:1.65; white-space:pre-wrap;"></div>
+        </section>
+        <section class="card stack">
+            ${cap.estado === 'publicado'
+                ? `<p class="muted" style="margin:0;">✅ Ya está publicado. Tu familiar puede leerlo.</p>`
+                : `<button class="btn btn--inicio btn--full" id="bio-cap-publicar">✅ Publicar</button>`}
+            <button class="btn btn--full" id="bio-cap-editar">✏️ Editar</button>
+            <button class="btn btn--full" id="bio-cap-regenerar">🔄 Regenerar</button>
+            <button class="btn btn--danger btn--full" id="bio-cap-descartar">🗑 Descartar</button>
+        </section>
+    `;
+    montarVolver($app, '#/biografia/capitulos');
+
+    const $texto = $app.querySelector('#bio-cap-texto');
+    function pintarTexto() {
+        const t = personaActiva === 'primera' ? cap.texto_primera : cap.texto_tercera;
+        $texto.textContent = (t || '').trim() || '(esta variante quedó vacía)';
+    }
+    $app.querySelectorAll('[data-cap-tab]').forEach(b => {
+        b.addEventListener('click', () => {
+            personaActiva = b.dataset.capTab;
+            $app.querySelectorAll('[data-cap-tab]').forEach(x =>
+                x.classList.toggle('is-active', x.dataset.capTab === personaActiva));
+            pintarTexto();
+        });
+    });
+    pintarTexto();
+
+    $app.querySelector('#bio-cap-publicar')?.addEventListener('click', async () => {
+        try {
+            await publicarCapitulo(cap.capitulo_id);
+            await avisar('Publicado', '<p>Tu familiar ya puede leer este capítulo.</p>');
+            go('#/biografia/capitulos');
+        } catch (err) {
+            await avisar('No pude publicar', `<pre>${h(err?.message || err)}</pre>`, 'error');
+        }
+    });
+
+    $app.querySelector('#bio-cap-editar')
+        ?.addEventListener('click', () => onEditarCapitulo($app, c, cap));
+    $app.querySelector('#bio-cap-regenerar')
+        ?.addEventListener('click', () => onRegenerarCapitulo($app, c, cap));
+    $app.querySelector('#bio-cap-descartar')
+        ?.addEventListener('click', () => onDescartarCapitulo($app, c, cap));
+}
+
+async function onEditarCapitulo($app, c, cap) {
+    const promesa = modal({
+        titulo: '✏️ Editar el capítulo',
+        cuerpo: `
+            <p class="muted">Corregí cada versión como querés que quede.</p>
+            <label class="stack"><span class="muted">Contado sobre él/ella (3ra persona)</span>
+                <textarea id="bio-edit-3" class="input-real" rows="5">${h(cap.texto_tercera || '')}</textarea></label>
+            <label class="stack" style="margin-top:0.5rem;"><span class="muted">Contado por él/ella (1ra persona)</span>
+                <textarea id="bio-edit-1" class="input-real" rows="5">${h(cap.texto_primera || '')}</textarea></label>`,
+        acciones: [
+            { label: 'Cancelar' },
+            { label: 'Guardar', clase: 'btn--pense btn--full', value: 'ok' }
+        ],
+        tono: 'pense'
+    });
+    // Capturamos los valores en vivo (el modal se desmonta al resolver).
+    let v3 = cap.texto_tercera || '', v1 = cap.texto_primera || '';
+    const $t3 = document.getElementById('bio-edit-3');
+    const $t1 = document.getElementById('bio-edit-1');
+    if ($t3) { v3 = $t3.value; $t3.addEventListener('input', () => { v3 = $t3.value; }); }
+    if ($t1) { v1 = $t1.value; $t1.addEventListener('input', () => { v1 = $t1.value; }); }
+    const r = await promesa;
+    if (r !== 'ok') return;
+
+    const nueva3 = (v3 || '').trim();
+    const nueva1 = (v1 || '').trim();
+    if (!nueva3 && !nueva1) {
+        return avisar('Capítulo vacío', '<p>Dejá al menos una de las dos versiones con texto.</p>', 'error');
+    }
+    // texto_antes = el borrador original (para el few-shot de la IA).
+    const antes = [cap.texto_tercera, cap.texto_primera].filter(Boolean).join('\n\n') || null;
+    try {
+        await editarCapitulo(cap.capitulo_id, {
+            circleId: c.id,
+            texto_primera: nueva1,
+            texto_tercera: nueva3,
+            texto_antes: antes
+        });
+    } catch (err) {
+        return avisar('No pude guardar', `<pre>${h(err?.message || err)}</pre>`, 'error');
+    }
+    cap.texto_tercera = nueva3;
+    cap.texto_primera = nueva1;
+    pintarDetalle($app, c, cap);
+}
+
+async function onRegenerarCapitulo($app, c, cap) {
+    if (!cap.aporteIds || !cap.aporteIds.length) {
+        try { cap.aporteIds = await aportesDeCapitulo(cap.capitulo_id); }
+        catch (_) { cap.aporteIds = []; }
+    }
+    if (!cap.aporteIds.length) {
+        return avisar('No puedo regenerar',
+            '<p>No encontré los recuerdos que armaron este capítulo. Armá uno nuevo desde la lista de recuerdos.</p>', 'error');
+    }
+    const promesa = modal({
+        titulo: '🔄 Regenerar el capítulo',
+        cuerpo: `
+            <p class="muted">La IA lo va a reescribir con los mismos recuerdos.
+               Si querés, dejale una indicación de qué cambiar.</p>
+            <textarea id="bio-regen-nota" class="input-real" rows="3"
+                      placeholder="Ej: más corto, sin tanto detalle del trabajo…"></textarea>`,
+        acciones: [
+            { label: 'Cancelar' },
+            { label: 'Regenerar', clase: 'btn--pense btn--full', value: 'ok' }
+        ],
+        tono: 'pense'
+    });
+    let nota = '';
+    const $n = document.getElementById('bio-regen-nota');
+    if ($n) { nota = $n.value; $n.addEventListener('input', () => { nota = $n.value; }); }
+    const r = await promesa;
+    if (r !== 'ok') return;
+
+    // Registramos el pedido como corrección (alimenta el few-shot).
+    if ((nota || '').trim()) {
+        await registrarPedidoReescritura(cap.capitulo_id, c.id, nota);
+    }
+
+    // Indicador de progreso en la propia vista.
+    const $btn = $app.querySelector('#bio-cap-regenerar');
+    if ($btn) { $btn.disabled = true; $btn.textContent = '⏳ La IA está reescribiendo…'; }
+    let res;
+    try {
+        res = await generarCapitulo({
+            circleId: c.id, aporteIds: cap.aporteIds,
+            etapa: cap.etapa, capituloId: cap.capitulo_id
+        });
+    } catch (err) {
+        if ($btn) { $btn.disabled = false; $btn.textContent = '🔄 Regenerar'; }
+        return avisar('No pude regenerar', `<pre>${h(err?.message || err)}</pre>`, 'error');
+    }
+    cap.titulo        = res.titulo;
+    cap.texto_primera = res.texto_primera;
+    cap.texto_tercera = res.texto_tercera;
+    pintarDetalle($app, c, cap);
+}
+
+async function onDescartarCapitulo($app, c, cap) {
+    const r = await modal({
+        titulo: '🗑 Descartar capítulo',
+        cuerpo: `<p>Lo saca de la biografía. Los recuerdos originales no se borran;
+                    podés armar otro capítulo con ellos cuando quieras.</p>`,
+        acciones: [
+            { label: 'Cancelar' },
+            { label: 'Descartar', clase: 'btn--danger btn--full', value: 'ok' }
+        ],
+        tono: 'neutral'
+    });
+    if (r !== 'ok') return;
+    try {
+        await descartarCapitulo(cap.capitulo_id, { circleId: c.id });
+        await avisar('Descartado', '<p>Listo, ya no aparece en la biografía.</p>');
+        go('#/biografia/capitulos');
+    } catch (err) {
+        await avisar('No pude descartar', `<pre>${h(err?.message || err)}</pre>`, 'error');
+    }
 }

@@ -649,6 +649,212 @@ export async function urlAudioBiografia(storagePath) {
 }
 
 // =====================================================================
+// Biografía · Etapa 4 — capítulos narrados con IA (Sonnet)
+// ---------------------------------------------------------------------
+// El aportador selecciona aportes APROBADOS (bio_aportes) y la edge
+// `bio-narrar` arma un capítulo en prosa, 1ra y 3ra persona. Acá viven
+// la generación, la curaduría (publicar/editar/regenerar/excluir) y el
+// registro de correcciones para el few-shot. TODO scopeado a circle_id
+// (regla férrea: nunca mezclar círculos). Tablas: migración 0019.
+// =====================================================================
+
+// Orden de presentación de las etapas de vida (decisión cerrada Etapa 4):
+// se lee de corrido, niñez → otro. Sin títulos visibles para el sujeto.
+export const ORDEN_ETAPAS = ['ninez', 'juventud', 'adultez', 'familia', 'trabajo', 'otro'];
+
+/**
+ * Capítulos de la biografía del círculo. El aportador (admin/editor) ve
+ * cualquier estado por RLS; el sujeto ve sólo los publicados. `incluirExcluidos`
+ * controla si traemos los 'excluido' (default no). Orden de presentación:
+ * por etapa (según ORDEN_ETAPAS) y luego por `orden`.
+ */
+export async function listarCapitulos(circleId, { incluirExcluidos = false } = {}) {
+    const sb = await sbClient();
+    let q = sb.from('bio_capitulos')
+        .select('id, circle_id, titulo, texto_primera, texto_tercera, etapa, orden, estado, created_at, updated_at')
+        .eq('circle_id', circleId);
+    if (!incluirExcluidos) q = q.neq('estado', 'excluido');
+    const { data, error } = await q;
+    if (error) throw enriquecer('listarCapitulos', error);
+    const orden = (e) => {
+        const i = ORDEN_ETAPAS.indexOf(e);
+        return i === -1 ? ORDEN_ETAPAS.length : i;
+    };
+    return (data || []).sort((a, b) =>
+        orden(a.etapa) - orden(b.etapa) || (a.orden - b.orden) ||
+        (new Date(a.created_at) - new Date(b.created_at))
+    );
+}
+
+/** Sólo los capítulos publicados, para la vista del adulto mayor. */
+export async function listarCapitulosPublicados(circleId) {
+    const todos = await listarCapitulos(circleId, { incluirExcluidos: false });
+    return todos.filter(c => c.estado === 'publicado');
+}
+
+/**
+ * Invoca la edge `bio-narrar`: arma (o regenera, si va `capituloId`) un
+ * capítulo a partir de los aportes aprobados elegidos. Devuelve
+ * { ok, capitulo_id, titulo, texto_primera, texto_tercera }.
+ */
+export async function generarCapitulo({ circleId, aporteIds, etapa = 'otro', tituloInterno = '', capituloId = null }) {
+    if (!circleId) throw new Error('sin círculo activo');
+    if (!Array.isArray(aporteIds) || !aporteIds.length) {
+        throw new Error('Elegí al menos un recuerdo para narrar.');
+    }
+    const payload = {
+        circle_id: circleId,
+        aporte_ids: aporteIds,
+        etapa,
+        titulo_interno: tituloInterno || undefined,
+    };
+    if (capituloId) payload.capitulo_id = capituloId;
+    return _invocarEdgeBio('bio-narrar', payload);
+}
+
+/** Publica un capítulo (lo deja visible para el adulto mayor). */
+export async function publicarCapitulo(capituloId) {
+    const sb = await sbClient();
+    const { data: { user } } = await sb.auth.getUser();
+    const { error } = await sb.from('bio_capitulos')
+        .update({
+            estado: 'publicado',
+            aprobado_por: user?.id || null,
+            updated_at: new Date().toISOString()
+        })
+        .eq('id', capituloId);
+    if (error) throw enriquecer('publicarCapitulo', error);
+}
+
+/**
+ * Guarda una edición humana del capítulo. Persiste los textos nuevos y
+ * registra la corrección (tipo='edicion') para el few-shot. `textoAntes`
+ * es el borrador original (para el aprendizaje); se guarda si viene.
+ */
+export async function editarCapitulo(capituloId, { circleId, texto_primera, texto_tercera, texto_antes = null }) {
+    const sb = await sbClient();
+    const { data: { user } } = await sb.auth.getUser();
+    if (!user) throw new Error('sin sesión');
+    const { error } = await sb.from('bio_capitulos')
+        .update({
+            texto_primera: texto_primera ?? null,
+            texto_tercera: texto_tercera ?? null,
+            updated_at: new Date().toISOString()
+        })
+        .eq('id', capituloId);
+    if (error) throw enriquecer('editarCapitulo', error);
+
+    // Memoria de curaduría (best-effort: no rompe el guardado si falla).
+    if (circleId) {
+        await sb.from('bio_correcciones').insert({
+            circle_id: circleId, usuario_id: user.id, capitulo_id: capituloId,
+            tipo: 'edicion',
+            texto_antes: texto_antes || null,
+            texto_despues: [texto_primera, texto_tercera].filter(Boolean).join('\n\n') || null
+        }).then(({ error: e }) => { if (e) console.warn('[bio_correcciones edicion]', e); });
+    }
+}
+
+/**
+ * Marca un capítulo como excluido (lo saca de la biografía). Lo puede
+ * hacer el aportador (UPDATE por RLS) o el sujeto vía RPC. Registra la
+ * corrección tipo='rechazo' para el aprendizaje.
+ */
+export async function descartarCapitulo(capituloId, { circleId, nota = null } = {}) {
+    const sb = await sbClient();
+    const { data: { user } } = await sb.auth.getUser();
+    const { error } = await sb.from('bio_capitulos')
+        .update({ estado: 'excluido', updated_at: new Date().toISOString() })
+        .eq('id', capituloId);
+    if (error) throw enriquecer('descartarCapitulo', error);
+    if (circleId && user) {
+        await sb.from('bio_correcciones').insert({
+            circle_id: circleId, usuario_id: user.id, capitulo_id: capituloId,
+            tipo: 'rechazo', nota: nota || null
+        }).then(({ error: e }) => { if (e) console.warn('[bio_correcciones rechazo]', e); });
+    }
+}
+
+/**
+ * Acción "olvidá esto" del adulto mayor: usa la RPC security definer
+ * `excluir_capitulo` (no necesita la policy de UPDATE de los curadores).
+ */
+export async function excluirCapitulo(capituloId) {
+    const sb = await sbClient();
+    const { error } = await sb.rpc('excluir_capitulo', { p_capitulo: capituloId });
+    if (error) throw enriquecer('excluirCapitulo', error);
+}
+
+/**
+ * El adulto mayor pide "cambiá esto" (reescritura). No toca el capítulo:
+ * deja una nota en bio_correcciones (tipo='reescritura_pedida') que el
+ * aportador verá. usuario_id = el propio sujeto (su corrección).
+ */
+export async function pedirReescritura(capituloId, circleId, nota) {
+    const sb = await sbClient();
+    const { data: { user } } = await sb.auth.getUser();
+    if (!user) throw new Error('sin sesión');
+    const { error } = await sb.from('bio_correcciones').insert({
+        circle_id: circleId, usuario_id: user.id, capitulo_id: capituloId,
+        tipo: 'reescritura_pedida', nota: String(nota || '').trim() || null
+    });
+    if (error) throw enriquecer('pedirReescritura', error);
+}
+
+/** Registra el pedido de reescritura del aportador antes de regenerar. */
+export async function registrarPedidoReescritura(capituloId, circleId, nota) {
+    const sb = await sbClient();
+    const { data: { user } } = await sb.auth.getUser();
+    if (!user) throw new Error('sin sesión');
+    const { error } = await sb.from('bio_correcciones').insert({
+        circle_id: circleId, usuario_id: user.id, capitulo_id: capituloId,
+        tipo: 'reescritura_pedida', nota: String(nota || '').trim() || null
+    });
+    if (error) console.warn('[registrarPedidoReescritura]', error);
+}
+
+/**
+ * Pedidos de reescritura que el adulto mayor (u otro miembro) dejó sobre
+ * los capítulos del círculo ("cambiá esto"). Visibles para admin/editor
+ * por la policy bio_correcciones_select_pedidos_curadores (0019). Trae el
+ * título interno del capítulo para ubicarlo.
+ */
+export async function listarPedidosReescritura(circleId) {
+    const sb = await sbClient();
+    const { data, error } = await sb.from('bio_correcciones')
+        .select('id, capitulo_id, nota, created_at, capitulo:bio_capitulos(titulo, estado)')
+        .eq('circle_id', circleId)
+        .eq('tipo', 'reescritura_pedida')
+        .order('created_at', { ascending: false });
+    if (error) throw enriquecer('listarPedidosReescritura', error);
+    return data || [];
+}
+
+/** IDs de los aportes que alimentaron un capítulo (para regenerarlo). */
+export async function aportesDeCapitulo(capituloId) {
+    const sb = await sbClient();
+    const { data, error } = await sb.from('bio_capitulo_fragmentos')
+        .select('aporte_id')
+        .eq('capitulo_id', capituloId);
+    if (error) throw enriquecer('aportesDeCapitulo', error);
+    return (data || []).map(r => r.aporte_id);
+}
+
+/** Correcciones propias del aportador en el círculo (debug / inspección). */
+export async function listarCorreccionesPropias(circleId) {
+    const sb = await sbClient();
+    const { data: { user } } = await sb.auth.getUser();
+    if (!user) throw new Error('sin sesión');
+    const { data, error } = await sb.from('bio_correcciones')
+        .select('id, tipo, texto_antes, texto_despues, nota, capitulo_id, created_at')
+        .eq('circle_id', circleId)
+        .eq('usuario_id', user.id)
+        .order('created_at', { ascending: false });
+    if (error) throw enriquecer('listarCorreccionesPropias', error);
+    return data || [];
+}
+
+// =====================================================================
 // Biografía · Etapa 3 — grabar una charla (videollamada)
 // ---------------------------------------------------------------------
 // El familiar graba el audio de una charla desde su propio micrófono
