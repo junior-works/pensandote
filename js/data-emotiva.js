@@ -424,6 +424,229 @@ export async function descartarPunta(id) {
     if (error) throw enriquecer('descartarPunta', error);
 }
 
+// =====================================================================
+// Biografía — Etapa 2: aportes, cola de aprobación, filtros (sección
+// del familiar/aportador). TODO scopeado a circle_id + auth.uid()
+// (regla férrea: jamás mezclar círculos). Las tablas y RLS las crea la
+// migración 0017_biografia_aportes_y_capitulos.sql.
+// =====================================================================
+
+// Helper interno: invoca una edge function con el JWT de la sesión.
+async function _invocarEdgeBio(nombre, payload) {
+    const cfg = window.PENSANDOTE_CONFIG;
+    const sb  = await sbClient();
+    const { data: sess } = await sb.auth.getSession();
+    const token = sess?.session?.access_token;
+    if (!token) {
+        throw enriquecer(nombre, new Error('Tenés que estar logueado para usar esta función.'));
+    }
+    let resp;
+    try {
+        resp = await fetch(`${cfg.SUPABASE_URL}/functions/v1/${nombre}`, {
+            method:  'POST',
+            headers: {
+                'Content-Type':  'application/json',
+                'apikey':        cfg.SUPABASE_ANON_KEY,
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify(payload)
+        });
+    } catch (e) {
+        throw enriquecer(`${nombre} fetch`, e);
+    }
+    const data = await resp.json().catch(() => ({}));
+    if (!resp.ok || data.error) {
+        const e = new Error(data.error || `HTTP ${resp.status}`);
+        e.status = resp.status;
+        throw enriquecer(nombre, e);
+    }
+    return data;
+}
+
+/**
+ * Sube un ZIP de chat de WhatsApp al bucket privado `wapp_zips`
+ * (path <circle_id>/<aportador_id>/<uuid>.zip) y dispara la edge
+ * `wapp-parsear-zip`, que parsea, extrae audios, aplica filtros y encola
+ * candidatos en bio_aporte_cola. Devuelve { procesados, en_cola, filtrados }.
+ */
+export async function subirZipWhatsapp(circleId, file) {
+    const sb = await sbClient();
+    const { data: { user } } = await sb.auth.getUser();
+    if (!user) throw new Error('sin sesión');
+    const uuid = crypto.randomUUID();
+    const path = `${circleId}/${user.id}/${uuid}.zip`;
+
+    const { error: e1 } = await sb.storage.from('wapp_zips').upload(path, file, {
+        contentType: file.type || 'application/zip', upsert: false
+    });
+    if (e1) throw enriquecer('subir ZIP', e1);
+
+    // La edge borra el ZIP crudo al terminar (es efímero).
+    return _invocarEdgeBio('wapp-parsear-zip', {
+        circle_id: circleId, aportador_id: user.id, zip_path: path
+    });
+}
+
+/**
+ * Sube un audio reenviado (nota de voz suelta) al bucket bio_audios y lo
+ * encola como candidato sin transcribir, para que el aportador lo cure.
+ */
+export async function subirAudioReenviado(circleId, file) {
+    const sb = await sbClient();
+    const { data: { user } } = await sb.auth.getUser();
+    if (!user) throw new Error('sin sesión');
+    const uuid = crypto.randomUUID();
+    const ext  = (file.name?.split('.').pop() || 'opus').toLowerCase();
+    const path = `${circleId}/${uuid}.${ext}`;
+
+    const { error: e1 } = await sb.storage.from('bio_audios').upload(path, file, {
+        contentType: file.type || 'audio/ogg', upsert: false
+    });
+    if (e1) throw enriquecer('subir audio', e1);
+
+    const { error: e2 } = await sb.from('bio_aporte_cola').insert({
+        circle_id: circleId, aportador_id: user.id,
+        origen: 'whatsapp', estado: 'pendiente',
+        contenido: '🎙 Audio sin transcribir', audio_path: path,
+        metadatos: { es_audio: true, reenviado: true }
+    });
+    if (e2) {
+        sb.storage.from('bio_audios').remove([path]).catch(() => {});
+        throw enriquecer('encolar audio', e2);
+    }
+}
+
+/** Anota un recuerdo a mano: entra directo a la biografía (origen='manual'). */
+export async function crearAporteManual(circleId, texto, fechaEvento = null) {
+    const sb = await sbClient();
+    const { data: { user } } = await sb.auth.getUser();
+    if (!user) throw new Error('sin sesión');
+    const { error } = await sb.from('bio_aportes').insert({
+        circle_id: circleId, aportador_id: user.id,
+        origen: 'manual', transcripcion: String(texto || '').trim(),
+        fecha_evento: fechaEvento || null
+    });
+    if (error) throw enriquecer('crearAporteManual', error);
+}
+
+/** Cola pendiente del aportador en este círculo (sólo lo suyo, por RLS). */
+export async function listarColaPendiente(circleId) {
+    const sb = await sbClient();
+    const { data: { user } } = await sb.auth.getUser();
+    if (!user) throw new Error('sin sesión');
+    const { data, error } = await sb.from('bio_aporte_cola')
+        .select('id, circle_id, origen, estado, contenido, audio_path, metadatos, created_at')
+        .eq('circle_id', circleId)
+        .eq('aportador_id', user.id)
+        .eq('estado', 'pendiente')
+        .order('created_at', { ascending: true });
+    if (error) throw enriquecer('listarColaPendiente', error);
+    return data || [];
+}
+
+// Mueve una fila de la cola a bio_aportes (la aprueba). Si se pasa
+// `contenidoOverride`, además persiste el texto editado en la cola.
+async function _aprobarCola(colaId, contenidoOverride = null) {
+    const sb = await sbClient();
+    const { data: row, error: e0 } = await sb.from('bio_aporte_cola')
+        .select('id, circle_id, aportador_id, origen, contenido, audio_path')
+        .eq('id', colaId).maybeSingle();
+    if (e0) throw enriquecer('leer cola', e0);
+    if (!row) throw new Error('No encontré ese ítem en tu cola.');
+
+    const transcripcion = String(
+        contenidoOverride != null ? contenidoOverride : (row.contenido || '')
+    ).trim();
+    if (!transcripcion) throw new Error('El recuerdo está vacío.');
+
+    const { error: e1 } = await sb.from('bio_aportes').insert({
+        circle_id:    row.circle_id,
+        aportador_id: row.aportador_id,
+        origen:       row.origen,
+        origen_ref:   row.id,
+        transcripcion,
+        audio_path:   row.audio_path || null
+    });
+    if (e1) throw enriquecer('crear aporte', e1);
+
+    const upd = { estado: 'aprobado', decidido_at: new Date().toISOString() };
+    if (contenidoOverride != null) upd.contenido = transcripcion;
+    const { error: e2 } = await sb.from('bio_aporte_cola').update(upd).eq('id', colaId);
+    if (e2) throw enriquecer('marcar aprobado', e2);
+}
+
+export async function aprobarItem(colaId) {
+    return _aprobarCola(colaId);
+}
+
+export async function editarYaprobarItem(colaId, nuevoContenido) {
+    return _aprobarCola(colaId, nuevoContenido);
+}
+
+async function _decidirCola(colaId, estado) {
+    const sb = await sbClient();
+    const { error } = await sb.from('bio_aporte_cola')
+        .update({ estado, decidido_at: new Date().toISOString() })
+        .eq('id', colaId);
+    if (error) throw enriquecer(`marcar ${estado}`, error);
+}
+
+export async function rechazarItem(colaId) { return _decidirCola(colaId, 'rechazado'); }
+export async function saltarItem(colaId)   { return _decidirCola(colaId, 'saltado'); }
+
+/** Transcribe bajo demanda un audio de la cola (edge bio-transcribir). */
+export async function transcribirAudioCola(colaId) {
+    return _invocarEdgeBio('bio-transcribir', { cola_id: colaId });
+}
+
+/** Aportes aprobados de la biografía del círculo, orden cronológico. */
+export async function listarAportesBiografia(circleId) {
+    const sb = await sbClient();
+    const { data, error } = await sb.from('bio_aportes')
+        .select('id, circle_id, aportador_id, origen, etapa, temas, transcripcion, audio_path, fecha_evento, created_at')
+        .eq('circle_id', circleId)
+        .order('fecha_evento', { ascending: true, nullsFirst: false })
+        .order('created_at', { ascending: true });
+    if (error) throw enriquecer('listarAportesBiografia', error);
+    return data || [];
+}
+
+// ---- Filtros personales del aportador (CRUD) ----
+export async function listarFiltrosAportador(circleId) {
+    const sb = await sbClient();
+    const { data: { user } } = await sb.auth.getUser();
+    if (!user) throw new Error('sin sesión');
+    const { data, error } = await sb.from('bio_filtros_aportador')
+        .select('id, circle_id, tipo, valor, created_at')
+        .eq('circle_id', circleId)
+        .eq('aportador_id', user.id)
+        .order('created_at', { ascending: true });
+    if (error) throw enriquecer('listarFiltrosAportador', error);
+    return data || [];
+}
+
+export async function crearFiltro(circleId, tipo, valor) {
+    const sb = await sbClient();
+    const { data: { user } } = await sb.auth.getUser();
+    if (!user) throw new Error('sin sesión');
+    const { error } = await sb.from('bio_filtros_aportador').insert({
+        circle_id: circleId, aportador_id: user.id,
+        tipo, valor: String(valor || '').trim()
+    });
+    if (error) throw enriquecer('crearFiltro', error);
+}
+
+export async function borrarFiltro(filtroId) {
+    const sb = await sbClient();
+    const { error } = await sb.from('bio_filtros_aportador').delete().eq('id', filtroId);
+    if (error) throw enriquecer('borrarFiltro', error);
+}
+
+/** URL reproducible de un audio de aporte (bucket bio_audios). */
+export async function urlAudioBiografia(storagePath) {
+    return descargarComoObjectURL('bio_audios', storagePath);
+}
+
 // ---------------------------------------------------------------------
 // Tutoriales (contenido editorial global — sin circle_id, RLS: select libre)
 // ---------------------------------------------------------------------
