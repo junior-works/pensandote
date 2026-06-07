@@ -1382,16 +1382,29 @@ body[data-mode="dashboard"] .meds-admin-slot.is-pend { background: #fff8e9; }
 .widget h3 { margin-top: 0.3rem; }
 
 /* ---- Tabs ---- */
-.tabs { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 1rem; }
+/* Una sola fila siempre: con 3 solapas en mobile, nowrap + flex equitativo
+   para que repartan el ancho y no salten a 2 filas. */
+.tabs { display: flex; flex-wrap: nowrap; gap: 0.35rem; margin-bottom: 1rem; }
 .tabs__tab {
+    flex: 1 1 0;
+    min-width: 0;
+    text-align: center;
+    white-space: nowrap;
     background: var(--bg-soft);
+    /* color explícito: sin esto el <button> cae al color de sistema
+       (oscuro) y queda ilegible sobre el fondo translúcido oscuro del
+       skin dashboard. Con var(--ink) hereda el tema (oscuro en simple,
+       claro en dashboard). */
+    color: var(--ink);
     border: var(--bw) solid var(--line);
     border-radius: var(--r-sm) var(--r-sm) 0 0;
-    padding: 0.5em 0.9em;
+    padding: 0.5em 0.4em;
+    font-size: 0.9rem;
     font-weight: 700;
     box-shadow: var(--shadow-sm);
 }
-.tabs__tab.is-active { background: var(--accent-inicio); }
+/* Activa: fondo ámbar (claro en ambos temas) → texto oscuro fijo. */
+.tabs__tab.is-active { background: var(--accent-inicio); color: #1a1a1a; }
 .tabs__panel {
     background: var(--bg-soft);
     border: var(--bw) solid var(--line);
