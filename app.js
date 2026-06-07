@@ -285,6 +285,16 @@ async function bootstrap() {
     if ('serviceWorker' in navigator && !window.__pushNavBound) {
         window.__pushNavBound = true;
         navigator.serviceWorker.addEventListener('message', async (e) => {
+            // Señal de grabación de biografía: puntito discreto para el
+            // adulto mayor (sólo modo simple, sólo su círculo activo).
+            // Sin pop-up, sin navegación.
+            if (e.data?.type === 'bio-grabacion') {
+                if (state.membresiaReal?.interface_mode !== 'simple') return;
+                if (e.data.circle_id && e.data.circle_id !== state.circuloActivoIdReal) return;
+                if (e.data.tipo === 'biografia_grabacion_inicio') Simple.mostrarPuntoGrabacion();
+                else if (e.data.tipo === 'biografia_grabacion_fin') Simple.ocultarPuntoGrabacion();
+                return;
+            }
             if (e.data?.type !== 'push-navigate' || !e.data.url) return;
             if (e.data.circle_id) {
                 try { await cambiarCirculoActivo(e.data.circle_id); }

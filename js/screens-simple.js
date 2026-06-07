@@ -1452,3 +1452,38 @@ export function renderComoHagoIA($app) {
         }
     });
 }
+
+// =====================================================================
+// Biografía · Etapa 3 — señal discreta de grabación al adulto mayor
+// ---------------------------------------------------------------------
+// Cuando un familiar empieza a grabar una charla, el papá ve (si tiene
+// la app abierta) un puntito rojo + texto pequeño arriba a la derecha.
+// Sin pop-up, sin sonido, sin interrumpir. Lo dispara app.js al recibir
+// el mensaje del service worker ({type:'bio-grabacion'}). El elemento
+// vive en <body> para sobrevivir a los re-renders de #app.
+// =====================================================================
+const BIO_PUNTO_ID = 'bio-grabacion-punto';
+
+export function mostrarPuntoGrabacion() {
+    if (document.getElementById(BIO_PUNTO_ID)) return;
+    const $p = document.createElement('div');
+    $p.id = BIO_PUNTO_ID;
+    $p.setAttribute('role', 'status');
+    $p.style.cssText = [
+        'position:fixed', 'top:0.6rem', 'right:0.6rem', 'z-index:9998',
+        'display:flex', 'align-items:center', 'gap:0.4rem',
+        'padding:0.3rem 0.6rem', 'border-radius:999px',
+        'background:rgba(220, 50, 50, 0.12)',
+        'color:var(--ink-soft, #6b5d4f)',
+        'font-size:0.8rem', 'line-height:1.2',
+        'box-shadow:0 1px 4px rgba(0,0,0,0.08)'
+    ].join(';');
+    $p.innerHTML = `
+        <span style="width:0.6rem; height:0.6rem; border-radius:50%; background:#dc3232; display:inline-block;"></span>
+        <span>tu familia está guardando esta charla</span>`;
+    document.body.appendChild($p);
+}
+
+export function ocultarPuntoGrabacion() {
+    document.getElementById(BIO_PUNTO_ID)?.remove();
+}

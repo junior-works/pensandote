@@ -22,7 +22,7 @@ import {
     enviarPensamiento, pensamientosRecibidos, marcarContacto,
     listarHistorias, urlHistoriaAudio, grabarHistoria, borrarHistoria,
     listarInteracciones, toggleFavorita, repreguntarTexto, repreguntarAudio,
-    listarAportesBiografia
+    listarAportesBiografia, avisosGrabacionPendientes, marcarAvisosVistos
 } from './data-emotiva.js';
 import { esPreview, avisarPreview, getMiembroVisto } from './preview.js';
 
@@ -284,8 +284,13 @@ async function renderTabBiografia($cont, c, u, esNarrador, esAdmin) {
         console.warn('[biografia aportes]', err);
     }
 
+    // Resumen post-hoc: si la familia grabó charlas mientras el papá no
+    // tenía la app abierta, las ve resumidas (sin nombres) al entrar acá.
+    const avisoHtml = esNarrador ? await tarjetaAvisosGrabacion(c.id) : '';
+
     if (!aportes.length) {
         $cont.innerHTML = `
+            ${avisoHtml}
             <div class="card stack center" style="margin-top:0.5rem; padding:1.6em 1.2em;">
                 <p style="font-size:2.6rem; line-height:1; margin:0;">📚</p>
                 <h3 style="margin:0.3rem 0 0;">${titulo}</h3>
@@ -294,15 +299,56 @@ async function renderTabBiografia($cont, c, u, esNarrador, esAdmin) {
                 </p>
             </div>
         `;
+        wireAvisosGrabacion($cont, c.id);
         return;
     }
 
     $cont.innerHTML = `
+        ${avisoHtml}
         <h3 style="margin:0.4rem 0 0.8rem;">${titulo}</h3>
         <div class="bio-aportes">
             ${aportes.map(a => tarjetaAporte(a, esNarrador)).join('')}
         </div>
     `;
+    wireAvisosGrabacion($cont, c.id);
+}
+
+// Cartelito "esta semana tu familia guardó N charlas" — sin nombres
+// propios (regla de oro 4). El botón "Ver" marca los avisos como vistos
+// (el resumen que ve es la lista de aportes de abajo).
+async function tarjetaAvisosGrabacion(circleId) {
+    let pendientes = [];
+    try {
+        pendientes = await avisosGrabacionPendientes(circleId);
+    } catch (err) {
+        console.warn('[avisos grabacion]', err);
+        return '';
+    }
+    // "Esta semana": sólo los de los últimos 7 días.
+    const corte = Date.now() - 7 * 24 * 60 * 60 * 1000;
+    const recientes = pendientes.filter(a => new Date(a.iniciado_at).getTime() >= corte);
+    if (!recientes.length) return '';
+    const n = recientes.length;
+    const plural = n === 1 ? 'una charla' : `${n} charlas`;
+    const ids = recientes.map(a => a.id).join(',');
+    return `
+        <div class="card stack" id="bio-avisos-grab" data-ids="${h(ids)}"
+             style="background:#fff8f3; border:2px solid #f0d9c8; margin-bottom:0.8rem;">
+            <p style="margin:0; line-height:1.5;">
+                💛 Esta semana tu familia guardó <strong>${plural}</strong> para tu historia.</p>
+            <button class="btn btn--inicio btn--full" id="bio-avisos-ver">Ver</button>
+        </div>`;
+}
+
+function wireAvisosGrabacion($cont, circleId) {
+    const $card = $cont.querySelector('#bio-avisos-grab');
+    if (!$card) return;
+    $card.querySelector('#bio-avisos-ver')?.addEventListener('click', async () => {
+        const ids = ($card.dataset.ids || '').split(',').filter(Boolean);
+        try { await marcarAvisosVistos(circleId, ids); }
+        catch (err) { console.warn('[marcarAvisosVistos]', err); }
+        $card.remove();
+    });
 }
 
 const ORIGEN_BIO = {
