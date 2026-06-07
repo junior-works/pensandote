@@ -30,7 +30,7 @@ import {
     listarHistorias, urlHistoriaAudio, grabarHistoria,
     listarInteracciones, toggleFavorita, repreguntarTexto, repreguntarAudio,
     urlInteraccionAudio,
-    listarPuntas, crearPunta, borrarPunta,
+    listarPuntas, crearPunta, descartarPunta,
     ultimosCheckinsPorMiembro,
     estadoAvisos, activarAvisos, desactivarAvisos, probarAviso,
     actividadReciente, listarEstudios,
@@ -42,6 +42,7 @@ import {
 import { contarEstudiosNoVistos } from './screens-estudios.js';
 import { entrarPreviewVerComoPapa, limpiarDatosReales } from './preview.js';
 import { montarSeccionContactos, montarSeccionAccesos } from './screens-admin.js';
+import { etiquetaDesdeAdultoMayor } from './utils/parentesco.js';
 
 // LocalStorage key para marcar pensamientos recibidos como "vistos".
 const LS_LAST_SEEN = (circleId, userId) =>
@@ -108,6 +109,8 @@ export async function renderHogar($app) {
 
         <section class="card stack hogar-ultimo-carino" id="sec-ultimo-carino" hidden></section>
 
+        <section class="card stack hogar-puntas-aviso" id="sec-puntas-aviso" hidden></section>
+
         <section class="inicio-proximas" id="sec-proximas" hidden></section>
 
         <section class="card stack hogar-actividad">
@@ -133,6 +136,7 @@ export async function renderHogar($app) {
     cargarHeroFoto(c, $app.querySelector('#sec-hero'));
     cargarCheckinsDelDia(c, $app.querySelector('#sec-checkin-estado'));
     cargarUltimoCarino(c, u, $app.querySelector('#sec-ultimo-carino'));
+    cargarTarjetaPuntas(c, $app.querySelector('#sec-puntas-aviso'));
     cargarProximasCosas(c, $app.querySelector('#sec-proximas'));
     cargarActividadReciente(c, $app.querySelector('#sec-actividad'), { limit: 5 });
 
@@ -194,9 +198,19 @@ export async function renderFamilia($app) {
     const narradorParentesco = (_miembrosCache.find(x => x.interface_mode === 'simple')?.parentesco || '')
         .trim().toLowerCase() || null;
 
+    const narradorPosesivo = narradorParentesco ? `tu ${narradorParentesco}` : 'tu familiar';
+
     $app.innerHTML = `
         <h1>💜 Familia</h1>
         <p class="muted">Lo emotivo del círculo: mandá un cariño, subí la foto del día, pedile historias.</p>
+
+        <section class="card stack hogar-biografia">
+            <h2>📚 Biografía</h2>
+            <p class="muted">La historia de vida de ${h(narradorPosesivo)}, armándose con los recuerdos que sumen entre todos.</p>
+            <button class="btn btn--full" id="btn-ver-biografia">
+                📚 Ver biografía de ${h(narradorParentesco || 'tu familiar')}
+            </button>
+        </section>
 
         <section class="card stack hogar-pense">
             <h2>💛 Pensé en vos</h2>
@@ -262,21 +276,17 @@ export async function renderFamilia($app) {
         </section>
 
         <section class="card stack hogar-puntas">
-            <h2>💡 Ideas para contar</h2>
+            <h2>🗒 Hoy le pregunto a ${h(narradorPosesivo)}</h2>
             <p class="muted">
-                Mandale ${narradorParentesco
-                    ? `a tu <strong>${h(narradorParentesco)}</strong>`
-                    : 'al narrador'} una pregunta o disparador concreto.
-                En su pantalla aparece <strong>una sola por día</strong>,
-                como tarjeta grande. Cuando graba esa historia, pasa a la
-                siguiente.
+                Anotá lo que querés preguntarle en tu <strong>próxima charla</strong>.
+                Sumá las tuyas o elegí de las sugeridas, y descartá las que ya cubriste.
             </p>
             <form id="form-punta" class="form-punta">
                 <textarea id="punta-texto" class="input-real" rows="3" required
                           placeholder="${narradorParentesco
                             ? `${h(narradorParentesco)}, contame cuándo empezaste a trabajar en la verdulería en la villa…`
                             : 'Contame cuándo empezaste a trabajar en la verdulería…'}"></textarea>
-                <button type="submit" class="btn btn--inicio">📤 Mandar idea</button>
+                <button type="submit" class="btn btn--inicio">➕ Sumar pregunta</button>
             </form>
 
             <details class="ideas-sugeridas">
@@ -285,12 +295,12 @@ export async function renderFamilia($app) {
                 </summary>
                 <p class="muted" style="font-size:0.85em; margin: 0.4rem 0 0.6rem;">
                     Disparadores de historia de vida. Tocá "Agregar" en las
-                    que te sirvan — se suman a la cola del papá una por una.
+                    que te sirvan — se suman a tu lista de preguntas.
                 </p>
                 <ul class="ideas-sugeridas__lista" id="sec-ideas-sugeridas"></ul>
             </details>
 
-            <div id="sec-puntas-cola"><p class="muted">Cargando cola…</p></div>
+            <div id="sec-puntas-cola"><p class="muted">Cargando…</p></div>
         </section>
 
         <section class="card stack">
@@ -303,6 +313,10 @@ export async function renderFamilia($app) {
     poblarDestinatariosPense(u);
     $app.querySelector('#btn-pense').addEventListener('click', () => onPense(c, u, $app));
     cargarPensRecibidos(c, u, $app.querySelector('#sec-pense-recibidos'));
+
+    // --- Acceso a Biografía (deep-link a la 3ra solapa de Historias) ---
+    $app.querySelector('#btn-ver-biografia')?.addEventListener('click',
+        () => go('#/v2/historias?tab=biografia'));
 
     // --- Foto + Calendario (escritura) ---
     if (puedeEscribir) {
@@ -350,7 +364,7 @@ export async function renderFamilia($app) {
                     acciones: [{ label: 'OK', clase: 'btn--inicio', value: 'ok' }]
                 });
             } finally {
-                btn.disabled = false; btn.textContent = '📤 Mandar idea';
+                btn.disabled = false; btn.textContent = '➕ Sumar pregunta';
             }
         });
         actualizarSeccionPuntas(c, u, $app);
@@ -651,7 +665,9 @@ async function cargarUltimoCarino(c, u, $wrap) {
         if (!lista.length) { $wrap.hidden = true; return; }
         const p = lista[0];
         const autor = (_miembrosCache || []).find(m => m.user_id === p.de_user_id);
-        const nombre = autor?.parentesco || 'Alguien';
+        // Etiqueta desde la perspectiva del adulto mayor (sin el posesivo
+        // "Tu", que sería incorrecto entre familiares). Ver utils/parentesco.
+        const etiqueta = etiquetaDesdeAdultoMayor(autor, c);
         $wrap.hidden = false;
         // Glow coral sólo si el cariño es fresco (≤24 h): novedad real, no
         // un cariño viejo brillando para siempre.
@@ -662,12 +678,44 @@ async function cargarUltimoCarino(c, u, $wrap) {
             <div class="pense-item is-nuevo" style="margin:0;">
                 <span class="pense-item__emoji">💛</span>
                 <div>
-                    <strong>Tu ${h(nombre)} te está pensando</strong>
+                    <strong>${h(etiqueta)} te está pensando</strong>
                     <small>${h(tiempoRelativo(p.created_at))}</small>
                 </div>
             </div>
         `;
     } catch (err) {
+        $wrap.hidden = true;
+    }
+}
+
+/**
+ * Tarjeta destacada en el Inicio: "Tenés N ideas para preguntarle…".
+ * Sólo si hay puntas pendientes (listarPuntas ya filtra usadas/descartadas).
+ * Lleva a Familia, donde está la lista completa "Hoy le pregunto a…".
+ */
+async function cargarTarjetaPuntas(c, $wrap) {
+    if (!$wrap) return;
+    try {
+        const puntas = await listarPuntas(c.id);
+        if (!puntas.length) { $wrap.hidden = true; return; }
+        const narrador = (_miembrosCache || []).find(m => m.interface_mode === 'simple');
+        const par = (narrador?.parentesco || '').trim().toLowerCase();
+        const aQuien = par ? `tu ${par}` : 'tu familiar';
+        const n = puntas.length;
+        $wrap.hidden = false;
+        $wrap.innerHTML = `
+            <h2>🗒 Para tu próxima charla</h2>
+            <p style="font-size:1.05rem; line-height:1.5; margin:0;">
+                Tenés <strong>${n}</strong> ${n === 1 ? 'idea' : 'ideas'} para
+                preguntarle a ${h(aQuien)}.
+            </p>
+            <button class="btn btn--full" id="btn-ir-puntas">Ver preguntas</button>
+        `;
+        $wrap.querySelector('#btn-ir-puntas')?.addEventListener('click', () => go('#/familia'));
+    } catch (err) {
+        // Si la columna descartada_at todavía no existe (migración 0016 sin
+        // aplicar) o falla la query, no rompemos el Inicio: ocultamos.
+        console.warn('[cargarTarjetaPuntas]', err);
         $wrap.hidden = true;
     }
 }
@@ -839,14 +887,16 @@ async function cargarPensRecibidos(c, u, $cont) {
             <ul class="pense-lista">
                 ${lista.map(p => {
                     const autor = (_miembrosCache || []).find(m => m.user_id === p.de_user_id);
-                    const nombre = autor?.parentesco || 'Alguien';
+                    // Etiqueta centrada en el adulto mayor (sin "Tu", ver
+                    // utils/parentesco): entre familiares "Tu hija" sería falso.
+                    const etiqueta = etiquetaDesdeAdultoMayor(autor, c);
                     const cuando = formatearHace(Date.now() - new Date(p.created_at).getTime());
                     const esNuevo = new Date(p.created_at).getTime() > lastSeen;
                     return `
                         <li class="pense-item ${esNuevo ? 'is-nuevo' : ''}">
                             <span class="pense-item__emoji">💛</span>
                             <div>
-                                <strong>Tu ${h(nombre)} te está pensando</strong>
+                                <strong>${h(etiqueta)} te está pensando</strong>
                                 <small>${h(cuando)}</small>
                             </div>
                             ${esNuevo ? `<span class="pense-item__dot" aria-label="nuevo"></span>` : ''}
@@ -1354,10 +1404,11 @@ function pedirVisibilidad(narradorId) {
 // Cola de puntas + catálogo de sugerencias (admin dashboard)
 // =====================================================================
 //
-// Una sola query a `puntas_historia` alimenta dos renders:
-//   1) Cola: pendientes (con la próxima marcada) + usadas con fecha.
+// Una sola query a `puntas_historia` (sólo pendientes: listarPuntas ya
+// excluye usadas y descartadas) alimenta dos renders:
+//   1) Cola: la lista de preguntas pendientes para la próxima charla.
 //   2) Sugeridas (catálogo constante): cada idea, "Agregar" o "✓ Ya
-//      agregada" si el texto exacto ya está en la cola — así no
+//      agregada" si el texto exacto ya está en la lista — así no
 //      duplicamos.
 async function actualizarSeccionPuntas(c, u, $app) {
     const $cola      = $app.querySelector('#sec-puntas-cola');
@@ -1370,8 +1421,8 @@ async function actualizarSeccionPuntas(c, u, $app) {
         if ($cola) $cola.innerHTML = `<p class="muted">Error cargando la cola: ${h(err?.message || err)}</p>`;
     }
     // Set de textos normalizados (lower + trim) para dedup contra el
-    // catálogo. Cubre tanto pendientes como usadas — si el papá ya la
-    // contó, no la volvemos a empujar a la cola automáticamente.
+    // catálogo: una sugerida que ya está en la lista pendiente se marca
+    // "✓ Ya agregada" en vez de ofrecer "Agregar".
     const yaCargadas = new Set(
         puntas.map(p => String(p.texto || '').trim().toLowerCase())
     );
@@ -1379,50 +1430,43 @@ async function actualizarSeccionPuntas(c, u, $app) {
     if ($cola) renderCola($cola, puntas, c, u, $app);
 }
 
+// La cola muestra sólo las pendientes (listarPuntas ya filtra usadas y
+// descartadas). Cada una se puede "Descartar" (soft, sin borrar): la RLS
+// permite al autor o al admin del círculo. Por eso el botón aparece si la
+// punta es propia o si el familiar es admin.
 function renderCola($cont, puntas, c, u, $app) {
     if (!puntas.length) {
-        $cont.innerHTML = `<p class="muted">Todavía no mandaron ninguna idea. Empezá con una sugerida o escribí algo concreto arriba.</p>`;
+        $cont.innerHTML = `<p class="muted">Todavía no hay preguntas en tu lista. Sumá una arriba o elegí de las sugeridas.</p>`;
         return;
     }
-    const pend = puntas.filter(p => !p.usada_at);
-    const usadas = puntas.filter(p =>  p.usada_at);
-    const ordered = [...pend, ...usadas];
+    const esAdmin = state.membresiaReal?.permission_level === 'admin';
     $cont.innerHTML = `
-        <h3 style="margin: 0.8rem 0 0.4rem; font-size: 0.95em;">Cola (${pend.length} sin usar)</h3>
+        <h3 style="margin: 0.8rem 0 0.4rem; font-size: 0.95em;">Tu lista (${puntas.length} ${puntas.length === 1 ? 'pregunta' : 'preguntas'})</h3>
         <ul class="puntas-cola">
-            ${ordered.map((p, i) => {
-                const usada = !!p.usada_at;
-                const mia   = p.de_user_id === u.id;
-                const proxima = !usada && i === 0;
+            ${puntas.map(p => {
+                const puedeDescartar = p.de_user_id === u.id || esAdmin;
                 return `
-                    <li class="puntas-cola__item ${usada ? 'is-usada' : ''}">
-                        <span class="puntas-cola__texto">
-                            ${proxima ? '<strong>👉 La próxima:</strong> ' : ''}${h(p.texto)}
-                        </span>
-                        <span class="puntas-cola__chip ${usada ? 'puntas-cola__chip--usada' : ''}">
-                            ${usada
-                                ? `✓ contada ${new Date(p.usada_at).toLocaleDateString('es-AR')}`
-                                : 'pendiente'}
-                        </span>
-                        ${mia
-                            ? `<button class="btn btn--mini btn--danger" data-borrar-punta="${h(p.id)}" title="Borrar">×</button>`
+                    <li class="puntas-cola__item">
+                        <span class="puntas-cola__texto">${h(p.texto)}</span>
+                        ${puedeDescartar
+                            ? `<button class="btn btn--mini" data-descartar-punta="${h(p.id)}" title="Descartar">Descartar</button>`
                             : '<span></span>'}
                     </li>
                 `;
             }).join('')}
         </ul>
     `;
-    $cont.querySelectorAll('[data-borrar-punta]').forEach(btn => {
+    $cont.querySelectorAll('[data-descartar-punta]').forEach(btn => {
         btn.addEventListener('click', async () => {
-            const id = btn.dataset.borrarPunta;
+            const id = btn.dataset.descartarPunta;
             btn.disabled = true;
             try {
-                await borrarPunta(id);
+                await descartarPunta(id);
                 await actualizarSeccionPuntas(c, u, $app);
             } catch (err) {
                 btn.disabled = false;
                 await modal({
-                    titulo: 'No pude borrarla',
+                    titulo: 'No pude descartarla',
                     cuerpo: `<pre>${h(err?.message || err)}</pre>`,
                     acciones: [{ label: 'OK', value: 'ok' }]
                 });
@@ -1641,12 +1685,9 @@ const ACT_ICONOS = {
 
 function nombreDeActor(actorId) {
     const m = (_miembrosCache || []).find(x => x.user_id === actorId);
-    if (!m) return 'Alguien';
-    const nom = (m.user?.nombre_completo || '').trim();
-    if (nom) return nom.split(/\s+/)[0];
-    const par = (m.parentesco || '').trim();
-    if (par) return `Tu ${par.toLowerCase()}`;
-    return 'Tu familiar';
+    // Etiqueta única centrada en el adulto mayor (nombre propio, o
+    // "la hija" / "el sobrino" — nunca "Tu hija" entre familiares).
+    return etiquetaDesdeAdultoMayor(m);
 }
 
 function actividadTexto(ev) {
