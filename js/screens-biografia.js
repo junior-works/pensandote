@@ -22,8 +22,12 @@ import {
     subirZipWhatsapp, subirAudioReenviado, crearAporteManual,
     listarColaPendiente, aprobarItem, rechazarItem, editarYaprobarItem,
     saltarItem, listarFiltrosAportador,
-    crearFiltro, borrarFiltro, urlAudioBiografia
+    crearFiltro, borrarFiltro, urlAudioBiografia,
+    iniciarGrabacionLlamada, finalizarGrabacionLlamada,
+    cancelarGrabacionLlamada, subirAudioLlamadaACola
 } from './data-emotiva.js';
+import { grabarLlamada } from './audio.js';
+import { miembrosDelCirculo } from './circles.js';
 import { crearDictado } from './utils/dictado.js';
 
 const SUBS_VALIDAS = ['panel', 'sumar', 'cola', 'filtros'];
@@ -67,6 +71,17 @@ async function renderPanel($app, c) {
         <p class="muted">Sumá charlas y recuerdos. Vos revisás cada uno antes de
            que entre a la biografía.</p>
 
+        <section class="card stack bio-grabar" id="bio-grabar-bloque"
+                 style="background:#fff8f3; border:2px solid #f0d9c8;">
+            <h2 style="margin:0;">🎙 Grabar una charla</h2>
+            <p class="muted" style="margin:0;">
+                Cuando estés en una llamada con <strong id="bio-grabar-quien">tu familiar</strong>,
+                tocá para grabar la charla y sumarla a la biografía.</p>
+            <div id="bio-grabar-slot">
+                <button class="btn btn--xl btn--full" id="bio-grabar-start">🔴 Empezar a grabar</button>
+            </div>
+        </section>
+
         <section class="card stack">
             <button class="btn btn--xl btn--full" id="bio-sumar">📥 Sumar charlas</button>
             <button class="btn btn--full" id="bio-cola">📋 Mi cola de aprobación<span id="bio-cola-badge"></span></button>
@@ -80,6 +95,19 @@ async function renderPanel($app, c) {
     $app.querySelector('#bio-filtros').addEventListener('click', () => go('#/biografia/filtros'));
     $app.querySelector('#bio-ver').addEventListener('click', () => go('#/v2/historias?tab=biografia'));
 
+    montarGrabarCharla($app, c);
+
+    // Nombre/parentesco del adulto mayor para el copy (best-effort).
+    try {
+        const miembros = await miembrosDelCirculo(c.id);
+        const central  = miembros.find(m => m.interface_mode === 'simple');
+        const quien = (central?.user?.nombre_completo || '').trim().split(' ')[0]
+            || (central?.parentesco || '').trim().toLowerCase()
+            || 'tu familiar';
+        const $quien = $app.querySelector('#bio-grabar-quien');
+        if ($quien) $quien.textContent = quien;
+    } catch (_) { /* dejamos el genérico */ }
+
     // Badge con el conteo de pendientes (best-effort).
     try {
         const cola = await listarColaPendiente(c.id);
@@ -87,6 +115,169 @@ async function renderPanel($app, c) {
             $app.querySelector('#bio-cola-badge').textContent = `  (${cola.length})`;
         }
     } catch (_) { /* sin badge si falla */ }
+}
+
+// =====================================================================
+// Grabar una charla (videollamada) — captura el micrófono del aportador
+// ---------------------------------------------------------------------
+// Estado de grabación a nivel módulo: un único recorder activo por vez.
+// Mientras graba: banner sticky fijo arriba + cronómetro + Detener /
+// Descartar. El audio entra a la cola (origen 'videollamada'); el papá
+// recibe el puntito vía push.
+// =====================================================================
+let _grab = null; // { rec, avisoId, circleId, t0, tickId, $banner }
+
+function montarGrabarCharla($app, c) {
+    const $start = $app.querySelector('#bio-grabar-start');
+    if (!$start) return;
+    // Si ya hay una grabación activa (volvimos al panel sin detenerla),
+    // re-pintamos el estado "grabando".
+    if (_grab && _grab.circleId === c.id) {
+        pintarGrabando($app, c);
+        return;
+    }
+    $start.addEventListener('click', () => onEmpezarGrabar($app, c));
+}
+
+async function onEmpezarGrabar($app, c) {
+    const $start = $app.querySelector('#bio-grabar-start');
+    if ($start) { $start.disabled = true; $start.textContent = '⏳ Pidiendo micrófono…'; }
+    let rec;
+    try {
+        rec = await grabarLlamada();
+    } catch (err) {
+        if ($start) { $start.disabled = false; $start.textContent = '🔴 Empezar a grabar'; }
+        await avisar('No pude acceder al micrófono',
+            `<p>Necesito acceso al micrófono para guardar la charla.
+                Activalo en los ajustes del navegador y volvé a intentar.</p>
+             <pre style="white-space:pre-wrap;">${h(err?.message || err)}</pre>`, 'error');
+        return;
+    }
+
+    let avisoId = null;
+    try {
+        const r = await iniciarGrabacionLlamada(c.id);
+        avisoId = r.avisoId;
+    } catch (err) {
+        // Si no pudimos registrar el aviso, no grabamos a ciegas: cortamos.
+        rec.cancel();
+        if ($start) { $start.disabled = false; $start.textContent = '🔴 Empezar a grabar'; }
+        await avisar('No pude empezar la grabación',
+            `<pre style="white-space:pre-wrap;">${h(err?.message || err)}</pre>`, 'error');
+        return;
+    }
+
+    _grab = { rec, avisoId, circleId: c.id, t0: Date.now(), tickId: null, $banner: null };
+    montarBannerGrabando();
+    pintarGrabando($app, c);
+}
+
+function fmtSeg(seg) {
+    const m = Math.floor(seg / 60);
+    const s = seg % 60;
+    return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+}
+
+// Banner sticky fijo arriba mientras graba (fuera de #app para sobrevivir
+// re-renders del panel).
+function montarBannerGrabando() {
+    if (_grab?.$banner) return;
+    const $b = document.createElement('div');
+    $b.id = 'bio-grabando-banner';
+    $b.setAttribute('role', 'status');
+    $b.style.cssText = [
+        'position:fixed', 'top:0', 'left:0', 'right:0', 'z-index:9999',
+        'background:#c0392b', 'color:#fff', 'text-align:center',
+        'padding:0.5rem 0.8rem', 'font-weight:700',
+        'box-shadow:0 2px 8px rgba(0,0,0,0.25)'
+    ].join(';');
+    $b.innerHTML = '🔴 Grabando para Pensándote';
+    document.body.appendChild($b);
+    if (_grab) _grab.$banner = $b;
+}
+
+function desmontarBannerGrabando() {
+    document.getElementById('bio-grabando-banner')?.remove();
+    if (_grab) _grab.$banner = null;
+}
+
+function pintarGrabando($app, c) {
+    const $slot = $app.querySelector('#bio-grabar-slot');
+    if (!$slot || !_grab) return;
+    $slot.innerHTML = `
+        <p style="font-weight:700; color:#c0392b; margin:0;">🔴 GRABANDO PARA PENSÁNDOTE</p>
+        <p id="bio-grabar-crono" style="font-size:2rem; font-variant-numeric:tabular-nums; margin:0.2rem 0;">00:00</p>
+        <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
+            <button class="btn btn--inicio btn--full" id="bio-grabar-stop" style="flex:1;">⏹ Detener y guardar</button>
+            <button class="btn btn--danger" id="bio-grabar-discard">❌ Descartar</button>
+        </div>`;
+
+    const $crono = $slot.querySelector('#bio-grabar-crono');
+    const tick = () => {
+        if (!_grab) return;
+        const seg = Math.floor((Date.now() - _grab.t0) / 1000);
+        if ($crono) $crono.textContent = fmtSeg(seg);
+    };
+    tick();
+    if (_grab.tickId) clearInterval(_grab.tickId);
+    _grab.tickId = setInterval(tick, 1000);
+
+    $slot.querySelector('#bio-grabar-stop').addEventListener('click', () => onDetenerGrabar($app, c));
+    $slot.querySelector('#bio-grabar-discard').addEventListener('click', () => onDescartarGrabar($app, c));
+}
+
+function limpiarGrabacion() {
+    if (_grab?.tickId) clearInterval(_grab.tickId);
+    desmontarBannerGrabando();
+    _grab = null;
+}
+
+async function onDetenerGrabar($app, c) {
+    if (!_grab) return;
+    const g = _grab;
+    const $stop = $app.querySelector('#bio-grabar-stop');
+    if ($stop) { $stop.disabled = true; $stop.textContent = '⏳ Guardando…'; }
+    if (g.tickId) clearInterval(g.tickId);
+
+    let res;
+    try {
+        res = await g.rec.stop();
+    } catch (err) {
+        // No pudimos cerrar el recorder: descartamos el aviso para no dejar
+        // el puntito del papá prendido.
+        await cancelarGrabacionLlamada(g.avisoId, g.circleId).catch(() => {});
+        limpiarGrabacion();
+        await avisar('No pude cerrar la grabación',
+            `<pre style="white-space:pre-wrap;">${h(err?.message || err)}</pre>`, 'error');
+        return renderPanel($app, c);
+    }
+
+    try {
+        await subirAudioLlamadaACola(res.blob, g.circleId, res.duracion);
+        await finalizarGrabacionLlamada(g.avisoId, g.circleId);
+        limpiarGrabacion();
+        await avisar('Listo', '<p>Está en tu cola para curar cuando quieras.</p>');
+        go('#/biografia/cola');
+    } catch (err) {
+        // El audio no se guardó: descartamos el aviso (no fue una charla
+        // guardada) y apagamos el puntito.
+        await cancelarGrabacionLlamada(g.avisoId, g.circleId).catch(() => {});
+        limpiarGrabacion();
+        await avisar('No pude guardar la charla',
+            `<pre style="white-space:pre-wrap;">${h(err?.message || err)}</pre>`, 'error');
+        renderPanel($app, c);
+    }
+}
+
+async function onDescartarGrabar($app, c) {
+    if (!_grab) return;
+    const g = _grab;
+    if (g.tickId) clearInterval(g.tickId);
+    try { g.rec.cancel(); } catch (_) {}
+    // Sin subir, sin encolar: borramos el aviso y apagamos el puntito.
+    await cancelarGrabacionLlamada(g.avisoId, g.circleId).catch(() => {});
+    limpiarGrabacion();
+    renderPanel($app, c);
 }
 
 // =====================================================================
