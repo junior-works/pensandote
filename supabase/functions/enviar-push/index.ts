@@ -89,6 +89,11 @@ Deno.serve(async (req) => {
         const target: Target = (TARGETS_VALIDOS as readonly string[]).includes(targetRaw) ? (targetRaw as Target) : "admins";
         const userId        = typeof body?.user_id === "string" ? body.user_id.trim() : "";
         const excludeUserId = typeof body?.exclude_user_id === "string" ? body.exclude_user_id.trim() : "";
+        // `tipo` opcional: viaja en el payload para que el service worker y
+        // el cliente puedan tratar ciertos avisos de forma especial (ej.
+        // 'biografia_grabacion_inicio'/'_fin' → puntito discreto, sin
+        // pop-up). No afecta el targeting ni la logica existente.
+        const tipo          = typeof body?.tipo === "string" ? body.tipo.trim() : "";
 
         if (!circle_id) return json({ error: "circle_id_requerido" }, 400);
 
@@ -127,7 +132,7 @@ Deno.serve(async (req) => {
 
         // circle_id viaja en el payload para que el cliente, al tocar la
         // notificación, switchee al círculo correcto antes de renderizar.
-        const payload = JSON.stringify({ title, body: text, url, tag, circle_id });
+        const payload = JSON.stringify({ title, body: text, url, tag, circle_id, ...(tipo ? { tipo } : {}) });
         let sent = 0, failed = 0;
         const toDelete: string[] = [];
 

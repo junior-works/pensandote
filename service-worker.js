@@ -18,7 +18,7 @@
  * correcto en ambos entornos.
  */
 
-const CACHE_NAME = 'pensandote-shell-v0.9.42';
+const CACHE_NAME = 'pensandote-shell-v0.9.43';
 
 const SHELL_FILES = [
     './',
@@ -157,6 +157,41 @@ self.addEventListener('push', (event) => {
     catch (_) {
         try { data = { body: event.data?.text() || '' }; } catch (__) {}
     }
+    // Señal de grabación de biografía (Etapa 3): NO es una notificación
+    // ruidosa. Si el papá tiene la app abierta y visible, le posteamos al
+    // cliente para que muestre el puntito discreto y NO mostramos pop-up.
+    // Si no hay ninguna pestaña visible, mostramos una notificación
+    // silenciosa mínima sólo para cumplir el contrato userVisibleOnly del
+    // navegador (sin sonido). El 'fin' cierra cualquier aviso previo.
+    if (data.tipo === 'biografia_grabacion_inicio' || data.tipo === 'biografia_grabacion_fin') {
+        event.waitUntil((async () => {
+            const clients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+            let hayVisible = false;
+            for (const cl of clients) {
+                try { cl.postMessage({ type: 'bio-grabacion', tipo: data.tipo, circle_id: data.circle_id || null }); } catch (_) {}
+                if (cl.visibilityState === 'visible') hayVisible = true;
+            }
+            const tag = data.tag || `bio-grab-${data.circle_id || 'g'}`;
+            if (data.tipo === 'biografia_grabacion_fin') {
+                const ns = await self.registration.getNotifications({ tag });
+                ns.forEach(n => n.close());
+                return;
+            }
+            if (!hayVisible) {
+                await self.registration.showNotification(data.title || 'Pensándote', {
+                    body:    data.body || '',
+                    icon:    './assets/icon-192.png',
+                    badge:   './assets/icon-192.png',
+                    tag,
+                    silent:  true,
+                    renotify: false,
+                    data: { url: data.url || '#/v2/historias?tab=biografia', circle_id: data.circle_id || null }
+                });
+            }
+        })());
+        return;
+    }
+
     const title = data.title || 'Pensándote';
     const opts = {
         body:  data.body || '',
