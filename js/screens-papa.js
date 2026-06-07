@@ -21,7 +21,8 @@ import { nuevaGrabacion } from './audio.js';
 import {
     enviarPensamiento, pensamientosRecibidos, marcarContacto,
     listarHistorias, urlHistoriaAudio, grabarHistoria, borrarHistoria,
-    listarInteracciones, toggleFavorita, repreguntarTexto, repreguntarAudio
+    listarInteracciones, toggleFavorita, repreguntarTexto, repreguntarAudio,
+    listarAportesBiografia
 } from './data-emotiva.js';
 import { esPreview, avisarPreview, getMiembroVisto } from './preview.js';
 
@@ -258,25 +259,71 @@ function renderTabNormal($cont, c, u, miembros, esNarrador) {
     });
 }
 
-// -------------------- TAB: Biografía (Etapa 1: vacía) --------------------
-// Scaffolding de la sección Biografía (spec v1). Por ahora sólo el estado
-// vacío con copy empático; los capítulos narrados a partir de las fuentes
-// (Historias, charlas, WhatsApp, notas) llegan en etapas siguientes. Nada
-// interactivo todavía.
-function renderTabBiografia($cont, c, u, esNarrador, esAdmin) {
+// -------------------- TAB: Biografía (Etapa 2: lista de aportes) --------------------
+// Muestra los aportes aprobados (bio_aportes) en orden cronológico, como
+// transcripción literal. Sin IA narrativa todavía (eso es Etapa 4): no se
+// arma prosa ni se agrupa en capítulos visibles. Si no hay aportes, vuelve
+// al estado vacío con copy empático (no rompe Etapa 1).
+//
+// Regla de oro 4 (spec v1): al adulto mayor no se le muestran nombres
+// propios de quién aportó cada recuerdo — sólo un indicio del origen.
+async function renderTabBiografia($cont, c, u, esNarrador, esAdmin) {
     const titulo = esNarrador ? 'Tu historia' : 'Su historia';
-    const cuerpo = esNarrador
+    const cuerpoVacio = esNarrador
         ? `Acá va a vivir tu biografía. A medida que charles, cuentes o tu
            familia agregue recuerdos, se va armando sola.`
         : `Acá va a empezar a armarse la biografía, con los recuerdos que
            vayan sumando entre todos.`;
+
+    $cont.innerHTML = `<p class="muted">Cargando…</p>`;
+
+    let aportes = [];
+    try {
+        aportes = await listarAportesBiografia(c.id);
+    } catch (err) {
+        console.warn('[biografia aportes]', err);
+    }
+
+    if (!aportes.length) {
+        $cont.innerHTML = `
+            <div class="card stack center" style="margin-top:0.5rem; padding:1.6em 1.2em;">
+                <p style="font-size:2.6rem; line-height:1; margin:0;">📚</p>
+                <h3 style="margin:0.3rem 0 0;">${titulo}</h3>
+                <p style="font-size:1.05rem; line-height:1.55; max-width:420px; margin:0 auto;">
+                    ${cuerpoVacio}
+                </p>
+            </div>
+        `;
+        return;
+    }
+
     $cont.innerHTML = `
-        <div class="card stack center" style="margin-top:0.5rem; padding:1.6em 1.2em;">
-            <p style="font-size:2.6rem; line-height:1; margin:0;">📚</p>
-            <h3 style="margin:0.3rem 0 0;">${titulo}</h3>
-            <p style="font-size:1.05rem; line-height:1.55; max-width:420px; margin:0 auto;">
-                ${cuerpo}
-            </p>
+        <h3 style="margin:0.4rem 0 0.8rem;">${titulo}</h3>
+        <div class="bio-aportes">
+            ${aportes.map(a => tarjetaAporte(a, esNarrador)).join('')}
+        </div>
+    `;
+}
+
+const ORIGEN_BIO = {
+    historia:    { icono: '📖', etiqueta: 'De una historia tuya' },
+    whatsapp:    { icono: '💬', etiqueta: 'De una charla' },
+    videollamada:{ icono: '🎥', etiqueta: 'De una videollamada' },
+    manual:      { icono: '✍️', etiqueta: 'Un recuerdo guardado' }
+};
+
+function tarjetaAporte(a, esNarrador) {
+    const o = ORIGEN_BIO[a.origen] || { icono: '•', etiqueta: '' };
+    // Fecha del evento si la hay; si no, la de creación. Sin nombres propios.
+    const fecha = a.fecha_evento
+        ? new Date(a.fecha_evento + 'T00:00:00').toLocaleDateString('es-AR',
+            { year: 'numeric', month: 'long', day: 'numeric' })
+        : new Date(a.created_at).toLocaleDateString('es-AR',
+            { year: 'numeric', month: 'long' });
+    return `
+        <div class="card stack" style="margin-bottom:0.8rem;">
+            <div class="muted" style="font-size:0.82em;">${o.icono} ${h(o.etiqueta)} · ${h(fecha)}</div>
+            <p style="line-height:1.6; white-space:pre-wrap; margin:0;">${h(a.transcripcion)}</p>
         </div>
     `;
 }

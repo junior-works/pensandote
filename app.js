@@ -32,6 +32,7 @@ import * as Papa      from './js/screens-papa.js';
 import * as HacemeAcordar from './js/screens-haceme-acordar.js';
 import * as PamiAnses from './js/screens-pami-anses.js';
 import * as Estudios from './js/screens-estudios.js';
+import * as Biografia from './js/screens-biografia.js';
 import { montarAsistente } from './js/asistente-pensa.js';
 import { prepararDatosReales, limpiarDatosReales } from './js/preview.js';
 
@@ -244,6 +245,11 @@ function renderRouteReal(ruta) {
             const sub = ruta.params[0];
             if (sub === 'pense')     return Papa.renderPenseSimpleReal($app);
             if (sub === 'historias') return Papa.renderHistoriasSimpleReal($app);
+        }
+        // Biografía — panel del aportador (dashboard del familiar). El papá
+        // (modo simple) no cura: ve su biografía dentro de #/v2/historias.
+        if (ruta.name === 'biografia' && state.membresiaReal?.interface_mode !== 'simple') {
+            return Biografia.renderBiografiaDashboard($app, ruta.params[0] || 'panel');
         }
         // Home: en modo real SIMPLE, el papá ve el layout de tarjetones
         // (el mismo que la preview) — Emergencias, Familia, Médico,

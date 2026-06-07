@@ -207,7 +207,13 @@ export async function renderFamilia($app) {
         <section class="card stack hogar-biografia">
             <h2>📚 Biografía</h2>
             <p class="muted">La historia de vida de ${h(narradorPosesivo)}, armándose con los recuerdos que sumen entre todos.</p>
-            <button class="btn btn--full" id="btn-ver-biografia">
+            <button class="btn btn--full" id="btn-sumar-charlas">
+                📥 Sumar charlas
+            </button>
+            <button class="btn btn--full" id="btn-cola-biografia">
+                📋 Revisar lo que sumé
+            </button>
+            <button class="btn btn--inicio btn--full" id="btn-ver-biografia">
                 📚 Ver biografía de ${h(narradorParentesco || 'tu familiar')}
             </button>
         </section>
@@ -314,7 +320,11 @@ export async function renderFamilia($app) {
     $app.querySelector('#btn-pense').addEventListener('click', () => onPense(c, u, $app));
     cargarPensRecibidos(c, u, $app.querySelector('#sec-pense-recibidos'));
 
-    // --- Acceso a Biografía (deep-link a la 3ra solapa de Historias) ---
+    // --- Acceso a Biografía (panel del aportador + deep-link a la solapa) ---
+    $app.querySelector('#btn-sumar-charlas')?.addEventListener('click',
+        () => go('#/biografia/sumar'));
+    $app.querySelector('#btn-cola-biografia')?.addEventListener('click',
+        () => go('#/biografia/cola'));
     $app.querySelector('#btn-ver-biografia')?.addEventListener('click',
         () => go('#/v2/historias?tab=biografia'));
 
