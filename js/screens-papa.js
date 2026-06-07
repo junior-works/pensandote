@@ -12,7 +12,7 @@
 
 import { state, setSesionReal } from './state.js';
 import { go, currentRoute } from './router.js';
-import { h, modal, installModalBackButton, cleanupModalBackButton } from './ui.js';
+import { h, modal, installModalBackButton, cleanupModalBackButton, wireTTSToggle } from './ui.js';
 import {
     miembrosDelCirculo, circulosDelUsuario, membresiaActiva,
     desbloquearLegado, bloquearLegado
@@ -22,9 +22,11 @@ import {
     enviarPensamiento, pensamientosRecibidos, marcarContacto,
     listarHistorias, urlHistoriaAudio, grabarHistoria, borrarHistoria,
     listarInteracciones, toggleFavorita, repreguntarTexto, repreguntarAudio,
-    listarAportesBiografia, avisosGrabacionPendientes, marcarAvisosVistos
+    avisosGrabacionPendientes, marcarAvisosVistos,
+    listarCapitulosPublicados, excluirCapitulo, pedirReescritura
 } from './data-emotiva.js';
 import { esPreview, avisarPreview, getMiembroVisto } from './preview.js';
+import { crearDictado } from './utils/dictado.js';
 
 const LS_LAST_SEEN = (cId, uId) => `pensandote.pensamientos.lastSeen.${cId}.${uId}`;
 
@@ -259,14 +261,18 @@ function renderTabNormal($cont, c, u, miembros, esNarrador) {
     });
 }
 
-// -------------------- TAB: Biografía (Etapa 2: lista de aportes) --------------------
-// Muestra los aportes aprobados (bio_aportes) en orden cronológico, como
-// transcripción literal. Sin IA narrativa todavía (eso es Etapa 4): no se
-// arma prosa ni se agrupa en capítulos visibles. Si no hay aportes, vuelve
-// al estado vacío con copy empático (no rompe Etapa 1).
+// -------------------- TAB: Biografía (Etapa 4: capítulos narrados) --------------------
+// El adulto mayor lee su biografía como PROSA CONTINUA: los capítulos
+// publicados (bio_capitulos) uno tras otro, ordenados por etapa de vida,
+// SIN títulos visibles ("Capítulo 1: Infancia" no aparece). Un toggle
+// arriba alterna 1ra/3ra persona (recordado en localStorage por círculo).
+// Cada capítulo tiene una acción discreta "Este recuerdo no me gusta":
+// olvidarlo (excluir) o pedir que lo reescriban (nota a los aportadores).
 //
-// Regla de oro 4 (spec v1): al adulto mayor no se le muestran nombres
-// propios de quién aportó cada recuerdo — sólo un indicio del origen.
+// Si todavía no hay capítulos publicados, vuelve al estado vacío de Etapa 1.
+// Regla de oro 4: sin nombres propios de quién aportó.
+const LS_BIO_PERSONA = (cId) => `pensandote_bio_persona_${cId}`;
+
 async function renderTabBiografia($cont, c, u, esNarrador, esAdmin) {
     const titulo = esNarrador ? 'Tu historia' : 'Su historia';
     const cuerpoVacio = esNarrador
@@ -277,18 +283,18 @@ async function renderTabBiografia($cont, c, u, esNarrador, esAdmin) {
 
     $cont.innerHTML = `<p class="muted">Cargando…</p>`;
 
-    let aportes = [];
+    let capitulos = [];
     try {
-        aportes = await listarAportesBiografia(c.id);
+        capitulos = await listarCapitulosPublicados(c.id);
     } catch (err) {
-        console.warn('[biografia aportes]', err);
+        console.warn('[biografia capitulos]', err);
     }
 
     // Resumen post-hoc: si la familia grabó charlas mientras el papá no
     // tenía la app abierta, las ve resumidas (sin nombres) al entrar acá.
     const avisoHtml = esNarrador ? await tarjetaAvisosGrabacion(c.id) : '';
 
-    if (!aportes.length) {
+    if (!capitulos.length) {
         $cont.innerHTML = `
             ${avisoHtml}
             <div class="card stack center" style="margin-top:0.5rem; padding:1.6em 1.2em;">
@@ -303,14 +309,171 @@ async function renderTabBiografia($cont, c, u, esNarrador, esAdmin) {
         return;
     }
 
+    // Persona narrativa: por sesión/dispositivo, recordada en localStorage.
+    // Default: primera persona ("contado por mí").
+    let persona = 'primera';
+    try {
+        const guard = localStorage.getItem(LS_BIO_PERSONA(c.id));
+        if (guard === 'tercera' || guard === 'primera') persona = guard;
+    } catch (_) {}
+
     $cont.innerHTML = `
         ${avisoHtml}
-        <h3 style="margin:0.4rem 0 0.8rem;">${titulo}</h3>
-        <div class="bio-aportes">
-            ${aportes.map(a => tarjetaAporte(a, esNarrador)).join('')}
+        <div style="display:flex; align-items:center; justify-content:space-between; gap:0.6rem; flex-wrap:wrap; margin:0.4rem 0 0.8rem;">
+            <h3 style="margin:0;">${titulo}</h3>
+            <button class="btn btn--mini" id="bio-persona-toggle"></button>
         </div>
+        <button class="btn btn--full" id="bio-escuchar-todo" style="margin-bottom:0.8rem;">🔊 Leer en voz alta</button>
+        <div class="bio-prosa" id="bio-prosa"></div>
     `;
     wireAvisosGrabacion($cont, c.id);
+
+    const $toggle = $cont.querySelector('#bio-persona-toggle');
+    const $prosa  = $cont.querySelector('#bio-prosa');
+
+    const textoActivo = (cap) =>
+        (persona === 'primera' ? cap.texto_primera : cap.texto_tercera) || '';
+
+    function pintarProsa() {
+        $toggle.textContent = persona === 'primera' ? '🔁 Contado por mí' : '🔁 Contado sobre mí';
+        $prosa.innerHTML = capitulos.map((cap, i) => {
+            const txt = textoActivo(cap).trim();
+            if (!txt) return '';
+            const divisor = i > 0
+                ? `<hr style="border:none; border-top:1px solid #00000016; max-width:120px; margin:1.4rem auto;">`
+                : '';
+            return `
+                ${divisor}
+                <div data-cap-prosa="${cap.id}">
+                    <p style="font-size:1.12rem; line-height:1.75; white-space:pre-wrap; margin:0;">${h(txt)}</p>
+                    ${esNarrador ? `<button class="btn btn--mini bio-no-gusta"
+                            style="margin-top:0.5rem; opacity:0.7;">Este recuerdo no me gusta</button>` : ''}
+                </div>`;
+        }).join('');
+        if (esNarrador) {
+            capitulos.forEach(cap => {
+                $prosa.querySelector(`[data-cap-prosa="${cap.id}"] .bio-no-gusta`)
+                    ?.addEventListener('click', () => onNoMeGusta($cont, c, cap, pintarProsa));
+            });
+        }
+    }
+    pintarProsa();
+
+    // Escuchar: lee de corrido todas las variantes activas.
+    wireTTSToggle(
+        $cont.querySelector('#bio-escuchar-todo'),
+        () => capitulos.map(textoActivo).map(t => t.trim()).filter(Boolean).join('. '),
+        { labelLeer: '🔊 Leer en voz alta', labelParar: '⏹ Parar' }
+    );
+
+    $toggle.addEventListener('click', () => {
+        persona = persona === 'primera' ? 'tercera' : 'primera';
+        try { localStorage.setItem(LS_BIO_PERSONA(c.id), persona); } catch (_) {}
+        pintarProsa();
+    });
+}
+
+// Acción discreta del adulto mayor: "Este recuerdo no me gusta".
+// Tres opciones: olvidarlo (excluir), pedir que lo reescriban (nota a la
+// cola de aportadores), o cancelar. Sin culpa, sin fricción.
+async function onNoMeGusta($cont, c, cap, repintar) {
+    if (esPreview()) {
+        return avisarPreview('👀 Vista previa',
+            'En la app real esto te deja olvidar o pedir que reescriban este recuerdo. Acá no se ejecuta.');
+    }
+    const r = await modal({
+        titulo: 'Este recuerdo',
+        cuerpo: `<p style="font-size:1.05rem; line-height:1.5;">¿Qué querés hacer con este recuerdo?</p>`,
+        acciones: [
+            { label: '🙈 Olvidá esto',  clase: 'btn--full',          value: 'olvidar' },
+            { label: '✏️ Cambiá esto',  clase: 'btn--pense btn--full', value: 'cambiar' },
+            { label: 'No, cancelar' }
+        ],
+        tono: 'pense'
+    });
+    if (r === 'olvidar') {
+        try {
+            await excluirCapitulo(cap.id);
+            await modal({
+                titulo: '💛 Listo',
+                cuerpo: '<p>Ya no va a aparecer en tu historia.</p>',
+                acciones: [{ label: 'Entendido', clase: 'btn--pense btn--full', value: 'ok' }],
+                tono: 'ok'
+            });
+            // Recargar la tab para reflejar el cambio.
+            const $app = document.getElementById('app');
+            renderHistoriasSimpleReal($app);
+        } catch (err) {
+            await modal({
+                titulo: 'No pude',
+                cuerpo: `<pre>${h(err?.message || err)}</pre>`,
+                acciones: [{ label: 'OK', clase: 'btn--inicio', value: 'ok' }]
+            });
+        }
+        return;
+    }
+    if (r === 'cambiar') {
+        await pedirCambioRecuerdo(c, cap);
+    }
+}
+
+// Modal de dictado para "Cambiá esto": el adulto mayor dicta qué quiere
+// cambiar y se manda como nota a la cola de los aportadores (no toca el
+// capítulo). Regla de oro: sin culpa, lenguaje simple.
+async function pedirCambioRecuerdo(c, cap) {
+    const promesa = modal({
+        titulo: '✏️ Cambiá esto',
+        cuerpo: `
+            <p style="line-height:1.5;">Contá qué te gustaría que cambien.
+               Tu familia lo va a ver y lo arregla.</p>
+            <textarea id="bio-cambio-txt" class="input-real" rows="4"
+                      placeholder="Lo que querés cambiar…"></textarea>
+            <div style="display:flex; align-items:center; gap:0.5rem; margin-top:0.4rem;">
+                <button class="btn btn--mini" id="bio-cambio-dictar" type="button">🎤 Dictar</button>
+                <span id="bio-cambio-estado" class="muted" style="font-size:0.85em;"></span>
+            </div>`,
+        acciones: [
+            { label: 'Cancelar' },
+            { label: 'Enviar', clase: 'btn--pense btn--full', value: 'ok' }
+        ],
+        tono: 'pense'
+    });
+    const $txt = document.getElementById('bio-cambio-txt');
+    const $mic = document.getElementById('bio-cambio-dictar');
+    const $est = document.getElementById('bio-cambio-estado');
+    let dict = null;
+    if ($txt && $mic) {
+        dict = crearDictado({
+            $textarea: $txt, $btnMic: $mic, $estado: $est,
+            labels: { hablar: '🎤 Dictar', terminar: '⏹ Listo' }
+        });
+    }
+    const res   = await promesa;
+    const texto = ($txt?.value || '').trim();
+    if (dict) dict.destroy();
+    if (res !== 'ok') return;
+    if (!texto) {
+        return modal({
+            titulo: 'Faltó contar qué cambiar',
+            cuerpo: '<p>Escribí o dictá qué te gustaría que cambien.</p>',
+            acciones: [{ label: 'OK', clase: 'btn--inicio', value: 'ok' }]
+        });
+    }
+    try {
+        await pedirReescritura(cap.id, c.id, texto);
+        await modal({
+            titulo: '💛 Enviado',
+            cuerpo: '<p>Tu familia lo va a ver y lo va a arreglar.</p>',
+            acciones: [{ label: 'Gracias', clase: 'btn--pense btn--full', value: 'ok' }],
+            tono: 'ok'
+        });
+    } catch (err) {
+        await modal({
+            titulo: 'No pude enviarlo',
+            cuerpo: `<pre>${h(err?.message || err)}</pre>`,
+            acciones: [{ label: 'OK', clase: 'btn--inicio', value: 'ok' }]
+        });
+    }
 }
 
 // Cartelito "esta semana tu familia guardó N charlas" — sin nombres
@@ -351,28 +514,6 @@ function wireAvisosGrabacion($cont, circleId) {
     });
 }
 
-const ORIGEN_BIO = {
-    historia:    { icono: '📖', etiqueta: 'De una historia tuya' },
-    whatsapp:    { icono: '💬', etiqueta: 'De una charla' },
-    videollamada:{ icono: '🎥', etiqueta: 'De una videollamada' },
-    manual:      { icono: '✍️', etiqueta: 'Un recuerdo guardado' }
-};
-
-function tarjetaAporte(a, esNarrador) {
-    const o = ORIGEN_BIO[a.origen] || { icono: '•', etiqueta: '' };
-    // Fecha del evento si la hay; si no, la de creación. Sin nombres propios.
-    const fecha = a.fecha_evento
-        ? new Date(a.fecha_evento + 'T00:00:00').toLocaleDateString('es-AR',
-            { year: 'numeric', month: 'long', day: 'numeric' })
-        : new Date(a.created_at).toLocaleDateString('es-AR',
-            { year: 'numeric', month: 'long' });
-    return `
-        <div class="card stack" style="margin-bottom:0.8rem;">
-            <div class="muted" style="font-size:0.82em;">${o.icono} ${h(o.etiqueta)} · ${h(fecha)}</div>
-            <p style="line-height:1.6; white-space:pre-wrap; margin:0;">${h(a.transcripcion)}</p>
-        </div>
-    `;
-}
 
 // -------------------- TAB: Legado --------------------
 function renderTabLegado($cont, c, u, miembros, esNarrador, esAdmin) {
