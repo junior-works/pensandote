@@ -62,3 +62,13 @@ export async function nuevaGrabacion() {
         }
     };
 }
+
+/**
+ * Graba el audio de una charla (videollamada) desde el micrófono del
+ * aportador. Reusa por completo `nuevaGrabacion()`: el primer mimeType
+ * preferido ya es `audio/webm;codecs=opus`. Existe como nombre propio
+ * para dejar explícito el caso de uso en el panel de Biografía.
+ */
+export async function grabarLlamada() {
+    return nuevaGrabacion();
+}

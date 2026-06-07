@@ -648,6 +648,179 @@ export async function urlAudioBiografia(storagePath) {
     return descargarComoObjectURL('bio_audios', storagePath);
 }
 
+// =====================================================================
+// Biografía · Etapa 3 — grabar una charla (videollamada)
+// ---------------------------------------------------------------------
+// El familiar graba el audio de una charla desde su propio micrófono
+// mientras habla con el adulto mayor por un canal externo. Acá viven:
+//   - la señal al adulto mayor (push, reusando enviar-push), y
+//   - el registro de la sesión en bio_avisos_grabacion (para el resumen
+//     post-hoc y el puntito en vivo).
+// El audio entra a la MISMA cola de aprobación que el resto (origen
+// 'videollamada'); no se transcribe por IA (decisión cerrada).
+//
+// REGLA FÉRREA: cada llamada pasa el circle_id explícito; nunca se mezcla
+// material entre círculos.
+// =====================================================================
+
+const BIO_PUSH = {
+    biografia_grabacion_inicio: {
+        title: 'Pensándote',
+        body:  'Tu familia está guardando esta charla.'
+    },
+    biografia_grabacion_fin: {
+        title: 'Pensándote',
+        body:  'La charla dejó de grabarse.'
+    }
+};
+
+/**
+ * Manda una señal de grabación al adulto mayor vía `enviar-push`
+ * (target 'simple'). `tipo` viaja en el payload para que el service
+ * worker y el front del papá lo muestren de forma discreta (puntito),
+ * sin pop-up cuando la app está abierta. Best-effort: si falla, no
+ * rompe la grabación (sólo se pierde la señal en vivo).
+ */
+async function _enviarPushBio(circleId, tipo) {
+    const cfg = (typeof window !== 'undefined') ? window.PENSANDOTE_CONFIG : null;
+    if (!cfg?.SUPABASE_URL || !cfg?.SUPABASE_ANON_KEY) return;
+    const meta = BIO_PUSH[tipo];
+    if (!meta) return;
+    try {
+        const sb = await sbClient();
+        const { data: { session } } = await sb.auth.getSession();
+        if (!session?.access_token) return;
+        await fetch(`${cfg.SUPABASE_URL}/functions/v1/enviar-push`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${session.access_token}`,
+                'apikey':        cfg.SUPABASE_ANON_KEY,
+                'Content-Type':  'application/json'
+            },
+            body: JSON.stringify({
+                circle_id: circleId,
+                target:    'simple',
+                tipo,
+                title:     meta.title,
+                body:      meta.body,
+                url:       '#/v2/historias?tab=biografia'
+            })
+        });
+    } catch (err) {
+        console.warn('[push bio grabacion]', err);
+    }
+}
+
+/**
+ * Marca el inicio de una grabación de charla: inserta la fila en
+ * bio_avisos_grabacion y dispara la señal al papá. Devuelve { avisoId }.
+ */
+export async function iniciarGrabacionLlamada(circleId) {
+    if (!circleId) throw new Error('sin círculo activo');
+    const sb = await sbClient();
+    const { data: { user } } = await sb.auth.getUser();
+    if (!user) throw new Error('sin sesión');
+    const { data, error } = await sb.from('bio_avisos_grabacion')
+        .insert({ circle_id: circleId, aportador_id: user.id })
+        .select('id')
+        .single();
+    if (error) throw enriquecer('iniciarGrabacionLlamada', error);
+    _enviarPushBio(circleId, 'biografia_grabacion_inicio');
+    return { avisoId: data.id };
+}
+
+/**
+ * Cierra una grabación guardada: marca finalizado_at y apaga el puntito
+ * del papá (push 'fin'). Se usa cuando la charla SÍ se guardó.
+ */
+export async function finalizarGrabacionLlamada(avisoId, circleId) {
+    const sb = await sbClient();
+    if (avisoId) {
+        const { error } = await sb.from('bio_avisos_grabacion')
+            .update({ finalizado_at: new Date().toISOString() })
+            .eq('id', avisoId);
+        if (error) console.warn('[finalizarGrabacionLlamada]', error);
+    }
+    await _enviarPushBio(circleId, 'biografia_grabacion_fin');
+}
+
+/**
+ * Descarta una grabación: borra la fila del aviso (no cuenta como charla
+ * guardada) y apaga el puntito del papá. Se usa cuando el aportador toca
+ * "Descartar" antes de guardar.
+ */
+export async function cancelarGrabacionLlamada(avisoId, circleId) {
+    const sb = await sbClient();
+    if (avisoId) {
+        const { error } = await sb.from('bio_avisos_grabacion')
+            .delete().eq('id', avisoId);
+        if (error) console.warn('[cancelarGrabacionLlamada]', error);
+    }
+    await _enviarPushBio(circleId, 'biografia_grabacion_fin');
+}
+
+/**
+ * Sube el audio de la charla grabada al bucket bio_audios y lo encola
+ * como candidato sin transcribir (origen 'videollamada'). El aportador
+ * lo cura después en su cola, igual que un audio de WhatsApp.
+ */
+export async function subirAudioLlamadaACola(audioBlob, circleId, durSeg) {
+    const sb = await sbClient();
+    const { data: { user } } = await sb.auth.getUser();
+    if (!user) throw new Error('sin sesión');
+    const ext  = (audioBlob.type || '').includes('ogg') ? 'ogg'
+               : (audioBlob.type || '').includes('mp4') ? 'mp4' : 'webm';
+    const uuid = crypto.randomUUID();
+    const path = `${circleId}/${uuid}.${ext}`;
+
+    const { error: e1 } = await sb.storage.from('bio_audios').upload(path, audioBlob, {
+        contentType: audioBlob.type || 'audio/webm', upsert: false
+    });
+    if (e1) throw enriquecer('subir audio charla', e1);
+
+    const { error: e2 } = await sb.from('bio_aporte_cola').insert({
+        circle_id: circleId, aportador_id: user.id,
+        origen: 'videollamada', estado: 'pendiente',
+        contenido: '🎙 Audio sin transcribir', audio_path: path,
+        metadatos: {
+            es_audio: true,
+            duracion_seg: durSeg || null,
+            fecha_grabacion: new Date().toISOString()
+        }
+    });
+    if (e2) {
+        sb.storage.from('bio_audios').remove([path]).catch(() => {});
+        throw enriquecer('encolar audio charla', e2);
+    }
+}
+
+/**
+ * Avisos de grabación pendientes de ver por el adulto mayor en este
+ * círculo (visto_por_sujeto_at IS NULL). Alimenta el resumen post-hoc.
+ */
+export async function avisosGrabacionPendientes(circleId) {
+    if (!circleId) return [];
+    const sb = await sbClient();
+    const { data, error } = await sb.from('bio_avisos_grabacion')
+        .select('id, circle_id, iniciado_at, finalizado_at')
+        .eq('circle_id', circleId)
+        .is('visto_por_sujeto_at', null)
+        .order('iniciado_at', { ascending: false });
+    if (error) throw enriquecer('avisosGrabacionPendientes', error);
+    return data || [];
+}
+
+/** El adulto mayor marca como vistos los avisos de grabación. */
+export async function marcarAvisosVistos(circleId, idsAvisos) {
+    if (!Array.isArray(idsAvisos) || !idsAvisos.length) return;
+    const sb = await sbClient();
+    const { error } = await sb.from('bio_avisos_grabacion')
+        .update({ visto_por_sujeto_at: new Date().toISOString() })
+        .eq('circle_id', circleId)
+        .in('id', idsAvisos);
+    if (error) throw enriquecer('marcarAvisosVistos', error);
+}
+
 // ---------------------------------------------------------------------
 // Tutoriales (contenido editorial global — sin circle_id, RLS: select libre)
 // ---------------------------------------------------------------------
