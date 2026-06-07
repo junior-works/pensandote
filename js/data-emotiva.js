@@ -594,10 +594,11 @@ async function _decidirCola(colaId, estado) {
 export async function rechazarItem(colaId) { return _decidirCola(colaId, 'rechazado'); }
 export async function saltarItem(colaId)   { return _decidirCola(colaId, 'saltado'); }
 
-/** Transcribe bajo demanda un audio de la cola (edge bio-transcribir). */
-export async function transcribirAudioCola(colaId) {
-    return _invocarEdgeBio('bio-transcribir', { cola_id: colaId });
-}
+// Nota: NO hay transcripción automática de audio. No tenemos API de
+// speech-to-text (Charly solo tiene Anthropic, que no transcribe audio).
+// El aportador escucha el audio y escribe/dicta lo que dijo en el cliente
+// (Web Speech API), y eso se aprueba con editarYaprobarItem. La edge
+// `bio-transcribir` quedó como stub desactivado.
 
 /** Aportes aprobados de la biografía del círculo, orden cronológico. */
 export async function listarAportesBiografia(circleId) {

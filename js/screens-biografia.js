@@ -21,9 +21,10 @@ import { h, modal } from './ui.js';
 import {
     subirZipWhatsapp, subirAudioReenviado, crearAporteManual,
     listarColaPendiente, aprobarItem, rechazarItem, editarYaprobarItem,
-    saltarItem, transcribirAudioCola, listarFiltrosAportador,
-    crearFiltro, borrarFiltro
+    saltarItem, listarFiltrosAportador,
+    crearFiltro, borrarFiltro, urlAudioBiografia
 } from './data-emotiva.js';
+import { crearDictado } from './utils/dictado.js';
 
 const SUBS_VALIDAS = ['panel', 'sumar', 'cola', 'filtros'];
 
@@ -226,7 +227,8 @@ async function pintarCola($app, c) {
         $card.querySelector('.bio-rechazar')?.addEventListener('click', () => onDecidir($app, c, it, 'rechazar'));
         $card.querySelector('.bio-saltar')?.addEventListener('click', () => onDecidir($app, c, it, 'saltar'));
         $card.querySelector('.bio-editar')?.addEventListener('click', () => onEditar($app, c, it));
-        $card.querySelector('.bio-transcribir')?.addEventListener('click', () => onTranscribir($app, c, it, $card));
+        $card.querySelector('.bio-escuchar')?.addEventListener('click', () => onEscuchar(it, $card));
+        $card.querySelector('.bio-escribir')?.addEventListener('click', () => onEscribirAudio($app, c, it));
     });
 }
 
@@ -234,20 +236,33 @@ function tarjetaCola(it) {
     const meta   = it.metadatos || {};
     const autor  = meta.autor_original ? `<span class="muted">— ${h(meta.autor_original)}</span>` : '';
     const fecha  = meta.fecha_chat ? `<div class="muted" style="font-size:0.82em;">${h(meta.fecha_chat)}</div>` : '';
-    const sinTranscribir = !!it.audio_path && meta.transcripto !== true;
+    // Audio sin texto: NO se transcribe por IA (no hay API de speech-to-text).
+    // El aportador escucha y escribe/dicta lo que dijo.
+    const audioPendiente = !!it.audio_path && meta.transcripto !== true;
 
-    const cuerpo = sinTranscribir
-        ? `<button class="btn btn--mini bio-transcribir">🎙 Transcribir audio</button>
-           <p class="muted" style="font-size:0.85em; margin-top:0.4rem;">
-               Tocá para pasar el audio a texto y poder revisarlo.</p>`
-        : `<p style="line-height:1.5; white-space:pre-wrap;">${h(it.contenido)}</p>`;
+    if (audioPendiente) {
+        return `
+            <div class="card stack" data-cola="${it.id}" style="margin-bottom:0.8rem;">
+                ${fecha}
+                <p class="muted" style="margin:0;">🎙 Nota de voz ${autor}</p>
+                <p class="muted" style="font-size:0.85em; margin:0;">
+                    Escuchala y escribí (o dictá) lo que dijo para sumarlo a la biografía.</p>
+                <div class="bio-audio-slot"></div>
+                <div class="bio-cola-acciones" style="display:flex; flex-wrap:wrap; gap:0.4rem;">
+                    <button class="btn btn--mini bio-escuchar">🎧 Escuchar audio</button>
+                    <button class="btn btn--mini bio-escribir">✍️ Escribir lo que dijo</button>
+                    <button class="btn btn--mini bio-rechazar">❌ Rechazar</button>
+                    <button class="btn btn--mini bio-saltar">⏭️ Saltar</button>
+                </div>
+            </div>`;
+    }
 
     return `
         <div class="card stack" data-cola="${it.id}" style="margin-bottom:0.8rem;">
             ${fecha}
-            <div>${cuerpo} ${autor}</div>
+            <div><p style="line-height:1.5; white-space:pre-wrap; margin:0;">${h(it.contenido)}</p> ${autor}</div>
             <div class="bio-cola-acciones" style="display:flex; flex-wrap:wrap; gap:0.4rem;">
-                <button class="btn btn--mini bio-aprobar"${sinTranscribir ? ' disabled title="Transcribí o editá primero"' : ''}>✅ Aprobar</button>
+                <button class="btn btn--mini bio-aprobar">✅ Aprobar</button>
                 <button class="btn btn--mini bio-editar">✏️ Editar y aprobar</button>
                 <button class="btn btn--mini bio-rechazar">❌ Rechazar</button>
                 <button class="btn btn--mini bio-saltar">⏭️ Saltar</button>
@@ -274,27 +289,22 @@ async function onDecidir($app, c, it, accion) {
     }
 }
 
+// Editar y aprobar un ítem de TEXTO (mensajes de chat / notas).
 async function onEditar($app, c, it) {
-    // Audio sin transcribir: arrancamos con textarea vacío (transcripción
-    // manual como fallback si Whisper falla o no está disponible).
-    const sinTranscribir = !!it.audio_path && (it.metadatos || {}).transcripto !== true;
-    const inicial = sinTranscribir ? '' : (it.contenido || '');
     // modal() construye el DOM de forma síncrona y lo elimina al resolver,
     // así que capturamos el texto en vivo ANTES de que se cierre.
     const promesa = modal({
         titulo: '✏️ Editar y aprobar',
         cuerpo: `
-            <p class="muted">${sinTranscribir
-                ? 'Escribí lo que dice el audio, como querés que quede en la biografía.'
-                : 'Corregí el texto como querés que quede en la biografía.'}</p>
-            <textarea id="bio-edit-txt" class="input-real" rows="5">${h(inicial)}</textarea>`,
+            <p class="muted">Corregí el texto como querés que quede en la biografía.</p>
+            <textarea id="bio-edit-txt" class="input-real" rows="5">${h(it.contenido || '')}</textarea>`,
         acciones: [
             { label: 'Cancelar' },
             { label: 'Aprobar', clase: 'btn--pense btn--full', value: 'ok' }
         ],
         tono: 'pense'
     });
-    let live = inicial;
+    let live = it.contenido || '';
     const $txt = document.getElementById('bio-edit-txt');
     if ($txt) { live = $txt.value; $txt.addEventListener('input', () => { live = $txt.value; }); }
     const nuevo = await promesa;
@@ -309,15 +319,71 @@ async function onEditar($app, c, it) {
     }
 }
 
-async function onTranscribir($app, c, it, $card) {
-    const $btn = $card.querySelector('.bio-transcribir');
-    if ($btn) { $btn.disabled = true; $btn.textContent = '⏳ Transcribiendo…'; }
+// 🎧 Escuchar: muestra el reproductor de audio en línea, dentro de la tarjeta.
+async function onEscuchar(it, $card) {
+    const $slot = $card.querySelector('.bio-audio-slot');
+    if (!$slot || $slot.dataset.loaded) return;
+    $slot.innerHTML = `<p class="muted" style="font-size:0.85em;">Cargando audio…</p>`;
     try {
-        await transcribirAudioCola(it.id);
+        const url = await urlAudioBiografia(it.audio_path);
+        $slot.innerHTML = `<audio controls preload="none" src="${url}" style="width:100%;"></audio>`;
+        $slot.dataset.loaded = '1';
+    } catch (err) {
+        $slot.innerHTML = `<p class="muted" style="font-size:0.85em;">No pude cargar el audio: ${h(err?.message || err)}</p>`;
+    }
+}
+
+// ✍️ Escribir lo que dijo: el aportador escucha y escribe (o dicta con la
+// Web Speech API) lo que dijo. Eso pasa a ser el contenido del aporte.
+async function onEscribirAudio($app, c, it) {
+    let audioUrl = null;
+    try { audioUrl = await urlAudioBiografia(it.audio_path); } catch (_) { /* seguimos sin player */ }
+
+    const promesa = modal({
+        titulo: '✍️ Escribir lo que dijo',
+        cuerpo: `
+            ${audioUrl
+                ? `<audio controls preload="none" src="${audioUrl}" style="width:100%; margin-bottom:0.6rem;"></audio>`
+                : `<p class="muted">No pude cargar el audio, pero podés escribir igual.</p>`}
+            <p class="muted">Escuchá y escribí lo que dijo, como querés que quede en la biografía.</p>
+            <textarea id="bio-edit-txt" class="input-real" rows="5" placeholder="Lo que dijo…"></textarea>
+            <div style="display:flex; align-items:center; gap:0.5rem; margin-top:0.4rem;">
+                <button class="btn btn--mini" id="bio-dictar" type="button">🎤 Dictar</button>
+                <span id="bio-dictar-estado" class="muted" style="font-size:0.85em;"></span>
+            </div>`,
+        acciones: [
+            { label: 'Cancelar' },
+            { label: 'Guardar y aprobar', clase: 'btn--pense btn--full', value: 'ok' }
+        ],
+        tono: 'pense'
+    });
+
+    // El DOM ya existe (modal síncrono). Montamos el dictado por voz: escribe
+    // directo en el textarea (no dispara 'input'), así que el valor final lo
+    // leemos del .value al cerrar.
+    const $txt = document.getElementById('bio-edit-txt');
+    const $mic = document.getElementById('bio-dictar');
+    const $est = document.getElementById('bio-dictar-estado');
+    let dict = null;
+    if ($txt && $mic) {
+        dict = crearDictado({
+            $textarea: $txt, $btnMic: $mic, $estado: $est,
+            labels: { hablar: '🎤 Dictar', terminar: '⏹ Listo' }
+        });
+    }
+
+    const res = await promesa;
+    const texto = ($txt?.value || '').trim();   // $txt sigue accesible (ref retenida)
+    if (dict) dict.destroy();
+    if (audioUrl) URL.revokeObjectURL(audioUrl);
+
+    if (res !== 'ok') return;
+    if (!texto) return avisar('Texto vacío', '<p>Escribí (o dictá) lo que dijo antes de aprobar.</p>', 'error');
+    try {
+        await editarYaprobarItem(it.id, texto);
         await pintarCola($app, c);
     } catch (err) {
-        if ($btn) { $btn.disabled = false; $btn.textContent = '🎙 Transcribir audio'; }
-        await avisar('No pude transcribir', `<pre>${h(err?.message || err)}</pre>`, 'error');
+        await avisar('No pude aprobar', `<pre>${h(err?.message || err)}</pre>`, 'error');
     }
 }
 
