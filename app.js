@@ -82,10 +82,119 @@ function renderRoute(ruta) {
     // cierra sesión, no sólo cuando el flow entra a renderRouteReal.
     actualizarShellAdmin();
 
+    // Arranque en frío genuino (config real, sin sesión, sin invitación,
+    // sin callback de magic-link y sin que el user haya elegido el demo):
+    // mostramos la bienvenida con "Ingresar" / "Ver demo" en vez de caer
+    // mudo al demo (Roberto) sin salida.
+    if (enFrioGenuino(ruta)) {
+        desmontarSalidaDemo();
+        return renderBienvenida($app);
+    }
+
     if (state.modo === 'real') {
+        desmontarSalidaDemo();
         return renderRouteReal(ruta);
     }
+
+    // Modo demo elegido a propósito. Bajo config real ofrecemos una
+    // salida visible para que el usuario no quede encerrado en el demo.
+    if (configEsReal()) montarSalidaDemo();
+    else desmontarSalidaDemo();
     return renderRouteDemo(ruta);
+}
+
+// ---------------------------------------------------------------------
+// Bienvenida en frío (sin sesión)
+// ---------------------------------------------------------------------
+
+/**
+ * ¿Estamos en un arranque en frío genuino? True sólo cuando hay backend
+ * real configurado, NO hay sesión (modo sigue en el default 'demo'), el
+ * user no eligió el demo, no es un link de invitación y la URL no trae un
+ * callback de magic-link en curso. En cualquiera de esos casos NO se
+ * intercepta: el flujo de siempre sigue (real, demo elegido, invitación o
+ * procesamiento de sesión).
+ */
+function enFrioGenuino(ruta) {
+    if (!configEsReal()) return false;          // sin backend no hay login → demo de siempre
+    if (state.modo === 'real') return false;    // hay sesión, o el user pidió ingresar (login)
+    if (state.demoElegido) return false;        // el user eligió "Ver demo"
+    if (ruta && ruta.name === 'invitacion') return false;  // link de invitación
+    if (hayCallbackMagicLink()) return false;   // volviendo del email: dejar procesar la sesión
+    return true;
+}
+
+/**
+ * Detecta el callback del magic link en la URL (hash o query). Supabase
+ * usa PKCE (`?code=…`) pero por las dudas también miramos el flujo
+ * implícito (`#access_token=…` / `refresh_token=…`). Si hay callback en
+ * curso NO mostramos la bienvenida — bootstrap ya espera a que la sesión
+ * se procese antes del primer render, esto es defensa extra.
+ */
+function hayCallbackMagicLink() {
+    const hash   = window.location.hash || '';
+    const search = window.location.search || '';
+    return /[#?&](access_token|refresh_token)=/.test(hash)
+        || /[?&]code=/.test(search)
+        || /[?&]code=/.test(hash);
+}
+
+/**
+ * Pantalla de bienvenida en frío. Dos acciones grandes:
+ *   - "Ingresar"  → modo real → renderRouteReal dibuja el login existente
+ *                   (Real.renderLogin, flujo magic-link). No reimplementa.
+ *   - "Ver demo"  → marca demoElegido y cae al demo (Roberto) a propósito.
+ */
+function renderBienvenida($app) {
+    $app.innerHTML = `
+        <section class="card stack" style="margin-top: 3rem;">
+            <h1 class="t-emocional center">Pensándote</h1>
+            <p class="center muted">La app para estar cerca de los que están lejos.</p>
+
+            <button class="btn btn--xl btn--inicio btn--full" id="btn-bienvenida-ingresar" type="button">
+                Ingresar
+            </button>
+
+            <p class="center muted" style="margin:0.4rem 0 0;">
+                ¿Todavía no tenés cuenta o sólo querés mirar cómo es?
+            </p>
+            <button class="btn btn--xl btn--familia btn--full" id="btn-bienvenida-demo" type="button">
+                Ver demo
+            </button>
+        </section>
+    `;
+    document.getElementById('btn-bienvenida-ingresar')
+        .addEventListener('click', () => { setModo('real'); });
+    document.getElementById('btn-bienvenida-demo')
+        .addEventListener('click', () => { setModo('demo'); });
+    window.scrollTo({ top: 0 });
+}
+
+// --- Banda "salida del demo" (chrome global, fuera de #app) -----------
+// Vive antes de #app (mismo patrón que el banner de preview) así
+// sobrevive a los innerHTML del router. Sólo bajo config real: en dev sin
+// config el demo es el modo normal y el dev-panel ya alterna.
+
+function montarSalidaDemo() {
+    let b = document.getElementById('demo-banner');
+    if (!b) {
+        b = document.createElement('div');
+        b.id = 'demo-banner';
+        b.style.cssText = 'position:sticky;top:0;z-index:100;background:#6CA0A0;color:#fff;padding:0.5rem 1rem;box-shadow:0 2px 8px rgba(0,0,0,0.18);';
+        document.body.insertBefore(b, document.getElementById('app'));
+    }
+    b.innerHTML = `
+        <div style="max-width:760px;margin:0 auto;display:flex;align-items:center;gap:0.7rem;">
+            <span style="font-size:1.2rem;" aria-hidden="true">👀</span>
+            <span style="flex:1;font-size:0.95rem;">Estás viendo una demostración.</span>
+            <button class="btn btn--mini" id="btn-salir-demo" type="button">Ingresar con mi cuenta</button>
+        </div>
+    `;
+    b.querySelector('#btn-salir-demo').addEventListener('click', () => { setModo('real'); });
+}
+
+function desmontarSalidaDemo() {
+    document.getElementById('demo-banner')?.remove();
 }
 
 function renderRoutePreview(ruta) {

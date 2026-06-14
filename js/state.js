@@ -21,6 +21,14 @@ export const state = {
     // --- Modo ---
     modo: 'demo',                  // 'demo' | 'real'
 
+    // --- Bienvenida en frío ---
+    // En arranque genuino (config real, sin sesión, sin invitación ni
+    // callback de magic-link) app.js muestra la pantalla de bienvenida en
+    // vez de caer mudo al demo. Este flag marca que el usuario eligió
+    // "Ver demo" a propósito; lo setea/limpia setModo() (demo→true,
+    // real→false) para que el demo deje de ser el default silencioso.
+    demoElegido: false,
+
     // --- Modo demo ---
     circulo: CIRCULO,
     miembros: MIEMBROS,
@@ -63,6 +71,10 @@ export function setMiembroActivo(id) {
 export function setModo(modo) {
     if (modo !== 'demo' && modo !== 'real') return;
     state.modo = modo;
+    // Pasar a demo es siempre una elección explícita (botón "Ver demo" /
+    // dev-panel); pasar a real la cancela. Así app.js distingue "frío
+    // genuino" (mostrar bienvenida) de "el user quiso ver el demo".
+    state.demoElegido = (modo === 'demo');
     _emit();
 }
 
