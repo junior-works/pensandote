@@ -24,14 +24,14 @@ import { nuevaGrabacion } from './audio.js';
 import { abrirModalInvitacion, pedirTexto, recargarSesion } from './screens-real.js';
 import {
     enviarPensamiento, pensamientosRecibidos,
-    ultimaFotoDia, subirFotoDia,
+    ultimaFotoDia, ultimasFotosDia, subirFotoDia,
     listarFechas, crearFecha, borrarFecha,
     listarContactosUltimo, marcarContacto,
     listarHistorias, urlHistoriaAudio, grabarHistoria,
     listarInteracciones, toggleFavorita, repreguntarTexto, repreguntarAudio,
     urlInteraccionAudio,
     listarPuntas, crearPunta, descartarPunta,
-    ultimosCheckinsPorMiembro,
+    ultimosCheckinsPorMiembro, solicitarCheckin,
     estadoAvisos, activarAvisos, desactivarAvisos, probarAviso,
     actividadReciente, listarEstudios,
     listarMedicamentos, tomasDeHoy
@@ -80,6 +80,7 @@ let _miembrosCache = null;
 // revocamos antes de poner una nueva, así no leakeamos memoria si el
 // usuario recarga / sube otra foto / cambia de pantalla.
 let _fotoUrlActiva = null;
+let _fotoUrlsMuro = [];
 
 export async function renderHogar($app) {
     // INICIO — "pulso del día" del familiar (solo dashboard; en modo
@@ -234,14 +235,37 @@ export async function renderFamilia($app) {
         </section>
 
         <section class="card stack">
-            <h2>📷 Foto del día</h2>
+            <h2>📷 Muro familiar</h2>
+            <p class="muted">Las fotos que comparten quedan acá para las personas que elijan al subirlas.</p>
             <div id="sec-foto">Cargando…</div>
             ${puedeEscribir ? `
+                <fieldset class="foto-privacidad">
+                    <legend>¿Quién puede ver esta foto?</legend>
+                    <label class="foto-privacidad__opcion">
+                        <input type="radio" name="foto-visibilidad" value="circulo" checked>
+                        <span><strong>Todo el círculo</strong><small>Adultos y tutores</small></span>
+                    </label>
+                    <label class="foto-privacidad__opcion">
+                        <input type="radio" name="foto-visibilidad" value="personas">
+                        <span><strong>Elegir personas</strong><small>Sólo quienes marques</small></span>
+                    </label>
+                    <div class="foto-destinatarios" id="foto-destinatarios" hidden>
+                        ${_miembrosCache.filter(x => x.user_id !== u.id).map(x => {
+                            const nombre = x.user?.nombre_completo || x.parentesco || 'Familiar';
+                            return `
+                                <label>
+                                    <input type="checkbox" value="${h(x.user_id)}" data-foto-destinatario>
+                                    <span>${h(nombre)} <small>${h(x.parentesco || '')}</small></span>
+                                </label>
+                            `;
+                        }).join('') || '<p class="muted">Todavía no hay otras personas en el círculo.</p>'}
+                    </div>
+                </fieldset>
+                <input id="foto-epigrafe" class="input-real" placeholder="Contá algo sobre la foto (opcional)">
                 <label class="btn btn--inicio" style="cursor:pointer;">
-                    📤 Subir foto nueva
+                    📤 Elegir y compartir foto
                     <input id="foto-input" type="file" accept="image/*" style="display:none">
                 </label>
-                <input id="foto-epigrafe" class="input-real" placeholder="Epígrafe (opcional)">
             ` : ''}
         </section>
 
@@ -331,6 +355,12 @@ export async function renderFamilia($app) {
     // --- Foto + Calendario (escritura) ---
     if (puedeEscribir) {
         $app.querySelector('#foto-input').addEventListener('change', (e) => onSubirFoto(c, e, $app));
+        const $destinatarios = $app.querySelector('#foto-destinatarios');
+        $app.querySelectorAll('input[name="foto-visibilidad"]').forEach(radio => {
+            radio.addEventListener('change', () => {
+                $destinatarios.hidden = radio.value !== 'personas' || !radio.checked;
+            });
+        });
         $app.querySelector('#form-fecha').addEventListener('submit', (e) => onCrearFecha(c, e, $app));
 
         const $tipo  = $app.querySelector('#fecha-tipo');
@@ -380,7 +410,7 @@ export async function renderFamilia($app) {
         actualizarSeccionPuntas(c, u, $app);
     }
 
-    cargarFoto(c, $app.querySelector('#sec-foto'));
+    cargarMuroFotos(c, $app.querySelector('#sec-foto'));
     cargarFechas(c, puedeEscribir, $app.querySelector('#sec-fechas'));
     cargarContactosUltimo(c, u, $app.querySelector('#sec-contactos'));
     cargarHistorias(c, m, u, $app.querySelector('#sec-historias'));
@@ -929,30 +959,44 @@ async function cargarPensRecibidos(c, u, $cont) {
 // =====================================================================
 // Foto del día
 // =====================================================================
-async function cargarFoto(c, $cont) {
+async function cargarMuroFotos(c, $cont) {
     try {
-        const f = await ultimaFotoDia(c.id);
-        // La foto anterior (si la había) deja de ser referenciada por
-        // el DOM en cuanto reemplazamos innerHTML; revocamos el blob.
+        const fotos = await ultimasFotosDia(c.id, 60);
         if (_fotoUrlActiva) {
             URL.revokeObjectURL(_fotoUrlActiva);
             _fotoUrlActiva = null;
         }
-        if (!f) {
-            $cont.innerHTML = `<p class="muted center">Todavía no hay foto del día. Cuando alguien suba una, aparece acá grande.</p>`;
+        _fotoUrlsMuro.forEach(url => URL.revokeObjectURL(url));
+        _fotoUrlsMuro = fotos.map(f => f.url).filter(Boolean);
+        if (!fotos.length) {
+            $cont.innerHTML = `<p class="muted center">Todavía no hay fotos en el muro. La primera que compartan va a aparecer acá.</p>`;
             return;
         }
-        _fotoUrlActiva = f.url;  // blob:... URL — revocar en el próximo render
         $cont.innerHTML = `
-            <figure class="foto-carousel">
-                <img class="foto-carousel__img" src="${h(f.url)}" alt="${h(f.epigrafe || 'Foto del día')}">
-                ${f.epigrafe ? `<figcaption><strong class="t-emocional">${h(f.epigrafe)}</strong></figcaption>` : ''}
-                <small class="muted">${new Date(f.created_at).toLocaleString('es-AR')}</small>
-            </figure>
+            <div class="muro-fotos">
+                ${fotos.map(f => {
+                    const autor = (_miembrosCache || []).find(m => m.user_id === f.subida_por);
+                    const nombre = autor?.user?.nombre_completo || autor?.parentesco || 'Un familiar';
+                    const cantidad = Array.isArray(f.foto_visibilidad) ? f.foto_visibilidad.length : 0;
+                    const alcance = f.visibilidad === 'personas'
+                        ? `Compartida con ${cantidad || 'algunas'} ${cantidad === 1 ? 'persona' : 'personas'}`
+                        : 'Visible para todo el círculo';
+                    return `
+                        <figure class="muro-foto">
+                            <img src="${h(f.url)}" alt="${h(f.epigrafe || 'Foto familiar')}" loading="lazy">
+                            <figcaption>
+                                ${f.epigrafe ? `<strong>${h(f.epigrafe)}</strong>` : ''}
+                                <span>${h(nombre)} · ${h(new Date(f.created_at).toLocaleDateString('es-AR'))}</span>
+                                <small>${f.visibilidad === 'personas' ? '🔒' : '👨‍👩‍👧'} ${h(alcance)}</small>
+                            </figcaption>
+                        </figure>
+                    `;
+                }).join('')}
+            </div>
         `;
     } catch (err) {
-        console.error('[cargarFoto]', err, err?.detalle);
-        renderErrorEstructurado($cont, err, { titulo: 'No pude cargar la foto del día' });
+        console.error('[cargarMuroFotos]', err, err?.detalle);
+        renderErrorEstructurado($cont, err, { titulo: 'No pude cargar el muro familiar' });
     }
 }
 
@@ -960,13 +1004,28 @@ async function onSubirFoto(c, ev, $app) {
     const file = ev.target.files?.[0];
     if (!file) return;
     const epigrafe = $app.querySelector('#foto-epigrafe')?.value.trim() || null;
+    const visibilidad = $app.querySelector('input[name="foto-visibilidad"]:checked')?.value || 'circulo';
+    const destinatarios = [...$app.querySelectorAll('[data-foto-destinatario]:checked')]
+        .map(input => input.value);
+    if (visibilidad === 'personas' && !destinatarios.length) {
+        ev.target.value = '';
+        await modal({
+            titulo: 'Elegí quién puede verla',
+            cuerpo: '<p>Marcá al menos una persona antes de compartir la foto.</p>',
+            acciones: [{ label: 'Entendido', clase: 'btn--inicio', value: 'ok' }]
+        });
+        return;
+    }
     const $cont = $app.querySelector('#sec-foto');
     $cont.innerHTML = '<p class="muted">Subiendo…</p>';
     try {
-        await subirFotoDia({ circleId: c.id, file, epigrafe });
+        await subirFotoDia({ circleId: c.id, file, epigrafe, visibilidad, destinatarios });
         $app.querySelector('#foto-epigrafe').value = '';
+        $app.querySelector('input[name="foto-visibilidad"][value="circulo"]').checked = true;
+        $app.querySelector('#foto-destinatarios').hidden = true;
+        $app.querySelectorAll('[data-foto-destinatario]').forEach(input => { input.checked = false; });
         ev.target.value = '';
-        cargarFoto(c, $cont);
+        cargarMuroFotos(c, $cont);
     } catch (err) {
         console.error('[onSubirFoto]', err, err?.detalle);
         renderErrorEstructurado($cont, err, { titulo: 'No pude subir la foto' });
@@ -1657,24 +1716,43 @@ async function cargarCheckinsDelDia(c, $cont) {
                 const par   = (m.parentesco || 'Familiar');
                 const row   = porUser[m.user_id];
                 const ok    = row && row.fecha === hoyAR;
-                const hora  = ok ? new Date(row.created_at).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' }) : null;
+                const hora  = ok ? new Date(row.respondida_at || row.created_at).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' }) : null;
+                const respuesta = ok ? String(row.respuesta || 'Estoy bien').trim() : '';
                 return `
                     <li class="checkin-estado-item ${ok ? 'is-ok' : 'is-pendiente'}">
                         <span class="checkin-estado-item__icono">${ok ? '✅' : '⏳'}</span>
                         <div>
                             <strong>${h(par)}</strong>
                             <small>${ok
-                                ? `marcó que está bien hoy a las ${h(hora)}`
-                                : 'todavía no marcó hoy'}</small>
+                                ? `respondió “${h(respuesta)}” hoy a las ${h(hora)}`
+                                : 'todavía no respondió hoy'}</small>
+                            <button class="btn btn--mini btn--inicio" type="button"
+                                    data-pedir-checkin="${h(m.user_id)}">
+                                ${ok ? 'Preguntar de nuevo con Nube' : 'Preguntarle con Nube'}
+                            </button>
                         </div>
                     </li>
                 `;
             }).join('')}
         </ul>
         <p class="muted" style="font-size:0.85em; margin:0;">
-            Se actualiza cuando tu familiar abre la app y toca "Estoy bien".
+            Nube se lo pregunta una vez al día y te acerca su respuesta.
         </p>
     `;
+    $cont.querySelectorAll('[data-pedir-checkin]').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            btn.disabled = true;
+            btn.textContent = 'Avisando a Nube…';
+            try {
+                await solicitarCheckin(c.id, btn.dataset.pedirCheckin);
+                btn.textContent = 'Nube se lo preguntará';
+            } catch (err) {
+                console.error('[solicitar checkin]', err);
+                btn.disabled = false;
+                btn.textContent = 'Volver a intentar';
+            }
+        });
+    });
 }
 
 // =====================================================================

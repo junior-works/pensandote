@@ -14,19 +14,20 @@ import {
 } from './ui.js';
 import {
     preguntarComoHagoIA, listarTutoriales, obtenerTutorialPorSlug,
-    marcarCheckin, checkinDeHoy, enviarPensamiento,
+    enviarPensamiento,
     marcarToma,
     activarAvisos, desactivarAvisos, estadoAvisos
 } from './data-emotiva.js';
 import {
     getContactos, getMedico, getTutoriales, getFotoDelDia, getFotosDia,
     getMiembroVisto, getMiembrosReales, getPensamientosRecibidos,
-    getAccesos, getMedicamentos, getTomasHoy, getCheckinHoyPreview,
+    getAccesos, getMedicamentos, getTomasHoy,
     esPreview, avisarPreview
 } from './preview.js';
 import { dispararPanico } from './utils/panico.js';
 import { crearDictado } from './utils/dictado.js';
 import { iconoContacto } from './utils/genero.js';
+import { montarNubeInicio } from './nube-asistente.js';
 
 // =====================================================================
 // INICIO
@@ -51,38 +52,12 @@ export async function renderInicio($app) {
         : null;
 
     $app.innerHTML = `
-        ${fotos.length ? `
-            <section class="galeria-fotos foto-cabecera">
-                <div class="galeria__track" id="galeria-track">
-                    ${fotos.map((f, i) => `
-                        <figure class="galeria__slide" data-idx="${i}">
-                            <img class="galeria__img" src="${h(f.url)}" alt="${h(f.epigrafe || 'Foto')}">
-                            ${f.epigrafe ? `<figcaption class="t-emocional">${h(f.epigrafe)}</figcaption>` : ''}
-                            ${puedeCorazonear(f, yo.id) ? `
-                                <button class="foto-corazon" data-corazon="${i}"
-                                        aria-label="Pensé en vos">🤍</button>
-                            ` : ''}
-                        </figure>
-                    `).join('')}
-                </div>
-                ${fotos.length > 1 ? `
-                    <div class="galeria__dots" id="galeria-dots">
-                        ${fotos.map((_, i) => `<span class="galeria__dot${i === 0 ? ' is-active' : ''}"></span>`).join('')}
-                    </div>
-                ` : ''}
-            </section>
-        ` : `
-            <article class="foto-del-dia foto-del-dia--placeholder foto-cabecera">
-                <div class="foto-del-dia__cuerpo">
-                    <span class="foto-del-dia__emoji">📷</span>
-                    <p>Acá vas a ver las fotos del día que te manda tu familia.</p>
-                </div>
-            </article>
-        `}
-
-        <header class="simple-header simple-header--abajo-foto">
-            <h1 class="simple-saludo">${horaSaludo},<br>${h(yo.nombre_corto)}</h1>
-            <p class="simple-fecha">${formatearFechaLarga(new Date())}</p>
+        <header class="nube-home-header">
+            <div>
+                <p class="nube-home-header__brand">♥ Pensándote</p>
+                <h1 class="nube-home-header__saludo">${horaSaludo}, ${h(yo.nombre_corto)}</h1>
+                <p class="simple-fecha">${formatearFechaLarga(new Date())}</p>
+            </div>
         </header>
 
         ${reciente ? `
@@ -92,12 +67,34 @@ export async function renderInicio($app) {
             </p>
         ` : ''}
 
-        <section class="checkin-card" id="checkin-card">
-            <p class="checkin-card__pregunta">¿Cómo estás hoy?</p>
-            <button class="btn btn--xl btn--familia btn--full checkin-card__btn"
-                    id="btn-checkin">
-                👍 Estoy bien
-            </button>
+        <section class="nube-home" aria-label="Nube, tu asistente">
+            <div class="nube-avatar" id="nube-rig" data-state="idle" role="img"
+                 aria-label="Nube, tu asistente de Pensándote">
+                <div class="nube-avatar__shadow" aria-hidden="true"></div>
+                <div class="nube-avatar__body">
+                    <div class="nube-avatar__sprite" aria-hidden="true"></div>
+                    <div class="nube-avatar__rasgo nube-avatar__ojos" aria-hidden="true"></div>
+                    <div class="nube-avatar__rasgo nube-avatar__boca nube-avatar__boca--a" aria-hidden="true"></div>
+                    <div class="nube-avatar__rasgo nube-avatar__boca nube-avatar__boca--b" aria-hidden="true"></div>
+                </div>
+            </div>
+
+            <p class="nube-bubble" id="nube-bubble" aria-live="polite">¿En qué te ayudo?</p>
+            <p class="nube-estado" id="nube-estado" aria-live="polite"></p>
+
+            <button class="nube-mic" id="nube-mic" type="button">🎤 HABLAR</button>
+
+            <div class="nube-escribir">
+                <label class="sr-only" for="nube-texto">También podés escribir</label>
+                <textarea id="nube-texto" rows="1"
+                          placeholder="También podés escribir"></textarea>
+                <button id="nube-enviar" type="button" disabled aria-label="Enviar pregunta">➜</button>
+            </div>
+            <p class="nube-capacidades">
+                Podés preguntarme sobre PAMI, pedirme que te recuerde algo
+                o que te explique cómo hacer cosas.
+            </p>
+            <div class="nube-respuesta" id="nube-respuesta"></div>
         </section>
 
         ${(state.modo === 'real' && !esPreview())
@@ -129,28 +126,56 @@ export async function renderInicio($app) {
             `;
         })()}
 
-        <nav class="simple-grid" aria-label="Secciones principales">
-            <button class="tarjeton tarjeton--emergencia"  data-go="#/emergencias">
-                <span class="tarjeton__icono">🚨</span>
-                <span class="tarjeton__label">Emergencias</span>
+        <nav class="nube-atajos" aria-label="Ayudas rápidas">
+            <button class="nube-atajo nube-atajo--familia" data-go="#/familia">
+                <span class="nube-atajo__icono" aria-hidden="true">👨‍👩‍👧</span>
+                <span>Llamar a<br>mi familia</span>
             </button>
-            <button class="tarjeton tarjeton--familia"     data-go="#/familia">
-                <span class="tarjeton__icono">👨‍👩‍👧</span>
-                <span class="tarjeton__label">Familia</span>
+            <button class="nube-atajo nube-atajo--remedios" data-go="#/remedios">
+                <span class="nube-atajo__icono" aria-hidden="true">💊</span>
+                <span>Mis<br>remedios</span>
             </button>
-            <button class="tarjeton tarjeton--medico"      data-go="#/salud">
-                <span class="tarjeton__icono">💊</span>
-                <span class="tarjeton__label">Salud</span>
-            </button>
-            <button class="tarjeton tarjeton--tutoriales"  data-go="#/como-hago">
-                <span class="tarjeton__icono">💡</span>
-                <span class="tarjeton__label">Cómo hago…</span>
-            </button>
-            <button class="tarjeton tarjeton--familia"     data-go="#/haceme-acordar">
-                <span class="tarjeton__icono">✏️</span>
-                <span class="tarjeton__label">Hacéme acordar</span>
+            <button class="nube-atajo nube-atajo--recordar" data-go="#/estudios">
+                <span class="nube-atajo__icono" aria-hidden="true">📄</span>
+                <span>Mis<br>estudios</span>
             </button>
         </nav>
+
+        <button class="nube-emergencia" data-go="#/emergencias">
+            <span aria-hidden="true">☎</span> Necesito ayuda
+        </button>
+
+        <section class="nube-hoy" aria-label="Información de hoy">
+            <h2>Hoy</h2>
+            ${fotos.length ? `
+                <section class="galeria-fotos foto-cabecera">
+                    <div class="galeria__track" id="galeria-track">
+                        ${fotos.map((f, i) => `
+                            <figure class="galeria__slide" data-idx="${i}">
+                                <img class="galeria__img" src="${h(f.url)}" alt="${h(f.epigrafe || 'Foto')}">
+                                ${f.epigrafe ? `<figcaption class="t-emocional">${h(f.epigrafe)}</figcaption>` : ''}
+                                ${puedeCorazonear(f, yo.id) ? `
+                                    <button class="foto-corazon" data-corazon="${i}"
+                                            aria-label="Pensé en vos">🤍</button>
+                                ` : ''}
+                            </figure>
+                        `).join('')}
+                    </div>
+                    ${fotos.length > 1 ? `
+                        <div class="galeria__dots" id="galeria-dots">
+                            ${fotos.map((_, i) => `<span class="galeria__dot${i === 0 ? ' is-active' : ''}"></span>`).join('')}
+                        </div>
+                    ` : ''}
+                </section>
+            ` : `
+                <article class="foto-del-dia foto-del-dia--placeholder foto-cabecera">
+                    <div class="foto-del-dia__cuerpo">
+                        <span class="foto-del-dia__emoji">📷</span>
+                        <p>Acá vas a ver las fotos que te manda tu familia.</p>
+                    </div>
+                </article>
+            `}
+        </section>
 
         ${(() => {
             // En el inicio sólo van los accesos categoría 'general'.
@@ -168,19 +193,18 @@ export async function renderInicio($app) {
             `;
         })()}
 
-        <div class="simple-extras">
-            <button class="btn btn--xl btn--pense btn--full" data-go="#/v2/historias">
-                📖 Historias
-            </button>
-        </div>
+        <nav class="nube-mas" aria-label="Más opciones">
+            <button class="btn btn--xl btn--medico" data-go="#/salud">🩺 Salud</button>
+            <button class="btn btn--xl btn--pense" data-go="#/v2/historias">📖 Historias</button>
+        </nav>
     `;
     wireNav($app);
     wireAccesos($app);
     wireGaleria($app, fotos);
     wireCorazones($app.querySelectorAll('.galeria__slide .foto-corazon'), fotos);
-    wireCheckin($app);
     wireRemediosAviso($app);
     wireAvisosSimple($app);
+    montarNubeInicio($app);
 }
 
 // =====================================================================
@@ -390,72 +414,6 @@ function wireCorazones($botones, fotos) {
                 mostrarToast('No pude avisarle, probá de nuevo');
             }
         });
-    });
-}
-
-/**
- * Check-in "estoy bien": muta a estado hecho al tocarlo y también
- * al cargar la pantalla si ya marcó hoy.
- */
-function wireCheckin($app) {
-    const $card = $app.querySelector('#checkin-card');
-    const $btn  = $app.querySelector('#btn-checkin');
-    if (!$card || !$btn) return;
-
-    function pintarHecho(creadoEn) {
-        const hora = creadoEn
-            ? new Date(creadoEn).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })
-            : 'recién';
-        $card.innerHTML = `
-            <p class="checkin-card__pregunta">¿Cómo estás hoy?</p>
-            <div class="checkin-card__hecho" aria-live="polite">
-                ✓ Avisaste que hoy estás bien
-                <small>${h(hora)}</small>
-            </div>
-        `;
-    }
-
-    // Chequeo inicial: ¿el papá ya marcó hoy?
-    // - En preview: leemos del cache (cargado en entrarPreviewVerComoPapa)
-    //   así el admin viendo como papá ve el estado REAL del papá.
-    // - En real: fetch fresco contra checkins.
-    if (state.modoPreview) {
-        const row = getCheckinHoyPreview();
-        if (row) pintarHecho(row.created_at);
-    } else if (state.modo === 'real' && state.usuarioReal && state.circuloActivoIdReal) {
-        checkinDeHoy(state.circuloActivoIdReal, state.usuarioReal.id)
-            .then(row => { if (row) pintarHecho(row.created_at); })
-            .catch(err => console.warn('[checkin load]', err));
-    }
-
-    $btn.addEventListener('click', async () => {
-        // En preview o demo (sin sesión real) sólo simulamos la mutación
-        // visual — no tenemos backend al que pegarle.
-        if (esPreview()) {
-            avisarPreview('👀 Vista previa — check-in',
-                'En la app real esto avisa a tu familia que estás bien hoy. Acá no se ejecuta.');
-            pintarHecho(Date.now());
-            return;
-        }
-        if (state.modo !== 'real') {
-            pintarHecho(Date.now());
-            return;
-        }
-        $btn.disabled = true;
-        $btn.textContent = 'Avisando…';
-        try {
-            const row = await marcarCheckin(state.circuloActivoIdReal);
-            pintarHecho(row?.created_at || Date.now());
-        } catch (err) {
-            console.error('[checkin marcar]', err);
-            $btn.disabled = false;
-            $btn.textContent = '👍 Estoy bien';
-            await modal({
-                titulo: 'No pude avisar',
-                cuerpo: `<pre>${h(err?.message || err)}</pre>`,
-                acciones: [{ label: 'OK', clase: 'btn--inicio', value: 'ok' }]
-            });
-        }
     });
 }
 

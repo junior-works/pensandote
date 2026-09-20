@@ -57,7 +57,7 @@ export async function pensamientosRecibidos(circleId, userId, limit = 15) {
 export async function ultimasFotosDia(circleId, limit = 60) {
     const sb = await sbClient();
     const { data, error } = await sb.from('fotos_dia')
-        .select('*').eq('circle_id', circleId)
+        .select('*, foto_visibilidad(user_id)').eq('circle_id', circleId)
         .order('created_at', { ascending: false })
         .limit(limit);
     if (error) {
@@ -98,7 +98,13 @@ export async function ultimaFotoDia(circleId) {
     return { ...data, url };
 }
 
-export async function subirFotoDia({ circleId, file, epigrafe = null }) {
+export async function subirFotoDia({
+    circleId,
+    file,
+    epigrafe = null,
+    visibilidad = 'circulo',
+    destinatarios = []
+}) {
     const sb = await sbClient();
 
     // 1) Sesión + perfil (FK target de subida_por).
@@ -140,11 +146,34 @@ export async function subirFotoDia({ circleId, file, epigrafe = null }) {
         circle_id:    circleId,
         subida_por:   user.id,
         storage_path: path,
-        epigrafe
+        epigrafe,
+        visibilidad: visibilidad === 'personas' ? 'personas' : 'circulo'
     }).select().single();
     if (errIns) {
         console.error('[subirFotoDia] insert fotos_dia', errIns);
         throw enriquecer('insert fotos_dia', errIns);
+    }
+
+    if (visibilidad === 'personas') {
+        const ids = [...new Set(destinatarios)]
+            .filter(id => id && id !== user.id);
+        if (!ids.length) {
+            await sb.from('fotos_dia').delete().eq('id', data.id);
+            await sb.storage.from('fotos').remove([path]).catch(() => {});
+            throw enriquecer('foto visibilidad', new Error('Elegí al menos una persona.'));
+        }
+        const { error: errVis } = await sb.from('foto_visibilidad').insert(
+            ids.map(userId => ({
+                foto_id: data.id,
+                circle_id: circleId,
+                user_id: userId
+            }))
+        );
+        if (errVis) {
+            await sb.from('fotos_dia').delete().eq('id', data.id);
+            await sb.storage.from('fotos').remove([path]).catch(() => {});
+            throw enriquecer('insert foto_visibilidad', errVis);
+        }
     }
     return data;
 }
@@ -1614,28 +1643,88 @@ function hoyArgentina() {
     return new Date().toLocaleDateString('en-CA', { timeZone: 'America/Argentina/Buenos_Aires' });
 }
 
-export async function marcarCheckin(circleId) {
+export async function marcarCheckin(circleId, {
+    respuesta = 'Estoy bien',
+    estadoAnimo = 'bien',
+    solicitudId = null
+} = {}) {
     const sb = await sbClient();
     const { data: { user } } = await sb.auth.getUser();
     if (!user) throw new Error('sin sesión');
-    const { data, error } = await sb.from('checkins').insert({
+    const payload = {
         circle_id: circleId,
-        user_id:   user.id
-        // fecha: DB default = hoy AR
-    }).select().single();
+        user_id: user.id,
+        fecha: hoyArgentina(),
+        respuesta: String(respuesta || '').trim().slice(0, 500) || 'Sin respuesta',
+        estado_animo: estadoAnimo,
+        solicitud_id: solicitudId,
+        respondida_at: new Date().toISOString()
+    };
+    const { data, error } = await sb.from('checkins')
+        .upsert(payload, { onConflict: 'circle_id,user_id,fecha' })
+        .select().single();
     if (error) {
-        if (error.code === '23505') {
-            // Ya marcó hoy. Buscamos el record para devolver created_at.
-            const { data: existing } = await sb.from('checkins')
-                .select('*')
-                .eq('circle_id', circleId)
-                .eq('user_id', user.id)
-                .eq('fecha', hoyArgentina())
-                .maybeSingle();
-            return existing;
-        }
-        throw enriquecer('insert checkins', error);
+        throw enriquecer('upsert checkins', error);
     }
+    return data;
+}
+
+/** Un familiar le pide a Nube que consulte cómo está el adulto mayor. */
+export async function solicitarCheckin(circleId, targetUserId) {
+    const sb = await sbClient();
+    const { data: { user } } = await sb.auth.getUser();
+    if (!user) throw new Error('sin sesión');
+
+    // Un único pedido pendiente por persona. Si ya existe, lo devolvemos
+    // para no multiplicar preguntas ni notificaciones.
+    const { data: pendiente, error: errPendiente } = await sb
+        .from('checkin_solicitudes')
+        .select('*')
+        .eq('circle_id', circleId)
+        .eq('target_user_id', targetUserId)
+        .eq('estado', 'pendiente')
+        .maybeSingle();
+    if (errPendiente) throw enriquecer('select checkin_solicitudes', errPendiente);
+    if (pendiente) return pendiente;
+
+    const { data, error } = await sb.from('checkin_solicitudes').insert({
+        circle_id: circleId,
+        target_user_id: targetUserId,
+        solicitado_por: user.id
+    }).select().single();
+    if (error) throw enriquecer('insert checkin_solicitudes', error);
+    return data;
+}
+
+/** Pedido más reciente que Nube todavía debe formularle al usuario. */
+export async function solicitudCheckinPendiente(circleId, targetUserId) {
+    const sb = await sbClient();
+    const { data, error } = await sb.from('checkin_solicitudes')
+        .select('*')
+        .eq('circle_id', circleId)
+        .eq('target_user_id', targetUserId)
+        .eq('estado', 'pendiente')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+    if (error) throw enriquecer('select checkin_solicitudes pendiente', error);
+    return data;
+}
+
+/** Guarda la respuesta en el pedido para que el tutor la vea. */
+export async function responderSolicitudCheckin(solicitudId, { respuesta, estadoAnimo }) {
+    if (!solicitudId) return null;
+    const sb = await sbClient();
+    const { data, error } = await sb.from('checkin_solicitudes')
+        .update({
+            estado: 'respondida',
+            respuesta: String(respuesta || '').trim().slice(0, 500),
+            estado_animo: estadoAnimo,
+            respondida_at: new Date().toISOString()
+        })
+        .eq('id', solicitudId)
+        .select().single();
+    if (error) throw enriquecer('update checkin_solicitudes', error);
     return data;
 }
 

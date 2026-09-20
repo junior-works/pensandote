@@ -123,9 +123,14 @@ export function speakES(texto, { onEnd } = {}) {
     try {
         window.speechSynthesis.cancel();
         const u = new SpeechSynthesisUtterance(texto);
-        u.lang = 'es-AR';
-        u.rate = 0.95;
-        u.pitch = 1;
+        const voz = elegirVozCalida();
+        if (voz) u.voice = voz;
+        u.lang = voz?.lang || 'es-AR';
+        // Un poco más lenta, apenas más aguda y sin volumen al máximo:
+        // resulta menos imperativa sin convertirla en una voz infantil.
+        u.rate = 0.88;
+        u.pitch = 1.06;
+        u.volume = 0.94;
         if (onEnd) {
             u.onend   = onEnd;
             u.onerror = onEnd;
@@ -135,6 +140,41 @@ export function speakES(texto, { onEnd } = {}) {
         console.warn('TTS falló:', e);
         onEnd?.();
     }
+}
+
+let vocesDisponibles = [];
+
+function refrescarVoces() {
+    if (!('speechSynthesis' in window)) return;
+    try { vocesDisponibles = window.speechSynthesis.getVoices() || []; }
+    catch (_) { vocesDisponibles = []; }
+}
+
+function elegirVozCalida() {
+    refrescarVoces();
+    if (!vocesDisponibles.length) return null;
+    const nombresCalidos = /(natural|neural|online|elena|helena|laura|dalia|sabina|sofia|sofía|paulina|monica|mónica|luciana|valentina)/i;
+    return [...vocesDisponibles]
+        .filter(v => /^es(?:-|_)/i.test(v.lang || ''))
+        .sort((a, b) => puntajeVoz(b) - puntajeVoz(a))[0] || null;
+
+    function puntajeVoz(v) {
+        const lang = String(v.lang || '').replace('_', '-').toLowerCase();
+        const name = String(v.name || '');
+        let n = 0;
+        if (lang === 'es-ar') n += 100;
+        else if (lang === 'es-uy') n += 90;
+        else if (lang === 'es-419') n += 80;
+        else if (lang.startsWith('es-')) n += 55;
+        if (nombresCalidos.test(name)) n += 35;
+        if (/natural|neural|online/i.test(name)) n += 25;
+        return n;
+    }
+}
+
+if ('speechSynthesis' in window) {
+    refrescarVoces();
+    window.speechSynthesis.addEventListener?.('voiceschanged', refrescarVoces);
 }
 
 export function stopSpeak() {

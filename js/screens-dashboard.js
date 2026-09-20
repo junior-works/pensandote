@@ -32,6 +32,15 @@ export function renderInicio($app) {
             <span class="estado-pill estado-pill--ok">Todo en orden</span>
         </section>
 
+        <section class="card stack">
+            <h2>📅 Estado de hoy</h2>
+            <p><strong>${h(adulto.nombre_corto || adulto.nombre)}</strong> todavía no respondió cómo está hoy.</p>
+            <button class="btn btn--inicio btn--full" id="demo-pedir-checkin" type="button">
+                Preguntarle con Nube
+            </button>
+            <p class="muted" style="margin:0;">Nube se lo preguntará dentro de su app y te acercará la respuesta.</p>
+        </section>
+
         <h2>Avisos recientes</h2>
         <ul class="avisos-lista">
             ${AVISOS.map(a => `
@@ -87,6 +96,12 @@ export function renderInicio($app) {
         </button>
     `;
     wireNav($app);
+    $app.querySelector('#demo-pedir-checkin')?.addEventListener('click', () => {
+        try { localStorage.setItem('pensandote:demo:checkin-pedido', '1'); } catch (_) {}
+        const btn = $app.querySelector('#demo-pedir-checkin');
+        btn.disabled = true;
+        btn.textContent = 'Nube se lo preguntará';
+    });
 }
 
 // =====================================================================

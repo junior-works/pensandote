@@ -321,6 +321,482 @@ body[data-mode="simple"] .btn--mini { min-height: 44px; font-size: var(--fs-md);
 
 .simple-extras { display: grid; gap: 0.8rem; margin-top: 1rem; }
 
+/* ===================================================================
+   NUBE — inicio conversacional del adulto mayor
+   =================================================================== */
+.nube-home-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    margin: 0 0 0.35rem;
+}
+.nube-home-header__brand {
+    margin: 0 0 0.35rem;
+    color: #6d382b;
+    font-size: 1.05rem;
+    font-weight: 700;
+}
+.nube-home-header__brand::first-letter { color: #e98861; }
+.nube-home-header__saludo {
+    margin: 0 0 0.15rem;
+    color: #4d271e;
+    font-family: var(--font-ui);
+    font-size: clamp(2.15rem, 9vw, 3.15rem);
+    letter-spacing: -0.035em;
+}
+
+.nube-home {
+    position: relative;
+    display: grid;
+    justify-items: center;
+    padding: 0 0 0.6rem;
+    text-align: center;
+}
+.nube-avatar {
+    --nube-x: 0px;
+    --nube-y: 0px;
+    --nube-r: 0deg;
+    position: relative;
+    width: min(78vw, 360px);
+    aspect-ratio: 1;
+    margin: -0.8rem auto -3.3rem;
+    isolation: isolate;
+    perspective: 700px;
+}
+.nube-avatar__body {
+    position: absolute;
+    inset: 0;
+    transform-origin: 50% 68%;
+    transition: transform 1.6s cubic-bezier(.2,.75,.25,1);
+    animation: nube-respira 4.8s ease-in-out infinite;
+    will-change: transform;
+}
+.nube-avatar__sprite {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    background-color: #faf5e9;
+    background-image: url('./assets/nube/nube-sprites-v1.png');
+    background-repeat: no-repeat;
+    background-size: 300% 300%;
+    background-position: 0 0;
+    border-radius: 42%;
+    will-change: background-position;
+}
+.nube-avatar__rasgo {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    background-color: #faf5e9;
+    background-image: url('./assets/nube/nube-sprites-v1.png');
+    background-repeat: no-repeat;
+    background-size: 300% 300%;
+    opacity: 0;
+    will-change: opacity;
+}
+.nube-avatar__rasgo.is-visible { opacity: 1; }
+.nube-avatar__ojos {
+    z-index: 2;
+    background-position: 100% 0%;
+    clip-path: inset(22% 12% 45% 12% round 42%);
+    transition: opacity 105ms cubic-bezier(.35,0,.25,1);
+}
+.nube-avatar__boca {
+    z-index: 3;
+    clip-path: inset(54% 16% 12% 16% round 36%);
+    transition: opacity 88ms ease-in-out;
+}
+.nube-avatar__shadow {
+    position: absolute;
+    z-index: -1;
+    left: 20%; right: 20%; bottom: 17%; height: 9%;
+    border-radius: 50%;
+    background: rgba(92, 54, 35, 0.16);
+    filter: blur(14px);
+    animation: nube-sombra 4.8s ease-in-out infinite;
+}
+.nube-avatar[data-state="listening"] .nube-avatar__body {
+    animation: nube-escucha 1.45s ease-in-out infinite;
+}
+.nube-avatar[data-state="thinking"] .nube-avatar__body {
+    animation: nube-piensa 2.4s ease-in-out infinite;
+}
+.nube-avatar[data-state="speaking"] .nube-avatar__body {
+    animation: nube-habla 0.72s ease-in-out infinite;
+}
+.nube-avatar[data-state="happy"] .nube-avatar__body {
+    animation: nube-celebra 0.9s ease-out both;
+}
+.nube-avatar[data-state="empathy"] .nube-avatar__body {
+    animation: nube-acompana 2.8s ease-in-out infinite;
+}
+
+.nube-bubble {
+    position: relative;
+    z-index: 3;
+    max-width: 620px;
+    min-height: 62px;
+    margin: 0 0 0.45rem;
+    padding: 0.62em 1em;
+    display: grid;
+    place-items: center;
+    color: #4d271e;
+    background: #fffdf8;
+    border: 2px solid rgba(77, 39, 30, 0.22);
+    border-radius: 24px;
+    box-shadow: 0 7px 20px rgba(77, 39, 30, 0.12);
+    font-size: clamp(1.3rem, 4.8vw, 1.7rem);
+    font-weight: 700;
+    line-height: 1.25;
+}
+.nube-bubble::before {
+    content: '';
+    position: absolute;
+    top: -13px;
+    left: calc(50% - 12px);
+    width: 22px;
+    height: 22px;
+    background: #fffdf8;
+    border-left: 2px solid rgba(77, 39, 30, 0.22);
+    border-top: 2px solid rgba(77, 39, 30, 0.22);
+    transform: rotate(45deg);
+}
+.nube-estado {
+    min-height: 1.35em;
+    margin: 0 0 0.35rem;
+    color: var(--ink-soft);
+    font-size: 1rem;
+}
+.nube-mic {
+    width: min(100%, 270px);
+    min-height: 84px;
+    padding: 0.6rem 1.1rem;
+    border: 0;
+    border-radius: 999px;
+    color: #fff;
+    background: #398fd7;
+    box-shadow: 0 7px 0 #236aa5, 0 14px 26px rgba(35, 106, 165, 0.25);
+    font-size: 1.55rem;
+    font-weight: 700;
+    transition: transform 120ms ease, box-shadow 120ms ease;
+}
+.nube-mic:active,
+.nube-mic.is-recording {
+    transform: translateY(5px) scale(0.985);
+    box-shadow: 0 2px 0 #236aa5, 0 8px 18px rgba(35, 106, 165, 0.22);
+}
+.nube-mic.is-recording { background: #337ebc; }
+.nube-mic:disabled { opacity: 0.55; }
+
+.nube-escribir {
+    width: 100%;
+    margin-top: 1rem;
+    display: grid;
+    grid-template-columns: 1fr 60px;
+    align-items: stretch;
+    overflow: hidden;
+    background: #fff;
+    border: 2px solid rgba(77, 39, 30, 0.25);
+    border-radius: 22px;
+    box-shadow: 0 6px 16px rgba(77, 39, 30, 0.09);
+}
+body[data-mode="simple"] .nube-escribir textarea {
+    min-height: 66px;
+    max-height: 130px;
+    resize: vertical;
+    padding: 1rem;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    font-size: 1.2rem;
+}
+body[data-mode="simple"] .nube-escribir textarea:focus { box-shadow: none; }
+.nube-escribir button {
+    border: 0;
+    color: #fff;
+    background: #e88961;
+    font-size: 1.65rem;
+    font-weight: 700;
+}
+.nube-escribir button:disabled { opacity: 0.38; }
+.nube-capacidades {
+    margin: 0.85rem 0 0;
+    max-width: 600px;
+    color: var(--ink-soft);
+    font-size: 1rem;
+    line-height: 1.4;
+}
+.nube-respuesta { width: 100%; margin-top: 0.75rem; }
+.nube-confirmacion {
+    padding: 0.9rem;
+    background: #fff8df;
+    border: 2px solid rgba(77,39,30,.25);
+    border-radius: 20px;
+    text-align: left;
+}
+.nube-confirmacion p { margin: 0.25rem 0; }
+.nube-confirmacion__acciones { display: grid; gap: 0.65rem; margin-top: 0.75rem; }
+.nube-fuentes {
+    padding: 0.75rem 0.9rem;
+    background: #fff;
+    border: 2px solid rgba(77,39,30,.2);
+    border-radius: 16px;
+    text-align: left;
+    font-size: 1rem;
+}
+.nube-fuentes summary { cursor: pointer; font-weight: 700; }
+.nube-fuentes ul { margin: 0.5rem 0 0; }
+.nube-fuentes a { text-decoration: underline; }
+
+/* Guía conversacional: video + Nube explicando un paso por vez. */
+body.nube-guia-abierta { overflow: hidden; }
+.nube-guia-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 10020;
+    display: grid;
+    place-items: center;
+    padding: max(0.65rem, env(safe-area-inset-top)) 0.65rem max(0.65rem, env(safe-area-inset-bottom));
+    background: rgba(48, 31, 25, 0.68);
+    backdrop-filter: blur(5px);
+}
+.nube-guia {
+    width: min(100%, 760px);
+    max-height: 96dvh;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 1rem;
+    color: #4d271e;
+    background: #faf5e9;
+    border: 3px solid rgba(77, 39, 30, 0.26);
+    border-radius: 28px;
+    box-shadow: 0 24px 70px rgba(33, 20, 16, 0.38);
+}
+.nube-guia__header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.8rem;
+    margin-bottom: 0.8rem;
+}
+.nube-guia__header h2 { margin: 0.1rem 0 0; font-size: clamp(1.35rem, 5vw, 2rem); }
+.nube-guia__eyebrow { color: #398fd7; font-weight: 800; }
+.nube-guia__cerrar {
+    flex: 0 0 54px;
+    width: 54px;
+    height: 54px;
+    border: 2px solid rgba(77,39,30,.25);
+    border-radius: 50%;
+    color: #4d271e;
+    background: #fff;
+    font-size: 2rem;
+    line-height: 1;
+}
+.nube-guia__video {
+    overflow: hidden;
+    aspect-ratio: 16 / 9;
+    background: #211714;
+    border-radius: 20px;
+    box-shadow: 0 8px 24px rgba(33, 20, 16, 0.2);
+}
+.nube-guia__video iframe { width: 100%; height: 100%; border: 0; }
+.nube-guia__video-pendiente {
+    height: 100%;
+    display: grid;
+    place-items: center;
+    align-content: center;
+    gap: 0.5rem;
+    color: #fff;
+    text-align: center;
+}
+.nube-guia__video-pendiente span { font-size: 3rem; }
+.nube-guia__video-pendiente p { margin: 0; }
+.nube-guia__video-ayuda {
+    margin: 0.5rem 0 0.85rem;
+    color: var(--ink-soft);
+    font-size: 0.9rem;
+    line-height: 1.35;
+}
+.nube-guia__video-ayuda a { color: #236aa5; font-weight: 700; text-decoration: underline; }
+.nube-guia__dialogo {
+    display: grid;
+    grid-template-columns: 86px 1fr;
+    align-items: center;
+    gap: 0.7rem;
+}
+.nube-guia__cara {
+    position: relative;
+    overflow: hidden;
+    width: 86px;
+    aspect-ratio: 1;
+    border-radius: 44%;
+    background: #faf5e9 url('./assets/nube/nube-sprites-v1.png') 0 0 / 300% 300% no-repeat;
+    filter: drop-shadow(0 4px 7px rgba(77,39,30,.18));
+    animation: nube-guia-cabecea 3.4s ease-in-out infinite;
+}
+.nube-guia__cara::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: #faf5e9 url('./assets/nube/nube-sprites-v1.png') 50% 50% / 300% 300% no-repeat;
+    clip-path: inset(54% 16% 12% 16% round 36%);
+    opacity: 0;
+}
+.nube-guia-overlay.is-speaking .nube-guia__cara::after {
+    animation: nube-guia-boca 0.62s ease-in-out infinite;
+}
+.nube-guia__globo {
+    position: relative;
+    min-height: 112px;
+    padding: 0.85rem 1rem;
+    background: #fff;
+    border: 2px solid rgba(77,39,30,.22);
+    border-radius: 20px;
+    box-shadow: 0 5px 14px rgba(77,39,30,.1);
+}
+.nube-guia__globo::before {
+    content: '';
+    position: absolute;
+    left: -10px;
+    top: 32px;
+    width: 17px;
+    height: 17px;
+    background: #fff;
+    border-left: 2px solid rgba(77,39,30,.22);
+    border-bottom: 2px solid rgba(77,39,30,.22);
+    transform: rotate(45deg);
+}
+.nube-guia__globo strong { color: #398fd7; font-size: 1rem; }
+.nube-guia__globo p { margin: 0.35rem 0 0; font-size: clamp(1.12rem, 4vw, 1.38rem); line-height: 1.35; }
+.nube-guia__globo .nube-guia__pista { color: var(--ink-soft); font-size: 0.98rem; }
+.nube-guia__progreso { display: flex; gap: 0.35rem; margin: 0.8rem 0; }
+.nube-guia__progreso span { flex: 1; height: 7px; border-radius: 999px; background: #ded5ca; }
+.nube-guia__progreso span.is-done { background: #398fd7; }
+.nube-guia__acciones { display: grid; grid-template-columns: 1fr 1fr; gap: 0.65rem; }
+.nube-guia__acciones .btn { min-height: 60px !important; font-size: 1.05rem !important; }
+.nube-guia__acciones #nube-guia-siguiente { grid-column: 1 / -1; }
+@keyframes nube-guia-cabecea {
+    0%,100% { transform: translateY(1px) rotate(-0.5deg); }
+    50% { transform: translateY(-3px) rotate(0.5deg); }
+}
+@keyframes nube-guia-boca {
+    0%,100% { opacity: 0; background-position: 50% 50%; }
+    20%,45% { opacity: 1; background-position: 50% 50%; }
+    46%,72% { opacity: 1; background-position: 100% 50%; }
+    85% { opacity: .45; background-position: 50% 50%; }
+}
+
+@media (max-width: 430px) {
+    .nube-guia { padding: 0.8rem; border-radius: 22px; }
+    .nube-guia__dialogo { grid-template-columns: 68px 1fr; gap: 0.5rem; }
+    .nube-guia__cara { width: 68px; }
+    .nube-guia__globo { padding: 0.72rem 0.8rem; }
+}
+
+.nube-atajos {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.8rem;
+    margin: 1.25rem 0 0.9rem;
+}
+.nube-atajo {
+    min-height: 112px;
+    padding: 0.75rem;
+    display: flex;
+    align-items: center;
+    gap: 0.7rem;
+    color: #4d271e;
+    background: #fffdf8;
+    border: 2px solid rgba(77,39,30,.22);
+    border-radius: 22px;
+    box-shadow: 0 6px 16px rgba(77,39,30,.1);
+    text-align: left;
+    font-size: clamp(1.05rem, 4vw, 1.3rem);
+    font-weight: 700;
+    line-height: 1.08;
+}
+.nube-atajo__icono {
+    flex: 0 0 54px;
+    width: 54px;
+    height: 54px;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    color: #fff;
+    background: #e88961;
+    font-size: 1.7rem;
+}
+.nube-atajo--pami .nube-atajo__icono { background: #4c9fe6; }
+.nube-atajo--remedios .nube-atajo__icono { background: #62ae87; }
+.nube-atajo--recordar .nube-atajo__icono { background: #e7ae3e; }
+.nube-atajos .nube-atajo:last-child:nth-child(odd) { grid-column: 1 / -1; }
+.nube-atajo:active { transform: scale(0.98); }
+
+.nube-emergencia {
+    width: 100%;
+    min-height: 78px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.7rem;
+    color: #fff;
+    background: #d8503a;
+    border: 2px solid #9e3020;
+    border-radius: 22px;
+    box-shadow: 0 6px 0 #9e3020;
+    font-size: 1.45rem;
+    font-weight: 700;
+}
+.nube-emergencia:active { transform: translateY(4px); box-shadow: 0 2px 0 #9e3020; }
+
+.nube-hoy {
+    margin-top: 2rem;
+    padding-top: 1.2rem;
+    border-top: 2px solid rgba(77,39,30,.16);
+}
+.nube-hoy > h2 { margin: 0 0 0.8rem; color: #4d271e; }
+.nube-hoy .foto-cabecera { margin-top: 1.2rem; }
+.nube-mas { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.8rem; margin-top: 1.4rem; }
+.nube-mas .btn { min-height: 76px !important; font-size: 1.18rem !important; }
+.nube-fin { padding: 1rem 0 0.4rem; color: var(--ink-soft); text-align: center; font-size: 1rem; }
+
+@keyframes nube-respira {
+    0%,100% { transform: translate3d(var(--nube-x), calc(var(--nube-y) + 2px), 0) rotate(var(--nube-r)) scale(1); }
+    45%     { transform: translate3d(var(--nube-x), calc(var(--nube-y) - 5px), 0) rotate(var(--nube-r)) scale(1.018, 1.026); }
+    70%     { transform: translate3d(var(--nube-x), calc(var(--nube-y) - 2px), 0) rotate(var(--nube-r)) scale(1.008, 1.012); }
+}
+@keyframes nube-sombra { 0%,100% { transform: scaleX(1); opacity:.7; } 50% { transform: scaleX(.9); opacity:.48; } }
+@keyframes nube-escucha {
+    0%,100% { transform: translate3d(-2px, 1px, 18px) rotate(-1.2deg) scale(1.025); }
+    50% { transform: translate3d(3px, -5px, 25px) rotate(1.1deg) scale(1.045); }
+}
+@keyframes nube-piensa {
+    0%,100% { transform: translate3d(-3px, 0, 0) rotate(-1deg) scale(1.01); }
+    50% { transform: translate3d(4px, -5px, 15px) rotate(1.5deg) scale(1.025); }
+}
+@keyframes nube-habla {
+    0%,100% { transform: translate3d(-1px, 1px, 0) rotate(-.35deg) scale(1.012, .998); }
+    50% { transform: translate3d(1px, -3px, 10px) rotate(.35deg) scale(1.022, 1.025); }
+}
+@keyframes nube-celebra {
+    0% { transform: translateY(0) scale(1); }
+    45% { transform: translateY(-11px) scale(1.04, 1.02); }
+    72% { transform: translateY(2px) scale(.995, 1.018); }
+    100% { transform: translateY(0) scale(1.012); }
+}
+@keyframes nube-acompana {
+    0%,100% { transform: translate3d(-2px, 2px, 0) rotate(-1deg) scale(1); }
+    50% { transform: translate3d(1px, -2px, 8px) rotate(.2deg) scale(1.015); }
+}
+@keyframes nube-respira-reducido {
+    0%,100% { transform: translateY(0) scale(1); }
+    50% { transform: translateY(-1px) scale(1.006); }
+}
+
 /* Foto del día como cabecera del home simple (lo primero que ve el
    papá al abrir). Sin margen arriba, integrada al borde del card. */
 .foto-cabecera {
@@ -1969,6 +2445,12 @@ body[data-mode="dashboard"] .meds-admin-slot.is-pend { background: #fff8e9; }
     .btn, .tarjeton, .widget { transition: none; }
     .dictado-fake__onda i { animation: none; height: 50% !important; }
     .loader-puntos span { animation: none; }
+    .nube-avatar__body,
+    .nube-avatar__shadow { transition: none !important; }
+    .nube-avatar__body { animation: nube-respira-reducido 8s ease-in-out infinite !important; }
+    .nube-avatar__shadow { animation: none !important; }
+    .nube-guia__cara,
+    .nube-guia__cara::after { animation: none !important; }
 }
 
 /* ===================================================================

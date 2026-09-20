@@ -83,9 +83,14 @@ function actualizarVisibilidad() {
     if (!$btn) return;
     const enSesion = state.modo === 'real' && state.usuarioReal && state.circuloActivoIdReal;
     const hash = location.hash || '#/inicio';
+    // En el inicio simple Nube ya es la interfaz principal. Mantener el
+    // botón flotante ahí duplicaría el asistente y agregaría ruido. En el
+    // resto de las pantallas sigue disponible como ayuda contextual.
+    const nubeEsPrincipal = document.body.dataset.mode === 'simple'
+        && /^#\/inicio(?:\?|$)/.test(hash);
     const enOnboarding = /^#\/tutorial\/como-usar-pensandote(\?|$)/.test(hash);
     const hayOverpane = document.querySelector('.modal-overlay, .lightbox-overlay');
-    const debeMostrar = enSesion && !enOnboarding && !hayOverpane;
+    const debeMostrar = enSesion && !nubeEsPrincipal && !enOnboarding && !hayOverpane;
     $btn.style.display = debeMostrar ? '' : 'none';
 }
 
@@ -237,7 +242,7 @@ function renderAccionHTML(acc) {
     `;
 }
 
-function ejecutarAccion(acc) {
+export function ejecutarAccion(acc) {
     stopSpeak();
     // Cerramos completo (dictado/micObs/poll + cleanup del back-button
     // del modal). cleanup encola un history.back ASYNC. Si llamáramos
@@ -267,7 +272,7 @@ function ejecutarAccion(acc) {
     }, 0);
 }
 
-function construirContexto() {
+export function construirContexto() {
     return {
         ruta_actual:         location.hash || '#/inicio',
         circulo_id:          state.circuloActivoIdReal || null,

@@ -1,0 +1,22 @@
+{
+  "character": "Nube",
+  "version": 1,
+  "basePath": "./assets/nube/",
+  "states": {
+    "idle": "nube-reposo.png",
+    "listening": "nube-escucha.png",
+    "blink": "nube-parpadeo.png",
+    "happy": "nube-alegria.png",
+    "talkSoft": "nube-habla-suave.png",
+    "talkOpen": "nube-habla-abierta.png",
+    "thinking": "nube-pensando.png",
+    "empathy": "nube-empatia.png",
+    "surprised": "nube-sorpresa.png"
+  },
+  "recommendedTransitionsMs": {
+    "expression": 140,
+    "blinkClose": 90,
+    "blinkOpen": 120,
+    "mouthFrame": 110
+  }
+}
