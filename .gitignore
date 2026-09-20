@@ -32,3 +32,10 @@ _test_*.mjs
 _test_*.js
 _diag_*.mjs
 _diag_*.js
+
+# Material de trabajo del personaje (fuentes 3D, prototipos, renders).
+# La app solo usa assets/nube/nube-sprites-v1.png y manifest.json.
+output/
+
+# Worktrees y settings locales de Claude
+.claude/
