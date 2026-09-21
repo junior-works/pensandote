@@ -390,6 +390,15 @@ async function bootstrap() {
     montarInstall();
     onStateChange(() => refreshRouter());
 
+    // Pintamos una pantalla útil antes de consultar la sesión. La sesión se
+    // recupera en segundo plano y, si existe, el primer render del router ya
+    // abrirá el círculo correcto. Así una demora del SDK nunca deja al usuario
+    // mirando el texto "Cargando Pensándote…".
+    if (configEsReal() && !hayCallbackMagicLink()) {
+        renderBienvenida($app);
+        window.__pensandoteReady = true;
+    }
+
     // Deep-link de notificaciones: cuando la app YA está abierta y el
     // usuario toca un push, el service worker enfoca la pestaña y postea
     // {type:'push-navigate', url, circle_id}. Si viene un circle_id,
@@ -420,10 +429,15 @@ async function bootstrap() {
     if (configEsReal()) {
         // Procesar el callback si la URL trae tokens del magic link.
         // (Si falla, asumimos sin sesión y caemos a demo.)
-        try {
-            await procesarCallback();
-        } catch (err) {
-            console.warn('[auth callback]', err);
+        // Sólo procesamos el callback cuando realmente volvemos de un magic
+        // link. Hacerlo en cada arranque podía dejar algunos teléfonos
+        // esperando un lock viejo de Supabase antes de pintar la pantalla.
+        if (hayCallbackMagicLink()) {
+            try {
+                await procesarCallback();
+            } catch (err) {
+                console.warn('[auth callback]', err);
+            }
         }
 
         const usr = await usuarioActual();
@@ -486,6 +500,7 @@ async function bootstrap() {
     montarAsistente();
 
     onRouteChange(renderRoute);
+    window.__pensandoteReady = true;
 }
 
 /**

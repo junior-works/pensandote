@@ -12,6 +12,18 @@
 let _client = null;
 let _clientPromise = null;
 
+/**
+ * Evita que un bloqueo del almacenamiento del navegador o una red cortada
+ * dejen toda la aplicación detenida en el loader inicial.
+ */
+function conTimeout(promesa, ms, mensaje) {
+    let timer;
+    const limite = new Promise((_, reject) => {
+        timer = setTimeout(() => reject(new Error(mensaje)), ms);
+    });
+    return Promise.race([promesa, limite]).finally(() => clearTimeout(timer));
+}
+
 /** ¿Está la config real (no el stub demo)? */
 export function configEsReal() {
     const cfg = window.PENSANDOTE_CONFIG;
@@ -73,7 +85,11 @@ export async function procesarCallback() {
     // El SDK con detectSessionInUrl=true ya consume los parámetros al
     // instanciar el cliente. Acá esperamos a que termine y limpiamos
     // la URL si quedó residuo.
-    await sb.auth.getSession();
+    await conTimeout(
+        sb.auth.getSession(),
+        8000,
+        'La validación del enlace demoró demasiado.'
+    );
     if (window.location.hash.includes('access_token')) {
         history.replaceState(null, '', window.location.pathname + window.location.search);
     }
@@ -84,10 +100,20 @@ export async function procesarCallback() {
 export async function usuarioActual() {
     if (!configEsReal()) return null;
     try {
-        const sb = await client();
-        const { data, error } = await sb.auth.getUser();
-        if (error || !data?.user) return null;
-        return data.user;
+        const sb = await conTimeout(
+            client(),
+            8000,
+            'No se pudo iniciar la conexión.'
+        );
+        // Para decidir la pantalla inicial alcanza con la sesión local. Esto
+        // evita una llamada de red bloqueante antes de mostrar cualquier UI.
+        const { data, error } = await conTimeout(
+            sb.auth.getSession(),
+            5000,
+            'La sesión demoró demasiado en responder.'
+        );
+        if (error || !data?.session?.user) return null;
+        return data.session.user;
     } catch (_) {
         return null;
     }

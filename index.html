@@ -47,7 +47,40 @@
         </div>
     </main>
 
-    <script type="module" src="./app.js?v=nube13"></script>
+    <script>
+        // Red de seguridad: si un módulo externo, una sesión vieja o la red
+        // dejan el arranque pendiente, reemplazamos el loader por una salida
+        // clara. El botón limpia sólo los archivos temporales de esta app y
+        // vuelve a pedir la versión publicada.
+        window.setTimeout(() => {
+            if (window.__pensandoteReady) return;
+            const app = document.getElementById('app');
+            if (!app || !app.querySelector('.boot-loader')) return;
+            app.innerHTML = `
+                <section class="card stack" style="margin-top:3rem;text-align:center">
+                    <h1>Pensándote necesita actualizarse</h1>
+                    <p>No pudimos iniciar la aplicación en este intento.</p>
+                    <button class="btn btn--xl btn--inicio btn--full" id="btn-recuperar-app" type="button">
+                        Actualizar ahora
+                    </button>
+                </section>`;
+            document.getElementById('btn-recuperar-app')?.addEventListener('click', async () => {
+                try {
+                    if ('serviceWorker' in navigator) {
+                        const regs = await navigator.serviceWorker.getRegistrations();
+                        await Promise.all(regs.map(reg => reg.unregister()));
+                    }
+                    if ('caches' in window) {
+                        const keys = await caches.keys();
+                        await Promise.all(keys.filter(k => k.startsWith('pensandote-')).map(k => caches.delete(k)));
+                    }
+                } finally {
+                    window.location.reload();
+                }
+            });
+        }, 12000);
+    </script>
+    <script type="module" src="./app.js?v=nube14"></script>
 
     <!-- Registro del service worker (sólo si el navegador lo soporta) -->
     <script>
