@@ -18,7 +18,7 @@
  * correcto en ambos entornos.
  */
 
-const CACHE_NAME = 'pensandote-shell-v0.10.5-nube-guias';
+const CACHE_NAME = 'pensandote-shell-v0.10.15-nube-avisa';
 
 const SHELL_FILES = [
     './',
@@ -51,6 +51,13 @@ const SHELL_FILES = [
     './js/audio.js',
     './js/auth.js',
     './js/circles.js',
+    './js/screens-biografia.js',
+    './js/utils/dictado.js',
+    './js/utils/escucha-relato.js',
+    './js/utils/genero.js',
+    './js/utils/panico.js',
+    './js/utils/parentesco.js',
+    './js/foto-interacciones.js',
     './assets/nube/nube-sprites-v1.png'
 ];
 

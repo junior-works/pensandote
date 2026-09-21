@@ -57,7 +57,12 @@ export async function pensamientosRecibidos(circleId, userId, limit = 15) {
 export async function ultimasFotosDia(circleId, limit = 60) {
     const sb = await sbClient();
     const { data, error } = await sb.from('fotos_dia')
-        .select('*, foto_visibilidad(user_id)').eq('circle_id', circleId)
+        .select(`
+            *,
+            foto_visibilidad(user_id),
+            foto_reacciones(user_id, emoji, created_at),
+            foto_comentarios(id, user_id, texto, created_at)
+        `).eq('circle_id', circleId)
         .order('created_at', { ascending: false })
         .limit(limit);
     if (error) {
@@ -106,6 +111,8 @@ export async function subirFotoDia({
     destinatarios = []
 }) {
     const sb = await sbClient();
+    const destinatariosUnicos = [...new Set(destinatarios)]
+        .filter(Boolean);
 
     // 1) Sesión + perfil (FK target de subida_por).
     const { data: authData, error: errAuth } = await sb.auth.getUser();
@@ -114,6 +121,10 @@ export async function subirFotoDia({
         throw enriquecer('auth', errAuth || new Error('sin sesion'));
     }
     const user = authData.user;
+    const destinatariosValidos = destinatariosUnicos.filter(id => id !== user.id);
+    if (visibilidad === 'personas' && !destinatariosValidos.length) {
+        throw enriquecer('foto visibilidad', new Error('Elegí al menos una persona.'));
+    }
 
     const { error: errProf } = await sb.from('users')
         .upsert({ id: user.id }, { onConflict: 'id' });
@@ -151,17 +162,12 @@ export async function subirFotoDia({
     }).select().single();
     if (errIns) {
         console.error('[subirFotoDia] insert fotos_dia', errIns);
+        await sb.storage.from('fotos').remove([path]).catch(() => {});
         throw enriquecer('insert fotos_dia', errIns);
     }
 
     if (visibilidad === 'personas') {
-        const ids = [...new Set(destinatarios)]
-            .filter(id => id && id !== user.id);
-        if (!ids.length) {
-            await sb.from('fotos_dia').delete().eq('id', data.id);
-            await sb.storage.from('fotos').remove([path]).catch(() => {});
-            throw enriquecer('foto visibilidad', new Error('Elegí al menos una persona.'));
-        }
+        const ids = destinatariosValidos;
         const { error: errVis } = await sb.from('foto_visibilidad').insert(
             ids.map(userId => ({
                 foto_id: data.id,
@@ -175,6 +181,50 @@ export async function subirFotoDia({
             throw enriquecer('insert foto_visibilidad', errVis);
         }
     }
+    return data;
+}
+
+const FOTO_EMOJIS = new Set(['❤️', '😂', '😮', '😢', '🙏', '👍']);
+
+/** Una reacción por persona y foto. Repetir el mismo emoji la quita. */
+export async function reaccionarFoto({ fotoId, circleId, emoji, quitar = false }) {
+    if (!FOTO_EMOJIS.has(emoji)) throw new Error('Reacción no permitida');
+    const sb = await sbClient();
+    const { data: { user }, error: authError } = await sb.auth.getUser();
+    if (authError || !user) throw enriquecer('auth reacción foto', authError || new Error('sin sesión'));
+
+    if (quitar) {
+        const { error } = await sb.from('foto_reacciones').delete()
+            .eq('foto_id', fotoId).eq('user_id', user.id);
+        if (error) throw enriquecer('quitar reacción foto', error);
+        return null;
+    }
+
+    const { data, error } = await sb.from('foto_reacciones').upsert({
+        foto_id: fotoId,
+        circle_id: circleId,
+        user_id: user.id,
+        emoji
+    }, { onConflict: 'foto_id,user_id' }).select().single();
+    if (error) throw enriquecer('reaccionar foto', error);
+    return data;
+}
+
+/** Agrega un comentario breve a una foto visible para el usuario. */
+export async function comentarFoto({ fotoId, circleId, texto }) {
+    const limpio = String(texto || '').trim().slice(0, 280);
+    if (!limpio) throw new Error('Escribí un comentario');
+    const sb = await sbClient();
+    const { data: { user }, error: authError } = await sb.auth.getUser();
+    if (authError || !user) throw enriquecer('auth comentario foto', authError || new Error('sin sesión'));
+
+    const { data, error } = await sb.from('foto_comentarios').insert({
+        foto_id: fotoId,
+        circle_id: circleId,
+        user_id: user.id,
+        texto: limpio
+    }).select().single();
+    if (error) throw enriquecer('comentar foto', error);
     return data;
 }
 
@@ -250,25 +300,35 @@ export async function urlHistoriaAudio(storagePath) {
  */
 export async function grabarHistoria({
     circleId, narradorId, audioBlob, durSeg, visibilidad,
-    personasEspecificas = [], titulo = null, esLegado = false
+    personasEspecificas = [], titulo = null, esLegado = false,
+    transcripcion = null, origen = 'manual'
 }) {
     const sb = await sbClient();
     const id  = crypto.randomUUID();
-    const ext = audioBlob.type.includes('webm') ? 'webm'
-              : audioBlob.type.includes('ogg')  ? 'ogg'
-              : audioBlob.type.includes('mp4')  ? 'm4a'
-              : 'audio';
-    const path = `${circleId}/historia/${id}.${ext}`;
+    let path = null;
 
-    const { error: e1 } = await sb.storage.from('historias').upload(path, audioBlob, {
-        contentType: audioBlob.type, upsert: false
-    });
-    if (e1) throw e1;
+    // En algunos Android, MediaRecorder y el reconocimiento de voz no
+    // comparten bien el micrófono. Si el audio no está disponible igual
+    // guardamos el texto: para la biografía es preferible conservar el
+    // recuerdo escrito antes que perder todo el relato.
+    if (audioBlob?.size) {
+        const ext = audioBlob.type.includes('webm') ? 'webm'
+                  : audioBlob.type.includes('ogg')  ? 'ogg'
+                  : audioBlob.type.includes('mp4')  ? 'm4a'
+                  : 'audio';
+        path = `${circleId}/historia/${id}.${ext}`;
+        const { error: e1 } = await sb.storage.from('historias').upload(path, audioBlob, {
+            contentType: audioBlob.type, upsert: false
+        });
+        if (e1) throw e1;
+    }
 
     const { error: e2 } = await sb.from('historias').insert({
         id, circle_id: circleId, narrador_id: narradorId,
         storage_path: path, duracion_seg: durSeg,
         titulo, visibilidad,
+        transcripcion: String(transcripcion || '').trim() || null,
+        origen: origen === 'nube' ? 'nube' : 'manual',
         es_legado: !!esLegado
     });
     if (e2) {
@@ -279,7 +339,7 @@ export async function grabarHistoria({
         // falló por RLS — en ese caso el objeto queda hasta que el
         // narrador lo borre desde otra grabación o el admin haga
         // limpieza manual).
-        sb.storage.from('historias').remove([path]).catch(() => {});
+        if (path) sb.storage.from('historias').remove([path]).catch(() => {});
         throw e2;
     }
 
@@ -396,9 +456,9 @@ export async function urlInteraccionAudio(storagePath) {
 // update/delete=autor o admin). Order asc por created_at: la más vieja
 // sin usar va primero.
 //
-// Desde la sección Biografía las puntas se consumen del lado del hijo
-// ("preguntas para mi próxima charla"), no como tarjeta del día del
-// viejo. Por eso, POR DEFAULT la lista trae sólo las PENDIENTES: oculta
+// El tutor carga los disparadores y Nube los consume dentro de la charla
+// normal con el adulto mayor; no existe una pantalla de "Historias" para
+// responderlos. Por eso, POR DEFAULT la lista trae sólo las PENDIENTES: oculta
 // las ya contadas (usada_at) y las descartadas a mano (descartada_at,
 // agregada en migración 0016). `incluirInactivas: true` las trae igual
 // (p.ej. para un historial futuro).
@@ -1667,6 +1727,22 @@ export async function marcarCheckin(circleId, {
         throw enriquecer('upsert checkins', error);
     }
     return data;
+}
+
+// Charlas cotidianas que Nube guardó al conversar con el adulto mayor.
+// Se muestran dentro de la sección existente de Nube para los tutores;
+// no constituyen una pestaña de "Historias" ni entran automáticamente
+// en la biografía.
+export async function listarCharlasNube(circleId, limite = 12) {
+    const sb = await sbClient();
+    const { data, error } = await sb.from('historias')
+        .select('id, narrador_id, titulo, transcripcion, created_at')
+        .eq('circle_id', circleId)
+        .eq('origen', 'nube')
+        .order('created_at', { ascending: false })
+        .limit(limite);
+    if (error) throw enriquecer('listar charlas de Nube', error);
+    return data || [];
 }
 
 /** Un familiar le pide a Nube que consulte cómo está el adulto mayor. */

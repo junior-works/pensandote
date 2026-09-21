@@ -34,7 +34,7 @@ import {
 } from './data-emotiva.js';
 import { miembrosDelCirculo } from './circles.js';
 import {
-    CONTACTOS, MEDICO, TUTORIALES
+    CONTACTOS, MEDICO, TUTORIALES, FOTOS_DEL_DIA
 } from './mocks.js';
 
 // =========================================================================
@@ -73,7 +73,17 @@ export function getFotoDelDia() {
 export function getFotosDia() {
     if (state.modoPreview) return state.previewData?.fotos || [];
     if (state.datosReales) return state.datosReales.fotos || [];
-    return [];
+    return FOTOS_DEL_DIA.map((foto, idx) => ({
+        ...foto,
+        created_at: foto.fecha,
+        visibilidad: idx === 1 ? 'personas' : 'circulo',
+        foto_reacciones: idx === 0
+            ? [{ user_id: 'charly', emoji: '❤️' }, { user_id: 'lucia', emoji: '❤️' }, { user_id: 'sofi', emoji: '😂' }]
+            : [],
+        foto_comentarios: idx === 0
+            ? [{ id: 'demo-comentario-1', user_id: 'lucia', autor: 'Lucía', texto: '¡Qué lindo día!', created_at: foto.fecha }]
+            : []
+    }));
 }
 
 export function getPensamientosRecibidos() {

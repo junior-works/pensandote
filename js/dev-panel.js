@@ -75,7 +75,6 @@ function renderDemo(cfgReal) {
         <div class="dev-panel__shortcuts">
             <button data-go="#/inicio">Inicio</button>
             <button data-go="#/v2/pense">v2 Pensé</button>
-            <button data-go="#/v2/historias">v2 Historias</button>
         </div>
         ${cfgReal ? `
             <p class="dev-panel__hint" style="margin-top:0.6rem;">Modo real:</p>

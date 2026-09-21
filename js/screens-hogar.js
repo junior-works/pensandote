@@ -27,7 +27,7 @@ import {
     ultimaFotoDia, ultimasFotosDia, subirFotoDia,
     listarFechas, crearFecha, borrarFecha,
     listarContactosUltimo, marcarContacto,
-    listarHistorias, urlHistoriaAudio, grabarHistoria,
+    listarHistorias, listarCharlasNube, urlHistoriaAudio, grabarHistoria,
     listarInteracciones, toggleFavorita, repreguntarTexto, repreguntarAudio,
     urlInteraccionAudio,
     listarPuntas, crearPunta, descartarPunta,
@@ -43,6 +43,7 @@ import { contarEstudiosNoVistos } from './screens-estudios.js';
 import { entrarPreviewVerComoPapa, limpiarDatosReales } from './preview.js';
 import { montarSeccionContactos, montarSeccionAccesos } from './screens-admin.js';
 import { etiquetaDesdeAdultoMayor } from './utils/parentesco.js';
+import { renderFotoInteracciones, wireFotoInteracciones } from './foto-interacciones.js';
 
 // LocalStorage key para marcar pensamientos recibidos como "vistos".
 const LS_LAST_SEEN = (circleId, userId) =>
@@ -96,6 +97,10 @@ export async function renderHogar($app) {
     _miembrosCache = await miembrosDelCirculo(c.id).catch(() => []);
 
     $app.innerHTML = `
+        <section class="avisos-inicio" id="hogar-avisos-inicio">
+            <div id="sec-avisos-inicio"><p class="muted">Comprobando avisos…</p></div>
+        </section>
+
         <section class="card inicio-hero" id="sec-hero">
             <div class="skel skel--hero" aria-hidden="true"></div>
         </section>
@@ -110,7 +115,7 @@ export async function renderHogar($app) {
 
         <section class="card stack hogar-ultimo-carino" id="sec-ultimo-carino" hidden></section>
 
-        <section class="card stack hogar-puntas-aviso" id="sec-puntas-aviso" hidden></section>
+
 
         <section class="inicio-proximas" id="sec-proximas" hidden></section>
 
@@ -134,10 +139,11 @@ export async function renderHogar($app) {
         </section>
     `;
 
+    pintarAvisos($app.querySelector('#sec-avisos-inicio'), { portada: true });
     cargarHeroFoto(c, $app.querySelector('#sec-hero'));
     cargarCheckinsDelDia(c, $app.querySelector('#sec-checkin-estado'));
     cargarUltimoCarino(c, u, $app.querySelector('#sec-ultimo-carino'));
-    cargarTarjetaPuntas(c, $app.querySelector('#sec-puntas-aviso'));
+
     cargarProximasCosas(c, $app.querySelector('#sec-proximas'));
     cargarActividadReciente(c, $app.querySelector('#sec-actividad'), { limit: 5 });
 
@@ -205,20 +211,6 @@ export async function renderFamilia($app) {
         <h1>💜 Familia</h1>
         <p class="muted">Lo emotivo del círculo: mandá un cariño, subí la foto del día, pedile historias.</p>
 
-        <section class="card stack hogar-biografia">
-            <h2>📚 Biografía</h2>
-            <p class="muted">La historia de vida de ${h(narradorPosesivo)}, armándose con los recuerdos que sumen entre todos.</p>
-            <button class="btn btn--full" id="btn-sumar-charlas">
-                📥 Sumar charlas
-            </button>
-            <button class="btn btn--full" id="btn-cola-biografia">
-                📋 Revisar lo que sumé
-            </button>
-            <button class="btn btn--inicio btn--full" id="btn-ver-biografia">
-                📚 Ver biografía de ${h(narradorParentesco || 'tu familiar')}
-            </button>
-        </section>
-
         <section class="card stack hogar-pense">
             <h2>💛 Pensé en vos</h2>
             <div id="sec-pense-recibidos">cargando…</div>
@@ -236,7 +228,7 @@ export async function renderFamilia($app) {
 
         <section class="card stack">
             <h2>📷 Muro familiar</h2>
-            <p class="muted">Las fotos que comparten quedan acá para las personas que elijan al subirlas.</p>
+            <p class="muted">Compartí recuerdos con todo el círculo o sólo con las personas que elijas.</p>
             <div id="sec-foto">Cargando…</div>
             ${puedeEscribir ? `
                 <fieldset class="foto-privacidad">
@@ -306,17 +298,18 @@ export async function renderFamilia($app) {
         </section>
 
         <section class="card stack hogar-puntas">
-            <h2>🗒 Hoy le pregunto a ${h(narradorPosesivo)}</h2>
+            <h2>🗣 Lo que le va a preguntar Nube</h2>
             <p class="muted">
-                Anotá lo que querés preguntarle en tu <strong>próxima charla</strong>.
-                Sumá las tuyas o elegí de las sugeridas, y descartá las que ya cubriste.
+                Escribí algo que quieras que ${h(narradorPosesivo)} cuente.
+                <strong>Nube se lo pregunta sola</strong>, en algún momento del día,
+                y guarda la charla para que no se pierda.
             </p>
             <form id="form-punta" class="form-punta">
                 <textarea id="punta-texto" class="input-real" rows="3" required
                           placeholder="${narradorParentesco
                             ? `${h(narradorParentesco)}, contame cuándo empezaste a trabajar en la verdulería en la villa…`
                             : 'Contame cuándo empezaste a trabajar en la verdulería…'}"></textarea>
-                <button type="submit" class="btn btn--inicio">➕ Sumar pregunta</button>
+                <button type="submit" class="btn btn--inicio">➕ Que Nube se lo pregunte</button>
             </form>
 
             <details class="ideas-sugeridas">
@@ -325,17 +318,18 @@ export async function renderFamilia($app) {
                 </summary>
                 <p class="muted" style="font-size:0.85em; margin: 0.4rem 0 0.6rem;">
                     Disparadores de historia de vida. Tocá "Agregar" en las
-                    que te sirvan — se suman a tu lista de preguntas.
+                    que te sirvan — Nube se las va a preguntar.
                 </p>
                 <ul class="ideas-sugeridas__lista" id="sec-ideas-sugeridas"></ul>
             </details>
 
             <div id="sec-puntas-cola"><p class="muted">Cargando…</p></div>
-        </section>
 
-        <section class="card stack">
-            <h2>📖 Historias</h2>
-            <div id="sec-historias">Cargando…</div>
+            <div class="charlas-nube">
+                <h3>💬 Lo que conversó con Nube</h3>
+                <p class="muted">Acá aparecen sus respuestas, sin convertirlas todavía en un libro ni en una historia publicada.</p>
+                <div id="sec-charlas-nube"><p class="muted">Cargando charlas…</p></div>
+            </div>
         </section>
     `;
 
@@ -343,14 +337,6 @@ export async function renderFamilia($app) {
     poblarDestinatariosPense(u);
     $app.querySelector('#btn-pense').addEventListener('click', () => onPense(c, u, $app));
     cargarPensRecibidos(c, u, $app.querySelector('#sec-pense-recibidos'));
-
-    // --- Acceso a Biografía (panel del aportador + deep-link a la solapa) ---
-    $app.querySelector('#btn-sumar-charlas')?.addEventListener('click',
-        () => go('#/biografia/sumar'));
-    $app.querySelector('#btn-cola-biografia')?.addEventListener('click',
-        () => go('#/biografia/cola'));
-    $app.querySelector('#btn-ver-biografia')?.addEventListener('click',
-        () => go('#/v2/historias?tab=biografia'));
 
     // --- Foto + Calendario (escritura) ---
     if (puedeEscribir) {
@@ -404,16 +390,16 @@ export async function renderFamilia($app) {
                     acciones: [{ label: 'OK', clase: 'btn--inicio', value: 'ok' }]
                 });
             } finally {
-                btn.disabled = false; btn.textContent = '➕ Sumar pregunta';
+                btn.disabled = false; btn.textContent = '➕ Que Nube se lo pregunte';
             }
         });
         actualizarSeccionPuntas(c, u, $app);
+        cargarCharlasNube(c, $app.querySelector('#sec-charlas-nube'));
     }
 
     cargarMuroFotos(c, $app.querySelector('#sec-foto'));
     cargarFechas(c, puedeEscribir, $app.querySelector('#sec-fechas'));
     cargarContactosUltimo(c, u, $app.querySelector('#sec-contactos'));
-    cargarHistorias(c, m, u, $app.querySelector('#sec-historias'));
 }
 
 // =====================================================================
@@ -661,10 +647,12 @@ export async function renderAccesos($app) {
 // INICIO — helpers del "pulso del día"
 // =====================================================================
 
-/** Hero 16:9 con la foto del día + epígrafe + "hace X". Empty state cálido. */
+/** Hero 16:9 con la última foto visible + epígrafe + "hace X". */
 async function cargarHeroFoto(c, $cont) {
     if (!$cont) return;
     try {
+        _fotoUrlsMuro.forEach(url => URL.revokeObjectURL(url));
+        _fotoUrlsMuro = [];
         const f = await ultimaFotoDia(c.id);
         if (_fotoUrlActiva) {
             URL.revokeObjectURL(_fotoUrlActiva);
@@ -674,7 +662,7 @@ async function cargarHeroFoto(c, $cont) {
             $cont.innerHTML = `
                 <div class="inicio-hero__empty">
                     <span class="inicio-hero__empty-icon">📷</span>
-                    <p>Todavía no hay foto del día.<br>Subí una desde <strong>Familia</strong> y aparece acá grande.</p>
+                    <p>Todavía no hay fotos en el muro.<br>Compartí una desde <strong>Familia</strong> y aparece acá grande.</p>
                     <button class="btn btn--mini" data-ir-familia>Ir a Familia</button>
                 </div>`;
             $cont.querySelector('[data-ir-familia]')?.addEventListener('click', () => go('#/familia'));
@@ -684,7 +672,7 @@ async function cargarHeroFoto(c, $cont) {
         const hace = tiempoRelativo(f.created_at);
         $cont.innerHTML = `
             <figure class="inicio-hero__fig">
-                <img class="inicio-hero__img" src="${h(f.url)}" alt="${h(f.epigrafe || 'Foto del día')}">
+                <img class="inicio-hero__img" src="${h(f.url)}" alt="${h(f.epigrafe || 'Foto familiar')}">
                 <figcaption class="inicio-hero__cap">
                     ${f.epigrafe ? `<strong class="t-emocional">${h(f.epigrafe)}</strong>` : ''}
                     <small class="muted">${h(hace)}</small>
@@ -693,7 +681,7 @@ async function cargarHeroFoto(c, $cont) {
         `;
     } catch (err) {
         console.error('[cargarHeroFoto]', err, err?.detalle);
-        $cont.innerHTML = `<p class="muted">No pude cargar la foto del día.</p>`;
+        $cont.innerHTML = `<p class="muted">No pude cargar la última foto del muro.</p>`;
     }
 }
 
@@ -729,6 +717,10 @@ async function cargarUltimoCarino(c, u, $wrap) {
 }
 
 /**
+ * SIN USO desde que las preguntas las hace Nube: antes esta tarjeta le
+ * recordaba al familiar que tenia preguntas pendientes para su proxima
+ * charla. Se deja definida por si hace falta volver atras.
+ *
  * Tarjeta destacada en el Inicio: "Tenés N ideas para preguntarle…".
  * Sólo si hay puntas pendientes (listarPuntas ya filtra usadas/descartadas).
  * Lleva a Familia, donde está la lista completa "Hoy le pregunto a…".
@@ -957,7 +949,7 @@ async function cargarPensRecibidos(c, u, $cont) {
 }
 
 // =====================================================================
-// Foto del día
+// Muro familiar
 // =====================================================================
 async function cargarMuroFotos(c, $cont) {
     try {
@@ -978,22 +970,38 @@ async function cargarMuroFotos(c, $cont) {
                     const autor = (_miembrosCache || []).find(m => m.user_id === f.subida_por);
                     const nombre = autor?.user?.nombre_completo || autor?.parentesco || 'Un familiar';
                     const cantidad = Array.isArray(f.foto_visibilidad) ? f.foto_visibilidad.length : 0;
+                    const esAutor = f.subida_por === state.usuarioReal?.id;
                     const alcance = f.visibilidad === 'personas'
-                        ? `Compartida con ${cantidad || 'algunas'} ${cantidad === 1 ? 'persona' : 'personas'}`
+                        ? (esAutor
+                            ? `Compartida con ${cantidad || 'las personas elegidas'}` + (cantidad ? ` ${cantidad === 1 ? 'persona' : 'personas'}` : '')
+                            : 'Compartida con vos')
                         : 'Visible para todo el círculo';
                     return `
                         <figure class="muro-foto">
-                            <img src="${h(f.url)}" alt="${h(f.epigrafe || 'Foto familiar')}" loading="lazy">
+                            <img src="${h(f.url)}" alt="${h(f.epigrafe || 'Foto familiar')}" loading="lazy"
+                                 data-foto-abrir="${h(f.id)}" role="button" tabindex="0"
+                                 aria-label="Abrir foto y reaccionar">
                             <figcaption>
                                 ${f.epigrafe ? `<strong>${h(f.epigrafe)}</strong>` : ''}
                                 <span>${h(nombre)} · ${h(new Date(f.created_at).toLocaleDateString('es-AR'))}</span>
                                 <small>${f.visibilidad === 'personas' ? '🔒' : '👨‍👩‍👧'} ${h(alcance)}</small>
                             </figcaption>
+                            ${renderFotoInteracciones(f, _miembrosCache, state.usuarioReal?.id)}
                         </figure>
                     `;
                 }).join('')}
             </div>
         `;
+        wireFotoInteracciones($cont, fotos, {
+            circleId: c.id,
+            usuarioId: state.usuarioReal?.id,
+            miembros: _miembrosCache,
+            onError: (error) => modal({
+                titulo: 'No pude guardar eso',
+                cuerpo: `<p>${h(error?.message || 'Probá de nuevo en un momento.')}</p>`,
+                acciones: [{ label: 'OK', clase: 'btn--inicio', value: 'ok' }]
+            })
+        });
     } catch (err) {
         console.error('[cargarMuroFotos]', err, err?.detalle);
         renderErrorEstructurado($cont, err, { titulo: 'No pude cargar el muro familiar' });
@@ -1505,12 +1513,12 @@ async function actualizarSeccionPuntas(c, u, $app) {
 // punta es propia o si el familiar es admin.
 function renderCola($cont, puntas, c, u, $app) {
     if (!puntas.length) {
-        $cont.innerHTML = `<p class="muted">Todavía no hay preguntas en tu lista. Sumá una arriba o elegí de las sugeridas.</p>`;
+        $cont.innerHTML = `<p class="muted">No hay nada pendiente: Nube ya preguntó todo lo que cargaste. Sumá una arriba o elegí de las sugeridas.</p>`;
         return;
     }
     const esAdmin = state.membresiaReal?.permission_level === 'admin';
     $cont.innerHTML = `
-        <h3 style="margin: 0.8rem 0 0.4rem; font-size: 0.95em;">Tu lista (${puntas.length} ${puntas.length === 1 ? 'pregunta' : 'preguntas'})</h3>
+        <h3 style="margin: 0.8rem 0 0.4rem; font-size: 0.95em;">Todavía sin preguntar (${puntas.length})</h3>
         <ul class="puntas-cola">
             ${puntas.map(p => {
                 const puedeDescartar = p.de_user_id === u.id || esAdmin;
@@ -1580,7 +1588,7 @@ function renderSugeridas($cont, yaCargadas, c, u, $app) {
 // =====================================================================
 // Avisos (Web Push) — UI de activación
 // =====================================================================
-async function pintarAvisos($cont) {
+async function pintarAvisos($cont, { portada = false } = {}) {
     if (!$cont) return;
     const vapid = window.PENSANDOTE_CONFIG?.VAPID_PUBLIC_KEY || '';
     if (!vapid || vapid.startsWith('REEMPLAZAR')) {
@@ -1594,6 +1602,11 @@ async function pintarAvisos($cont) {
     let st;
     try { st = await estadoAvisos(); }
     catch (err) { st = { estado: 'desactivado' }; }
+
+    if (portada) {
+        pintarAvisosPortada($cont, st, vapid);
+        return;
+    }
 
     if (st.estado === 'no-soporta') {
         $cont.innerHTML = `
@@ -1669,7 +1682,8 @@ async function pintarAvisos($cont) {
             <button class="btn btn--mini btn--inicio" id="btn-activar-avisos">Activar avisos</button>
         </div>
         <p class="muted avisos-help">
-            Te avisamos cuando tu familiar no marque su check-in del día.
+            Activálos una sola vez en este teléfono. Te avisaremos cuando tu familiar responda a Nube,
+            comparta una foto o confirme un remedio.
         </p>
     `;
     $cont.querySelector('#btn-activar-avisos').addEventListener('click', async (ev) => {
@@ -1753,6 +1767,89 @@ async function cargarCheckinsDelDia(c, $cont) {
             }
         });
     });
+}
+
+function pintarAvisosPortada($cont, st, vapid) {
+    const nube = './assets/nube/nube-reposo.png';
+    const base = (contenido, accion = '') => `
+        <div class="avisos-inicio__nube" aria-hidden="true">
+            <img src="${nube}" alt="">
+        </div>
+        <div class="avisos-inicio__texto">${contenido}</div>
+        ${accion}`;
+
+    if (st.estado === 'activado') {
+        $cont.parentElement.classList.add('is-active');
+        $cont.innerHTML = base(`
+            <strong>Nube te mantiene al tanto</strong>
+            <span>Los avisos están activos en este teléfono.</span>
+        `, '<span class="avisos-inicio__estado">Activo</span>');
+        return;
+    }
+
+    if (st.estado === 'no-soporta') {
+        $cont.parentElement.hidden = true;
+        return;
+    }
+
+    if (st.estado === 'bloqueado') {
+        $cont.parentElement.classList.add('is-blocked');
+        $cont.innerHTML = base(`
+            <strong>Nube no puede avisarte todavía</strong>
+            <span>Habilitá las notificaciones de Pensándote desde el candado del navegador.</span>
+        `);
+        return;
+    }
+
+    $cont.innerHTML = base(`
+        <strong>Que Nube te cuente lo importante</strong>
+        <span>Enterate cuando responda, comparta una foto o confirme un remedio.</span>
+    `, '<button class="avisos-inicio__accion" id="btn-activar-avisos-inicio">Activar</button>');
+
+    $cont.querySelector('#btn-activar-avisos-inicio')?.addEventListener('click', async (ev) => {
+        const btn = ev.currentTarget;
+        btn.disabled = true;
+        btn.textContent = 'Activando…';
+        try {
+            await activarAvisos(vapid);
+            pintarAvisos($cont, { portada: true });
+        } catch (err) {
+            btn.disabled = false;
+            btn.textContent = 'Activar';
+            await modal({
+                titulo: 'No pude activar los avisos',
+                cuerpo: `<p>${h(err?.message || err)}</p>`,
+                acciones: [{ label: 'Entendido', clase: 'btn--inicio', value: 'ok' }]
+            });
+        }
+    });
+}
+
+async function cargarCharlasNube(c, $cont) {
+    if (!$cont) return;
+    try {
+        const charlas = await listarCharlasNube(c.id);
+        if (!charlas.length) {
+            $cont.innerHTML = '<p class="muted">Todavía no hay respuestas guardadas.</p>';
+            return;
+        }
+        $cont.innerHTML = `
+            <ul class="charlas-nube__lista">
+                ${charlas.map(charla => {
+                    const fecha = new Date(charla.created_at).toLocaleString('es-AR', {
+                        day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'
+                    });
+                    return `
+                        <li class="charlas-nube__item">
+                            <p class="charlas-nube__pregunta">${h(charla.titulo || 'Una charla con Nube')}</p>
+                            <blockquote>${h(charla.transcripcion || 'Respuesta sin texto')}</blockquote>
+                            <time datetime="${h(charla.created_at)}">${h(fecha)}</time>
+                        </li>`;
+                }).join('')}
+            </ul>`;
+    } catch (err) {
+        $cont.innerHTML = `<p class="muted">No pude cargar las charlas: ${h(err?.message || err)}</p>`;
+    }
 }
 
 // =====================================================================

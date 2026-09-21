@@ -97,9 +97,11 @@ export function installModalBackButton(overlay, onClose) {
     overlay.__pensandoteOnKey = onKey;
     window.addEventListener('popstate', onPop);
     document.addEventListener('keydown', onKey);
+    atraparFoco(overlay);
 }
 
 export function cleanupModalBackButton(overlay) {
+    liberarFoco(overlay);
     const onPop = overlay.__pensandoteOnPop;
     const onKey = overlay.__pensandoteOnKey;
     const key   = overlay.__pensandoteModalKey;
@@ -342,3 +344,89 @@ export const bannerV2 = `
         🚧 <strong>v2 — Próximamente.</strong> Vista previa de diseño.
     </div>
 `;
+
+/* =====================================================================
+ * Accesibilidad de modales — trampa de foco.
+ * ---------------------------------------------------------------------
+ * Los modales se arman a mano en varias pantallas, pero todos pasan por
+ * installModalBackButton / cleanupModalBackButton. Enganchamos ahi para
+ * cubrirlos a todos de una, incluidos los que se agreguen despues.
+ *
+ * Que hace:
+ *   - Guarda que elemento tenia el foco antes de abrir.
+ *   - Manda el foco al dialogo (asi el lector de pantalla lee el titulo,
+ *     y no arrancamos parados sobre la "x" de cerrar).
+ *   - Cicla el Tab dentro del dialogo, sin escaparse al fondo.
+ *   - Al cerrar, devuelve el foco a donde estaba.
+ *
+ * Con modales anidados, cada uno ignora los eventos que no son suyos.
+ * ===================================================================== */
+
+const FOCUSABLES = [
+    'a[href]', 'button:not([disabled])', 'input:not([disabled])',
+    'select:not([disabled])', 'textarea:not([disabled])',
+    '[tabindex]:not([tabindex="-1"])'
+].join(', ');
+
+export function atraparFoco(overlay) {
+    if (!overlay || overlay.__pensandoteFocoActivo) return;
+
+    const dialogo = overlay.matches?.('[role="dialog"]')
+        ? overlay
+        : overlay.querySelector('[role="dialog"]');
+    if (!dialogo) return;
+
+    overlay.__pensandoteFocoActivo = true;
+    overlay.__pensandoteFocoPrevio = document.activeElement;
+
+    if (!dialogo.hasAttribute('tabindex')) dialogo.setAttribute('tabindex', '-1');
+    try { dialogo.focus({ preventScroll: true }); } catch (_) { }
+
+    function enfocables() {
+        return [...dialogo.querySelectorAll(FOCUSABLES)]
+            .filter(el => el.getClientRects().length > 0);
+    }
+
+    function onTab(e) {
+        if (e.key !== 'Tab') return;
+        // Si el foco no esta en mi dialogo, no es mi evento (modal anidado).
+        const activo = document.activeElement;
+        if (activo !== dialogo && !dialogo.contains(activo)) return;
+
+        const lista = enfocables();
+        if (!lista.length) {
+            e.preventDefault();
+            try { dialogo.focus({ preventScroll: true }); } catch (_) { }
+            return;
+        }
+        const primero = lista[0];
+        const ultimo  = lista[lista.length - 1];
+
+        if (e.shiftKey && (activo === primero || activo === dialogo)) {
+            e.preventDefault();
+            ultimo.focus();
+        } else if (!e.shiftKey && activo === ultimo) {
+            e.preventDefault();
+            primero.focus();
+        }
+    }
+
+    overlay.__pensandoteOnTab = onTab;
+    document.addEventListener('keydown', onTab, true);
+}
+
+export function liberarFoco(overlay) {
+    if (!overlay || !overlay.__pensandoteFocoActivo) return;
+
+    if (overlay.__pensandoteOnTab) {
+        document.removeEventListener('keydown', overlay.__pensandoteOnTab, true);
+    }
+    const previo = overlay.__pensandoteFocoPrevio;
+    overlay.__pensandoteFocoActivo = false;
+    overlay.__pensandoteOnTab = null;
+    overlay.__pensandoteFocoPrevio = null;
+
+    if (previo && document.contains(previo) && typeof previo.focus === 'function') {
+        try { previo.focus({ preventScroll: true }); } catch (_) { }
+    }
+}

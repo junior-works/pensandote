@@ -61,8 +61,8 @@ export function renderInicio($app) {
 
             <button class="widget widget--v2" data-go="#/v2/foto-del-dia">
                 <span class="badge-v2">v2</span>
-                <h3>📷 Foto del día</h3>
-                <p class="muted">Una foto por día a la pantalla de inicio de tu viejo.</p>
+                <h3>📷 Muro familiar</h3>
+                <p class="muted">Compartí fotos con todo el círculo o elegí quién puede verlas.</p>
             </button>
 
             <button class="widget widget--v2" data-go="#/v2/audios">
@@ -71,23 +71,12 @@ export function renderInicio($app) {
                 <p class="muted">Mensajes de voz cortitos, sin ansiedad de tipear.</p>
             </button>
 
-            <button class="widget widget--v2" data-go="#/v2/historias">
-                <span class="badge-v2">v2</span>
-                <h3>📖 Historias / legado</h3>
-                <p class="muted">Guardá las historias de su vida en su voz.</p>
-            </button>
-
             <button class="widget widget--v2" data-go="#/v2/calendario">
                 <span class="badge-v2">v2</span>
                 <h3>📅 Calendario afectivo</h3>
                 <p class="muted">Cumpleaños y countdowns a reencuentros.</p>
             </button>
 
-            <button class="widget widget--v2" data-go="#/v2/historias-tab">
-                <span class="badge-v2">v2</span>
-                <h3>🎧 Historias para responder</h3>
-                <p class="muted">Las anécdotas que grabó tu viejo, listas para que las escuches.</p>
-            </button>
         </div>
 
         <h2>Configuración</h2>

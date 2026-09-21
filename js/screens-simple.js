@@ -28,6 +28,7 @@ import { dispararPanico } from './utils/panico.js';
 import { crearDictado } from './utils/dictado.js';
 import { iconoContacto } from './utils/genero.js';
 import { montarNubeInicio } from './nube-asistente.js';
+import { renderFotoInteracciones, wireFotoInteracciones } from './foto-interacciones.js';
 
 // =====================================================================
 // INICIO
@@ -147,19 +148,25 @@ export async function renderInicio($app) {
 
         <section class="nube-hoy" aria-label="Información de hoy">
             <h2>Hoy</h2>
+            <h3 class="muro-simple__titulo">📷 Muro familiar</h3>
             ${fotos.length ? `
                 <section class="galeria-fotos foto-cabecera">
                     <div class="galeria__track" id="galeria-track">
-                        ${fotos.map((f, i) => `
+                        ${fotos.map((f, i) => {
+                            const meta = metaFotoMuro(f, miembros, yo.id);
+                            return `
                             <figure class="galeria__slide" data-idx="${i}">
-                                <img class="galeria__img" src="${h(f.url)}" alt="${h(f.epigrafe || 'Foto')}">
-                                ${f.epigrafe ? `<figcaption class="t-emocional">${h(f.epigrafe)}</figcaption>` : ''}
-                                ${puedeCorazonear(f, yo.id) ? `
-                                    <button class="foto-corazon" data-corazon="${i}"
-                                            aria-label="Pensé en vos">🤍</button>
-                                ` : ''}
+                                <img class="galeria__img" src="${h(f.url)}" alt="${h(f.epigrafe || 'Foto')}"
+                                     data-foto-abrir="${h(f.id)}" role="button" tabindex="0"
+                                     aria-label="Abrir foto y reaccionar">
+                                <figcaption>
+                                    ${f.epigrafe ? `<strong class="t-emocional">${h(f.epigrafe)}</strong>` : ''}
+                                    <small>${h(meta.autor)} · ${h(meta.fecha)}</small>
+                                    <small>${meta.privada ? '🔒 Compartida con vos' : '👨‍👩‍👧 Todo el círculo'}</small>
+                                </figcaption>
+                                ${renderFotoInteracciones(f, miembros, yo.id)}
                             </figure>
-                        `).join('')}
+                        `; }).join('')}
                     </div>
                     ${fotos.length > 1 ? `
                         <div class="galeria__dots" id="galeria-dots">
@@ -171,7 +178,7 @@ export async function renderInicio($app) {
                 <article class="foto-del-dia foto-del-dia--placeholder foto-cabecera">
                     <div class="foto-del-dia__cuerpo">
                         <span class="foto-del-dia__emoji">📷</span>
-                        <p>Acá vas a ver las fotos que te manda tu familia.</p>
+                        <p>Acá vas a ver las fotos que comparte tu familia.</p>
                     </div>
                 </article>
             `}
@@ -195,13 +202,18 @@ export async function renderInicio($app) {
 
         <nav class="nube-mas" aria-label="Más opciones">
             <button class="btn btn--xl btn--medico" data-go="#/salud">🩺 Salud</button>
-            <button class="btn btn--xl btn--pense" data-go="#/v2/historias">📖 Historias</button>
         </nav>
     `;
     wireNav($app);
     wireAccesos($app);
     wireGaleria($app, fotos);
-    wireCorazones($app.querySelectorAll('.galeria__slide .foto-corazon'), fotos);
+    wireFotoInteracciones($app, fotos, {
+        circleId: state.circuloActivoIdReal || 'demo-circle',
+        usuarioId: yo.id,
+        miembros,
+        demo: state.modo !== 'real' || esPreview(),
+        onError: () => mostrarToast('No pude guardar eso, probá de nuevo')
+    });
     wireRemediosAviso($app);
     wireAvisosSimple($app);
     montarNubeInicio($app);
@@ -355,66 +367,20 @@ function wireGaleria($app, fotos) {
             $dots.forEach((d, i) => d.classList.toggle('is-active', i === idx));
         });
     }
-    $app.querySelectorAll('.galeria__slide').forEach(slide => {
-        slide.addEventListener('click', (ev) => {
-            // El corazón vive adentro del slide pero NO abre lightbox —
-            // su click no debe propagar al figure.
-            if (ev.target.closest('.foto-corazon')) return;
-            abrirLightboxFotos(fotos, Number(slide.dataset.idx) || 0);
-        });
-    });
 }
 
-/**
- * ¿Mostramos corazón "pensé en vos" sobre esta foto?
- * No si el papá la subió él mismo (raro pero posible), y no si
- * la foto no tiene uploader válido (no sabríamos a quién mandar).
- */
-function puedeCorazonear(f, miUserId) {
-    return !!f?.subida_por && f.subida_por !== miUserId;
-}
-
-/** Wirea los corazones (gallery o lightbox) — comparten lógica. */
-function wireCorazones($botones, fotos) {
-    if (!$botones || !$botones.length) return;
-    const miembros = getMiembrosReales();
-    $botones.forEach(btn => {
-        btn.addEventListener('click', async (ev) => {
-            ev.stopPropagation();
-            const idx = Number(btn.dataset.corazon);
-            const f = fotos[idx];
-            if (!f?.subida_por) return;
-
-            // Visual: pintamos lleno inmediatamente (optimistic) y
-            // bloqueamos para no spamear. Si falla la query, revertimos.
-            const ya = btn.classList.contains('is-mandado');
-            if (ya) return;
-            btn.textContent = '❤️';
-            btn.classList.add('is-mandado');
-            btn.disabled = true;
-
-            const autor = miembros.find(m => m.user_id === f.subida_por);
-            const quien = (autor?.parentesco || 'familiar').toLowerCase();
-
-            if (esPreview()) {
-                mostrarToast(`Le habrías avisado a tu ${quien} 💛 (vista previa)`);
-                return;
-            }
-            try {
-                await enviarPensamiento({
-                    circleId:    state.circuloActivoIdReal,
-                    paraUserId:  f.subida_por
-                });
-                mostrarToast(`Le avisamos a tu ${quien} 💛`);
-            } catch (err) {
-                console.warn('[corazon foto]', err);
-                btn.textContent = '🤍';
-                btn.classList.remove('is-mandado');
-                btn.disabled = false;
-                mostrarToast('No pude avisarle, probá de nuevo');
-            }
-        });
-    });
+/** Texto humano del muro, sin mostrar la lista de destinatarios. */
+function metaFotoMuro(f, miembros, miUserId) {
+    const autor = (miembros || []).find(m => m.user_id === f?.subida_por);
+    const nombre = autor?.user?.nombre_completo || autor?.nombre_completo || autor?.parentesco || f?.autor || 'Tu familia';
+    const fecha = f?.created_at
+        ? new Date(f.created_at).toLocaleDateString('es-AR', { day: 'numeric', month: 'short' })
+        : 'hoy';
+    return {
+        autor: f?.subida_por === miUserId ? 'La compartiste vos' : nombre,
+        fecha,
+        privada: f?.visibilidad === 'personas'
+    };
 }
 
 // =====================================================================
@@ -705,21 +671,21 @@ function abrirLightboxFotos(fotos, startIdx = 0) {
         <button class="lightbox__close" aria-label="Cerrar">✕</button>
         <div class="lightbox__counter" id="lb-counter">${startIdx + 1} de ${fotos.length}</div>
         <div class="lightbox__track" id="lb-track">
-            ${fotos.map((f, i) => `
+            ${fotos.map((f, i) => {
+                const meta = metaFotoMuro(f, getMiembrosReales(), yo.id);
+                return `
                 <figure class="lightbox__slide">
                     <img src="${h(f.url)}" alt="${h(f.epigrafe || 'Foto')}">
-                    ${f.epigrafe ? `<figcaption>${h(f.epigrafe)}</figcaption>` : ''}
-                    ${puedeCorazonear(f, yo.id) ? `
-                        <button class="foto-corazon foto-corazon--lightbox" data-corazon="${i}"
-                                aria-label="Pensé en vos">🤍</button>
-                    ` : ''}
+                    <figcaption>
+                        ${f.epigrafe ? `<strong>${h(f.epigrafe)}</strong>` : ''}
+                        <small>${h(meta.autor)} · ${h(meta.fecha)}</small>
+                        <small>${meta.privada ? '🔒 Compartida con vos' : '👨‍👩‍👧 Todo el círculo'}</small>
+                    </figcaption>
                 </figure>
-            `).join('')}
+            `; }).join('')}
         </div>
     `;
     document.body.appendChild(overlay);
-    wireCorazones(overlay.querySelectorAll('.foto-corazon'), fotos);
-
     const $track   = overlay.querySelector('#lb-track');
     const $counter = overlay.querySelector('#lb-counter');
 

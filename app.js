@@ -58,13 +58,15 @@ const RUTAS = {
     'v2': {
         both: (app, ruta) => {
             const sub = ruta.params[0] || 'pense';
+            if (sub === 'historias' || sub === 'historias-tab') {
+                goReplace('#/inicio');
+                return;
+            }
             const map = {
                 'pense':          V2.renderPense,
                 'foto-del-dia':   V2.renderFotoDelDia,
                 'audios':         V2.renderAudios,
-                'historias':      V2.renderHistorias,
-                'calendario':     V2.renderCalendario,
-                'historias-tab':  V2.renderHistoriasTab
+                'calendario':     V2.renderCalendario
             };
             const rutaInterna = { ...ruta, params: ruta.params.slice(1) };
             (map[sub] || V2.renderPense)(app, rutaInterna);
@@ -217,11 +219,10 @@ function renderRoutePreview(ruta) {
         if (ruta.name === 'haceme-acordar') return HacemeAcordar.renderHacemeAcordarSimple($app);
         if (ruta.name === 'v2') {
             const sub = ruta.params[0];
-            // Historias: usamos el mismo render real (Papa.*) — ya tiene
-            // guardas esPreview() para no grabar ni marcar puntas en vivo.
-            // Antes ruteábamos a Preview.renderHistoriasPreview que era
-            // una versión vieja sin tabs / sin puntas / sin legado.
-            if (sub === 'historias') return Papa.renderHistoriasSimpleReal($app);
+            if (sub === 'historias' || sub === 'historias-tab') {
+                goReplace('#/inicio');
+                return;
+            }
             // #/v2/pense quedó deprecated cuando el "pensé" pasó al
             // corazón sobre la foto. Si alguien navega manualmente, lo
             // mandamos al inicio.
@@ -347,16 +348,19 @@ function renderRouteReal(ruta) {
             }
             return HacemeAcordar.renderHacemeAcordarAdmin($app);
         }
-        // #/v2/pense y #/v2/historias en modo real (no preview): pantallas
-        // funcionales del papá. En preview el router las desvía/ignora
-        // — ver renderRoutePreview más arriba.
+        // Los viejos accesos a Historias se redirigen al inicio: ahora las
+        // preguntas forman parte de la conversación normal con Nube.
         if (ruta.name === 'v2') {
             const sub = ruta.params[0];
             if (sub === 'pense')     return Papa.renderPenseSimpleReal($app);
-            if (sub === 'historias') return Papa.renderHistoriasSimpleReal($app);
+            if (sub === 'historias' || sub === 'historias-tab') {
+                goReplace('#/inicio');
+                return;
+            }
         }
-        // Biografía — panel del aportador (dashboard del familiar). El papá
-        // (modo simple) no cura: ve su biografía dentro de #/v2/historias.
+        // Biografía — panel interno del aportador. No se expone desde la
+        // experiencia principal hasta definir con usuarios qué destino darle
+        // a las charlas que Nube va guardando.
         if (ruta.name === 'biografia' && state.membresiaReal?.interface_mode !== 'simple') {
             return Biografia.renderBiografiaDashboard($app, ruta.params[0] || 'panel');
         }

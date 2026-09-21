@@ -1508,8 +1508,8 @@ const PASOS_GUIA_ADMIN = [
         texto: 'Es el gesto más simple. Tocás "Pensé en vos", elegís a quién, y a esa persona le aparece adentro de la app un cariño tuyo. No es un mensaje y no se contesta — es presencia. Él también te puede mandar un pensé desde su lado.'
     },
     {
-        titulo: 'Historias y Legado',
-        texto: 'Tu papá puede grabar anécdotas con su voz desde su app. Hay dos pestañas: "Historias" comparte lo que él quiera con quien él elija (todos del círculo, sólo hijos, o personas específicas); y "Legado" queda guardado privado para él, hasta que vos como admin lo abrís. El Legado es una acción delicada: el botón para abrirlo está al final del todo, separado, y pide confirmación. Solo abrilo cuando corresponda. Se puede volver a cerrar.'
+        titulo: 'Charlas con Nube',
+        texto: 'Podés dejar preguntas o recuerdos para conversar. Nube se los pregunta de manera natural cuando tu familiar usa la app y guarda lo que responde. Por ahora no se presenta como libro ni como una sección aparte: primero queremos conservar esas charlas y después decidir juntos el mejor destino.'
     },
     {
         titulo: 'Ver como lo ve papá',

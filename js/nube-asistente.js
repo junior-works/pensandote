@@ -9,7 +9,7 @@
  */
 
 import { state } from './state.js';
-import { h, speakES, stopSpeak } from './ui.js';
+import { h, speakES, stopSpeak, atraparFoco, liberarFoco } from './ui.js';
 import { crearDictado } from './utils/dictado.js';
 import {
     consultarAsistente,
@@ -18,7 +18,10 @@ import {
     marcarCheckin,
     checkinDeHoy,
     solicitudCheckinPendiente,
-    responderSolicitudCheckin
+    responderSolicitudCheckin,
+    listarPuntas,
+    grabarHistoria,
+    marcarPuntaUsada
 } from './data-emotiva.js';
 import { TUTORIALES } from './mocks.js';
 import { ejecutarAccion, construirContexto } from './asistente-pensa.js';
@@ -49,7 +52,15 @@ const SUGERENCIAS = [
     'Podés hacerme preguntas sobre PAMI.',
     'Podés preguntarme cómo hacer cosas con el teléfono.',
     'Si querés que te recuerde algo, decímelo.',
+    'Si tenés ganas, podés contarme una historia de tu vida.',
     'También puedo ayudarte a encontrar tus remedios o estudios.'
+];
+
+const PREGUNTAS_RELATO = [
+    '¿Cuál fue el primer trabajo que tuviste y cómo te sentiste ese primer día?',
+    '¿Cómo era el barrio donde creciste?',
+    '¿Qué comida de tu infancia te trae lindos recuerdos?',
+    '¿Cómo conociste a una persona muy importante para vos?'
 ];
 
 const VIDEO_TUTORIALES = {
@@ -94,6 +105,10 @@ export function montarNubeInicio($app) {
     let recordatorioPendiente = null;
     let checkinPendiente = null;
     let cerrarGuiaActiva = null;
+    let relatoPendiente = null;
+    let preguntaRelatoIdx = 0;
+    let relatoTimer = null;
+    let relatoPollTimer = null;
 
     // Todos los gestos viven en una única textura. Cambiar coordenadas de
     // esa textura es una operación de composición: no descarga, decodifica
@@ -176,7 +191,7 @@ export function montarNubeInicio($app) {
         clearTimeout(sugerenciaTimer);
         sugerenciaTimer = setTimeout(() => {
             if (!vivo) return;
-            if (ocupado || recordatorioPendiente || $rig.dataset.state !== 'idle') {
+            if (ocupado || recordatorioPendiente || checkinPendiente || relatoPendiente || $rig.dataset.state !== 'idle') {
                 programarSugerencia(15000);
                 return;
             }
@@ -184,7 +199,7 @@ export function montarNubeInicio($app) {
             setFrame('happy', 'happy');
             sugerenciaIdx = (sugerenciaIdx + 1) % SUGERENCIAS.length;
             setTimeout(() => {
-                if (!vivo || ocupado || recordatorioPendiente) return;
+                if (!vivo || ocupado || recordatorioPendiente || checkinPendiente || relatoPendiente) return;
                 setFrame('idle', 'idle');
             }, 1100);
             // Una sugerencia visible, silenciosa y espaciada. No usamos
@@ -216,7 +231,7 @@ export function montarNubeInicio($app) {
     }
 
     function formularCheckin(solicitud = null) {
-        if (!vivo || ocupado || recordatorioPendiente || checkinPendiente) return false;
+        if (!vivo || ocupado || recordatorioPendiente || checkinPendiente || relatoPendiente) return false;
         checkinPendiente = {
             solicitudId: solicitud?.id || null,
             origen: solicitud ? 'tutor' : 'diario'
@@ -276,6 +291,98 @@ export function montarNubeInicio($app) {
         formularCheckin();
     }
 
+    function claveRelatoDemo() {
+        const userId = state.usuarioReal?.id || getMiembroVisto()?.id || 'demo';
+        return `pensandote:nube:relato:${userId}:${fechaArgentina()}`;
+    }
+
+    function yaPreguntoRelatoDemo() {
+        try { return localStorage.getItem(claveRelatoDemo()) === '1'; }
+        catch (_) { return false; }
+    }
+
+    function formularRelato(punta) {
+        if (!vivo || ocupado || checkinPendiente || recordatorioPendiente || relatoPendiente) return false;
+        const pregunta = String(punta?.texto || '').trim();
+        if (!pregunta) return false;
+        relatoPendiente = {
+            puntaId: punta?.id || null,
+            pregunta
+        };
+        ultimaRespuesta = `Quiero preguntarte algo. ${pregunta}`;
+        decir(ultimaRespuesta, 'speaking');
+        empezarHabla();
+        speakES(ultimaRespuesta, { onEnd: terminarHabla });
+        if (state.modo !== 'real') {
+            try { localStorage.setItem(claveRelatoDemo(), '1'); } catch (_) {}
+        }
+        return true;
+    }
+
+    async function buscarRelatoPendiente() {
+        if (!vivo || ocupado || checkinPendiente || recordatorioPendiente || relatoPendiente) return;
+        if (state.modo === 'real' && !esPreview()) {
+            if (!state.usuarioReal || !state.circuloActivoIdReal) return;
+            try {
+                const puntas = await listarPuntas(state.circuloActivoIdReal);
+                if (puntas[0]) formularRelato(puntas[0]);
+            } catch (err) {
+                console.warn('[nube relato pendiente]', err);
+            }
+            return;
+        }
+        if (!yaPreguntoRelatoDemo()) {
+            const pregunta = PREGUNTAS_RELATO[preguntaRelatoIdx % PREGUNTAS_RELATO.length];
+            preguntaRelatoIdx += 1;
+            formularRelato({ id: null, texto: pregunta });
+        }
+    }
+
+    async function guardarRespuestaRelato(texto) {
+        if (!relatoPendiente || ocupado) return;
+        const respuesta = String(texto || '').trim();
+        if (!respuesta) return;
+        const relato = relatoPendiente;
+        ocupado = true;
+        stopSpeak();
+        $texto.disabled = true;
+        $enviar.disabled = true;
+        decir('Gracias por contármelo. Lo estoy guardando…', 'thinking');
+        setFrame('thinking', 'thinking');
+        try {
+            if (state.modo === 'real' && !esPreview()) {
+                await grabarHistoria({
+                    circleId: state.circuloActivoIdReal,
+                    narradorId: state.usuarioReal.id,
+                    audioBlob: null,
+                    durSeg: null,
+                    visibilidad: 'todos',
+                    titulo: relato.pregunta.slice(0, 140),
+                    transcripcion: respuesta,
+                    origen: 'nube'
+                });
+                if (relato.puntaId) await marcarPuntaUsada(relato.puntaId);
+            }
+            relatoPendiente = null;
+            $texto.value = '';
+            ultimaRespuesta = state.modo === 'real'
+                ? 'Gracias. Guardé lo que me contaste para que no se pierda.'
+                : 'Gracias. En la aplicación real, esta charla quedaría guardada para que no se pierda.';
+            decir(ultimaRespuesta, 'happy');
+            empezarHabla();
+            speakES(ultimaRespuesta, { onEnd: terminarHabla });
+        } catch (err) {
+            console.error('[nube guardar relato]', err);
+            ultimaRespuesta = 'No pude guardar lo que me contaste. No voy a marcar la pregunta como respondida; podemos volver a intentarlo.';
+            decir(ultimaRespuesta, 'empathy');
+            setFrame('empathy', 'empathy');
+        } finally {
+            ocupado = false;
+            $texto.disabled = false;
+            $enviar.disabled = !$texto.value.trim();
+        }
+    }
+
     function estadoDesdeRespuesta(texto) {
         const t = String(texto || '').toLowerCase();
         if (/\b(mal|triste|enfermo|enferma|dolor|solo|sola|angustiad[oa]|preocupad[oa]|p[eé]simo|p[eé]sima)\b/.test(t)) return 'mal';
@@ -326,6 +433,8 @@ export function montarNubeInicio($app) {
             empezarHabla();
             speakES(ultimaRespuesta, { onEnd: terminarHabla });
             $texto.value = '';
+            clearTimeout(relatoTimer);
+            relatoTimer = setTimeout(buscarRelatoPendiente, 4500);
         } catch (err) {
             console.error('[nube guardar checkin]', err);
             decir('No pude avisar ahora. Voy a intentarlo de nuevo cuando me respondas.', 'empathy');
@@ -526,6 +635,7 @@ export function montarNubeInicio($app) {
             function cerrarGuia() {
                 if (!$overlay.isConnected) return;
                 stopSpeak();
+                liberarFoco($overlay);
                 $overlay.remove();
                 document.body.classList.remove('nube-guia-abierta');
                 document.removeEventListener('keydown', onTeclaGuia);
@@ -549,6 +659,7 @@ export function montarNubeInicio($app) {
                 leerPaso();
             });
             document.addEventListener('keydown', onTeclaGuia);
+            atraparFoco($overlay);
             cerrarGuiaActiva = cerrarGuia;
             leerPaso();
         } catch (err) {
@@ -672,6 +783,18 @@ export function montarNubeInicio($app) {
             await guardarRespuestaCheckin(pregunta);
             return;
         }
+        if (relatoPendiente) {
+            await guardarRespuestaRelato(pregunta);
+            return;
+        }
+        if (/^(te quiero contar|quiero contarte|me acuerdo de|cuando yo era|te cuento que)\b/i.test(pregunta)) {
+            relatoPendiente = {
+                puntaId: null,
+                pregunta: 'Una charla espontánea con Nube'
+            };
+            await guardarRespuestaRelato(pregunta);
+            return;
+        }
         if (recordatorioPendiente && /^(s[ií]|dale|confirmo|est[aá] bien|correcto)\b/i.test(pregunta)) {
             $texto.value = '';
             await guardarRecordatorioPendiente();
@@ -771,8 +894,12 @@ export function montarNubeInicio($app) {
     programarMicroMovimiento();
     programarSugerencia();
     checkinTimer = setTimeout(iniciarPreguntaDiaria, 3200);
+    // Las preguntas de la familia no viven en una pantalla aparte: Nube
+    // las trae a la conversación cuando la persona está tranquila y libre.
+    relatoTimer = setTimeout(buscarRelatoPendiente, 10000);
     if (state.modo === 'real' && !esPreview()) {
         checkinPollTimer = setInterval(buscarPreguntaDeTutor, 20000);
+        relatoPollTimer = setInterval(buscarRelatoPendiente, 60000);
     }
 
     function cleanup() {
@@ -783,7 +910,9 @@ export function montarNubeInicio($app) {
         clearTimeout(sugerenciaTimer);
         clearTimeout(hablandoTimer);
         clearTimeout(checkinTimer);
+        clearTimeout(relatoTimer);
         clearInterval(checkinPollTimer);
+        clearInterval(relatoPollTimer);
         cerrarGuiaActiva?.();
         try { micObserver.disconnect(); } catch (_) {}
         try { dictado.destroy(); } catch (_) {}

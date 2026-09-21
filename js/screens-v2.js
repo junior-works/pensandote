@@ -15,6 +15,7 @@ import {
 import { miembroActivo, state } from './state.js';
 import { go } from './router.js';
 import { h, modal, bannerV2 } from './ui.js';
+import { renderFotoInteracciones, wireFotoInteracciones } from './foto-interacciones.js';
 
 // =====================================================================
 // PENSÉ EN VOS
@@ -52,7 +53,7 @@ export function renderPense($app) {
 }
 
 // =====================================================================
-// FOTO DEL DÍA — carousel simple
+// MURO FAMILIAR — carrusel simple
 // =====================================================================
 export function renderFotoDelDia($app, ruta) {
     const idx = Math.max(0, Math.min(
@@ -60,17 +61,28 @@ export function renderFotoDelDia($app, ruta) {
         FOTOS_DEL_DIA.length - 1
     ));
     const f = FOTOS_DEL_DIA[idx];
+    f.foto_reacciones ||= idx === 0
+        ? [{ user_id: 'lucia', emoji: '❤️' }, { user_id: 'sofi', emoji: '❤️' }]
+        : [];
+    f.foto_comentarios ||= idx === 0
+        ? [{ id: 'comentario-demo', user_id: 'lucia', autor: 'Lucía', texto: '¡Qué lindo recuerdo!', created_at: f.fecha }]
+        : [];
+    const yo = miembroActivo();
 
     $app.innerHTML = `
         ${bannerV2}
-        ${headerV2('Foto del día', 'pense')}
+        ${headerV2('Muro familiar', 'pense')}
 
         <figure class="foto-carousel">
-            <img class="foto-carousel__img" src="${h(f.url)}" alt="${h(f.epigrafe)}">
+            <img class="foto-carousel__img" src="${h(f.url)}" alt="${h(f.epigrafe)}"
+                 data-foto-abrir="${h(f.id)}" role="button" tabindex="0"
+                 aria-label="Abrir foto y reaccionar">
             <figcaption>
                 <strong class="t-emocional">${h(f.epigrafe)}</strong>
                 <small>De ${h(f.autor)} · ${h(f.fecha)}</small>
+                <small>👨‍👩‍👧 Visible para todo el círculo</small>
             </figcaption>
+            ${renderFotoInteracciones(f, [], yo.id)}
         </figure>
 
         <div class="foto-carousel__nav">
@@ -80,6 +92,11 @@ export function renderFotoDelDia($app, ruta) {
         </div>
     `;
     wireNav($app);
+    wireFotoInteracciones($app, [f], {
+        circleId: 'demo-circle',
+        usuarioId: yo.id,
+        demo: true
+    });
 }
 
 // =====================================================================
