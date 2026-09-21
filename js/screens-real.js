@@ -24,7 +24,8 @@ const STORAGE_PENDING_INVITE = 'pensandote.pending_invite';
 // =====================================================================
 // LOGIN
 // =====================================================================
-export function renderLogin($app, msg = '') {
+export function renderLogin($app, msg = '', emailInicial = '') {
+    const esError = msg && !msg.startsWith('✓');
     $app.innerHTML = `
         <section class="card stack" style="margin-top: 3rem;">
             <h1 class="t-emocional center">Pensándote</h1>
@@ -34,14 +35,21 @@ export function renderLogin($app, msg = '') {
                 <label class="stack">
                     <span>Tu mail</span>
                     <input id="email" type="email" required autocomplete="email"
-                           placeholder="vos@ejemplo.com" class="input-real">
+                           placeholder="vos@ejemplo.com" class="input-real"
+                           value="${h(emailInicial)}">
                 </label>
                 <button class="btn btn--xl btn--inicio btn--full" type="submit">
-                    Mandame el link mágico
+                    ${esError ? 'Volver a intentar' : 'Mandame el link mágico'}
                 </button>
             </form>
 
-            ${msg ? `<p class="center">${h(msg)}</p>` : ''}
+            <div id="login-estado"
+                 class="login-estado${msg ? (esError ? ' login-estado--error' : ' login-estado--ok') : ''}"
+                 role="status" aria-live="assertive" aria-atomic="true">
+                ${msg
+                    ? `<p>${h(msg)}</p>`
+                    : `<p>Te vamos a avisar acá cuando el enlace haya sido enviado.</p>`}
+            </div>
 
             ${esEntornoDev() ? `
                 <p class="center muted" style="margin-top:1.5rem;">
@@ -57,14 +65,44 @@ export function renderLogin($app, msg = '') {
         e.preventDefault();
         const email = document.getElementById('email').value.trim();
         const btn = e.target.querySelector('button[type=submit]');
+        const estado = document.getElementById('login-estado');
         btn.disabled = true; btn.textContent = 'Mandando…';
+        estado.className = 'login-estado login-estado--enviando';
+        estado.innerHTML = '<p><strong>Estamos enviando el enlace…</strong><br>Puede demorar unos segundos.</p>';
         try {
             await enviarMagicLink(email);
-            renderLogin($app, '✓ Te mandamos un link a tu mail. Abrilo desde el mismo dispositivo.');
+            renderLogin(
+                $app,
+                '✓ Enlace enviado. Revisá la bandeja de entrada y también Correo no deseado. Abrilo desde este mismo dispositivo.',
+                email
+            );
         } catch (err) {
-            renderLogin($app, 'No pudimos mandar el link: ' + (err.message || err));
+            console.warn('[login magic link]', {
+                code: err?.code || null,
+                status: err?.status || null,
+                message: err?.message || String(err)
+            });
+            renderLogin($app, mensajeErrorLogin(err), email);
         }
     });
+}
+
+function mensajeErrorLogin(err) {
+    const codigo = String(err?.code || '').toLowerCase();
+    const mensaje = String(err?.message || err || '').toLowerCase();
+    const estado = Number(err?.status || 0);
+
+    if (estado === 429 || codigo.includes('rate') || mensaje.includes('rate limit')) {
+        return 'No pudimos enviarlo porque se pidió otro enlace hace muy poco. Esperá un minuto y volvé a intentar.';
+    }
+    if (codigo.includes('email_address_not_authorized') || mensaje.includes('not authorized')) {
+        return 'Ese correo todavía no está habilitado para recibir enlaces de acceso. No sigas intentando: necesitamos revisar la configuración de correo.';
+    }
+    if (mensaje.includes('tardando demasiado') || mensaje.includes('iniciar la conexión') ||
+        mensaje.includes('fetch') || mensaje.includes('network')) {
+        return 'No recibimos respuesta del servicio de acceso. Revisá internet, esperá un minuto y tocá “Volver a intentar”.';
+    }
+    return 'No pudimos enviar el enlace. Esperá un minuto y volvé a intentar. Si vuelve a pasar, el detalle ya quedó registrado para revisarlo.';
 }
 
 // =====================================================================
@@ -617,12 +655,25 @@ function renderInvitacionDashboard($app, token, inv) {
         e.preventDefault();
         const email = document.getElementById('email').value.trim();
         const msg = document.getElementById('msg');
+        const btn = e.target.querySelector('button[type=submit]');
+        btn.disabled = true;
+        btn.textContent = 'Mandando…';
+        msg.setAttribute('role', 'status');
+        msg.setAttribute('aria-live', 'assertive');
+        msg.textContent = 'Estamos enviando el enlace… Puede demorar unos segundos.';
         try {
             localStorage.setItem(STORAGE_PENDING_INVITE, token);
             await enviarMagicLink(email);
-            msg.textContent = '✓ Te mandamos el link a tu mail. Abrilo desde el mismo dispositivo.';
+            msg.textContent = '✓ Enlace enviado. Revisá la bandeja de entrada y Correo no deseado. Abrilo desde este mismo dispositivo.';
         } catch (err) {
-            msg.textContent = 'No pudimos mandar el link: ' + (err.message || err);
+            console.warn('[invitacion magic link]', {
+                code: err?.code || null,
+                status: err?.status || null,
+                message: err?.message || String(err)
+            });
+            msg.textContent = mensajeErrorLogin(err);
+            btn.disabled = false;
+            btn.textContent = 'Volver a intentar';
         }
     });
 }

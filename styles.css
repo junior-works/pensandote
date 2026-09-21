@@ -257,6 +257,29 @@ body[data-mode="simple"] .btn--mini { min-height: 44px; font-size: var(--fs-md);
 .stack > * + * { margin-top: 1rem; }
 .center { text-align: center; }
 .muted { color: var(--ink-soft); }
+.login-estado {
+    min-height: 3.5rem;
+    padding: 0.9rem 1rem;
+    border-radius: var(--r-sm);
+    background: #faf5e9;
+    color: var(--ink-soft);
+    text-align: center;
+}
+.login-estado p { margin: 0; }
+.login-estado--enviando {
+    background: #eef5ff;
+    color: #244b73;
+}
+.login-estado--ok {
+    background: #e8f6ed;
+    color: #1f6338;
+    border: 2px solid #9ed3ad;
+}
+.login-estado--error {
+    background: #fff1ee;
+    color: #8a3328;
+    border: 2px solid #e7a79f;
+}
 .sr-only {
     position: absolute !important; width: 1px; height: 1px;
     padding: 0; margin: -1px; overflow: hidden;

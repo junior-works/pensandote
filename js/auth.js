@@ -63,16 +63,31 @@ async function client() {
  * Para dev local agregar http://localhost:5500.
  */
 export async function enviarMagicLink(email) {
-    const sb = await client();
-    const { error } = await sb.auth.signInWithOtp({
-        email,
-        options: {
-            // Redirect a la URL actual (sin hash) — el SDK consume el
-            // token cuando el navegador vuelve.
-            emailRedirectTo: window.location.origin + window.location.pathname
-        }
-    });
+    const correo = String(email || '').trim();
+    if (!correo) throw new Error('Escribí tu correo electrónico.');
+
+    // Tanto la carga remota del SDK como la petición de Auth pueden quedar
+    // pendientes si el teléfono cambia de red o el navegador conserva un
+    // lock viejo. La interfaz nunca debe quedar congelada en "Mandando…".
+    const sb = await conTimeout(
+        client(),
+        10000,
+        'No pudimos iniciar la conexión. Revisá internet y volvé a intentar.'
+    );
+    const { error } = await conTimeout(
+        sb.auth.signInWithOtp({
+            email: correo,
+            options: {
+                // Redirect a la URL actual (sin hash) — el SDK consume el
+                // token cuando el navegador vuelve.
+                emailRedirectTo: window.location.origin + window.location.pathname
+            }
+        }),
+        15000,
+        'El envío está tardando demasiado. Revisá internet, esperá un minuto y volvé a intentar.'
+    );
     if (error) throw error;
+    return { ok: true };
 }
 
 /**
