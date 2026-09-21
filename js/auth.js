@@ -24,6 +24,25 @@ function conTimeout(promesa, ms, mensaje) {
     return Promise.race([promesa, limite]).finally(() => clearTimeout(timer));
 }
 
+/**
+ * Fetch con cancelación real. Promise.race por sí solo deja la petición
+ * anterior viva y un segundo intento puede terminar enviando dos correos.
+ */
+function fetchConTimeout(input, init = {}, ms = 65000) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), ms);
+    const signalExterna = init.signal;
+    const abortar = () => controller.abort();
+    if (signalExterna) {
+        if (signalExterna.aborted) controller.abort();
+        else signalExterna.addEventListener('abort', abortar, { once: true });
+    }
+    return fetch(input, { ...init, signal: controller.signal }).finally(() => {
+        clearTimeout(timer);
+        signalExterna?.removeEventListener?.('abort', abortar);
+    });
+}
+
 /** ¿Está la config real (no el stub demo)? */
 export function configEsReal() {
     const cfg = window.PENSANDOTE_CONFIG;
@@ -45,6 +64,9 @@ async function client() {
     _clientPromise = import('https://esm.sh/@supabase/supabase-js@2.106.1')
         .then(mod => {
             _client = mod.createClient(cfg.SUPABASE_URL, cfg.SUPABASE_ANON_KEY, {
+                global: {
+                    fetch: (input, init) => fetchConTimeout(input, init, 65000)
+                },
                 auth: {
                     persistSession: true,
                     autoRefreshToken: true,
@@ -74,6 +96,24 @@ export async function enviarMagicLink(email) {
         10000,
         'No pudimos iniciar la conexión. Revisá internet y volvé a intentar.'
     );
+    // En el plan gratuito Auth puede tardar varios segundos en salir del
+    // reposo. Este GET liviano lo despierta antes de pedir el correo y evita
+    // cortar el envío durante el arranque en frío.
+    const cfg = window.PENSANDOTE_CONFIG;
+    try {
+        const health = await fetchConTimeout(
+            `${cfg.SUPABASE_URL}/auth/v1/health`,
+            { headers: { apikey: cfg.SUPABASE_ANON_KEY }, cache: 'no-store' },
+            30000
+        );
+        if (!health.ok) throw new Error(`Auth health ${health.status}`);
+    } catch (err) {
+        if (err?.name === 'AbortError') {
+            throw new Error('El servicio de acceso no respondió durante la comprobación inicial.');
+        }
+        throw err;
+    }
+
     const { error } = await conTimeout(
         sb.auth.signInWithOtp({
             email: correo,
@@ -83,8 +123,8 @@ export async function enviarMagicLink(email) {
                 emailRedirectTo: window.location.origin + window.location.pathname
             }
         }),
-        15000,
-        'El envío está tardando demasiado. Revisá internet, esperá un minuto y volvé a intentar.'
+        70000,
+        'El envío superó un minuto sin respuesta. Esperá un momento y volvé a intentar.'
     );
     if (error) throw error;
     return { ok: true };

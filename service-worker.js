@@ -18,7 +18,7 @@
  * correcto en ambos entornos.
  */
 
-const CACHE_NAME = 'pensandote-shell-v0.10.17-login-visible';
+const CACHE_NAME = 'pensandote-shell-v0.10.18-auth-warmup';
 
 const SHELL_FILES = [
     './',
