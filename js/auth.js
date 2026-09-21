@@ -96,24 +96,6 @@ export async function enviarMagicLink(email) {
         10000,
         'No pudimos iniciar la conexión. Revisá internet y volvé a intentar.'
     );
-    // En el plan gratuito Auth puede tardar varios segundos en salir del
-    // reposo. Este GET liviano lo despierta antes de pedir el correo y evita
-    // cortar el envío durante el arranque en frío.
-    const cfg = window.PENSANDOTE_CONFIG;
-    try {
-        const health = await fetchConTimeout(
-            `${cfg.SUPABASE_URL}/auth/v1/health`,
-            { headers: { apikey: cfg.SUPABASE_ANON_KEY }, cache: 'no-store' },
-            30000
-        );
-        if (!health.ok) throw new Error(`Auth health ${health.status}`);
-    } catch (err) {
-        if (err?.name === 'AbortError') {
-            throw new Error('El servicio de acceso no respondió durante la comprobación inicial.');
-        }
-        throw err;
-    }
-
     const { error } = await conTimeout(
         sb.auth.signInWithOtp({
             email: correo,
