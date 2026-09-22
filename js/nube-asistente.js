@@ -382,8 +382,8 @@ export function montarNubeInicio($app) {
         if (!vivo || ocupado || checkinPendiente || recordatorioPendiente || relatoPendiente) return;
 
         marcarMencionado();
-        ultimaRespuesta = 'Ahí arriba te dejé un cartel. Si tocás “Sí, avisame”, '
-                        + 'te aviso cuando tu familia te deje algo o cuando toque un remedio.';
+        ultimaRespuesta = 'Si querés, te aviso cuando tu familia te deje algo o '
+                        + 'cuando toque un remedio. Tocá acá abajo donde dice “Sí, avisame”.';
         decir(ultimaRespuesta, 'speaking');
         empezarHabla();
         speakES(ultimaRespuesta, { onEnd: terminarHabla });

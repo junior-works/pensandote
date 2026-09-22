@@ -60,6 +60,7 @@ export async function renderInicio($app) {
                 <h1 class="nube-home-header__saludo">${horaSaludo}, ${h(yo.nombre_corto)}</h1>
                 <p class="simple-fecha">${formatearFechaLarga(new Date())}</p>
             </div>
+            <div id="avisos-pin-slot" class="avisos-slot"></div>
         </header>
 
         ${reciente ? `
@@ -68,10 +69,6 @@ export async function renderInicio($app) {
                 te está pensando · <small>${h(formatearHaceCorto(Date.now() - new Date(reciente.ult.created_at).getTime()))}</small>
             </p>
         ` : ''}
-
-        ${(state.modo === 'real' && !esPreview())
-            ? `<section id="avisos-simple" aria-live="polite"></section>`
-            : ''}
 
         <section class="nube-home" aria-label="Nube, tu asistente">
             <div class="nube-avatar" id="nube-rig" data-state="idle" role="img"
@@ -87,6 +84,10 @@ export async function renderInicio($app) {
 
             <p class="nube-bubble" id="nube-bubble" aria-live="polite">¿En qué te ayudo?</p>
             <p class="nube-estado" id="nube-estado" aria-live="polite"></p>
+
+            ${(state.modo === 'real' && !esPreview())
+                ? `<div id="avisos-oferta" aria-live="polite"></div>`
+                : ''}
 
             <button class="nube-mic" id="nube-mic" type="button">🎤 HABLAR</button>
 
@@ -232,83 +233,79 @@ export async function renderInicio($app) {
 // fila discreta el resto del tiempo para activar/desactivar.
 // =====================================================================
 function wireAvisosSimple($app) {
-    const $cont = $app.querySelector('#avisos-simple');
-    if ($cont) pintarAvisosSimple($cont);
+    pintarAvisosSimple($app);
 }
 
 /**
- * Pinta el ofrecimiento de avisos arriba de Nube.
+ * Avisos en la pantalla simple, sin robarle el protagonismo a Nube.
  *
- * Tres estados visibles:
- *   - Sin activar y toca ofrecer  -> cartel grande, imposible de no ver.
- *   - Activados                   -> se pliega hacia la derecha y queda
- *                                    un icono chico que no molesta.
- *   - Sin activar pero pospuesto  -> directamente el icono chico.
+ * Dos lugares, nunca los dos a la vez:
+ *   - El ofrecimiento aparece DENTRO del bloque de Nube, debajo de su
+ *     globo. Se lee como que lo pide ella, que es quien esta hablando,
+ *     en vez de como un cartel aparte que le compite. Ademas Nube lo
+ *     dice en voz alta en el mismo momento.
+ *   - Una vez aceptado o descartado, se desliza al rincon del
+ *     encabezado y queda un icono chico. Nada mas.
  *
- * "Ahora no" ya no mata el cartel para siempre: pospone unos dias
- * (ver utils/avisos-prompt.js) y Nube lo recuerda hablando mientras
- * tanto.
+ * Nunca desplaza a Nube hacia abajo: el ofrecimiento es una franja
+ * delgada dentro de su bloque, y el estado de reposo es un icono en
+ * una esquina que ya existia.
  */
-async function pintarAvisosSimple($cont, { animar = false } = {}) {
-    if (!$cont) return;
+async function pintarAvisosSimple($app, { animar = false } = {}) {
+    const $oferta = $app.querySelector('#avisos-oferta');
+    const $pin    = $app.querySelector('#avisos-pin-slot');
+    if (!$oferta && !$pin) return;
+
+    const limpiar = () => {
+        if ($oferta) $oferta.innerHTML = '';
+        if ($pin) $pin.innerHTML = '';
+    };
+
     const vapid = window.PENSANDOTE_CONFIG?.VAPID_PUBLIC_KEY || '';
-    if (!vapid || vapid.startsWith('REEMPLAZAR')) { $cont.innerHTML = ''; return; }
+    if (!vapid || vapid.startsWith('REEMPLAZAR')) { limpiar(); return; }
 
     let st;
     try { st = await estadoAvisos(); }
     catch (_) { st = { estado: 'desactivado' }; }
 
-    if (st.estado === 'no-soporta') { $cont.innerHTML = ''; return; }
+    if (st.estado === 'no-soporta') { limpiar(); return; }
 
-    // --- icono plegado -----------------------------------------------
-    const pintarIcono = (modo) => {
-        const etiqueta = modo === 'on'  ? 'Avisos activados'
+    // ---- reposo: un icono en el rincon --------------------------------
+    const pintarPin = (modo) => {
+        if ($oferta) $oferta.innerHTML = '';
+        if (!$pin) return;
+        const etiqueta = modo === 'on'   ? 'Avisos activados'
                        : modo === 'bloq' ? 'Avisos bloqueados en el teléfono'
                        : 'Avisos apagados';
-        $cont.innerHTML = `
-            <div class="avisos-pin avisos-pin--${modo}${animar ? ' is-entrando' : ''}">
-                <button type="button" class="avisos-pin__btn" id="avisos-pin-btn"
-                        aria-label="${etiqueta}" title="${etiqueta}">
-                    ${modo === 'on' ? '🔔' : '🔕'}
-                </button>
-            </div>
+        $pin.innerHTML = `
+            <button type="button" class="avisos-pin avisos-pin--${modo}${animar ? ' is-entrando' : ''}"
+                    id="avisos-pin-btn" aria-label="${etiqueta}" title="${etiqueta}">
+                ${modo === 'on' ? '🔔' : '🔕'}
+            </button>
         `;
-        const $btn = $cont.querySelector('#avisos-pin-btn');
+        const $btn = $pin.querySelector('#avisos-pin-btn');
         if (modo === 'off') {
-            // Apagados: tocar el icono vuelve a intentar activarlos.
-            $btn.addEventListener('click', (ev) => activar(ev.currentTarget));
+            $btn.addEventListener('click', () => activar($btn));
         } else if (modo === 'on') {
-            // Activados: el icono despliega la opción de apagarlos. No
-            // dejamos un botón "Desactivar" suelto a la vista: es lo
-            // último que queremos que toque sin querer.
-            $btn.addEventListener('click', () => {
-                const $caja = $cont.querySelector('.avisos-pin');
-                if ($caja.classList.contains('is-abierto')) {
-                    $caja.classList.remove('is-abierto');
-                    $caja.querySelector('.avisos-pin__accion')?.remove();
-                    return;
-                }
-                $caja.classList.add('is-abierto');
-                const $acc = document.createElement('button');
-                $acc.type = 'button';
-                $acc.className = 'avisos-pin__accion';
-                $acc.textContent = 'Apagar avisos';
-                $acc.addEventListener('click', async () => {
-                    $acc.disabled = true; $acc.textContent = 'Apagando…';
-                    try {
-                        await desactivarAvisos();
-                        posponerAvisos();
-                        pintarAvisosSimple($cont);
-                    } catch (_) {
-                        $acc.disabled = false; $acc.textContent = 'Apagar avisos';
-                    }
+            // Apagarlos existe, pero no a la vista: es lo último que
+            // queremos que toque sin querer.
+            $btn.addEventListener('click', async () => {
+                const ok = await modal({
+                    titulo: '¿Apagar los avisos?',
+                    cuerpo: '<p>No te vamos a avisar más cuando tu familia te deje algo.</p>',
+                    acciones: [
+                        { label: 'No, dejalos', clase: 'btn--inicio btn--full', value: 'no' },
+                        { label: 'Sí, apagar',  clase: 'btn--full',             value: 'si' }
+                    ]
                 });
-                $caja.appendChild($acc);
+                if (ok !== 'si') return;
+                try { await desactivarAvisos(); posponerAvisos(); } catch (_) {}
+                pintarAvisosSimple($app);
             });
         }
     };
 
-    // --- activar ------------------------------------------------------
+    // ---- activar -------------------------------------------------------
     async function activar(btn) {
         const orig = btn.textContent;
         btn.disabled = true;
@@ -316,22 +313,15 @@ async function pintarAvisosSimple($cont, { animar = false } = {}) {
         try {
             await activarAvisos(vapid);
             olvidarEspera();
-            // El cartel se pliega y se va hacia la derecha; recién
-            // después aparece el icono. La animación es la que le dice
-            // "listo, quedó" sin tener que leer nada.
-            const $cta = $cont.querySelector('.avisos-cta');
-            if ($cta) {
-                $cta.classList.add('is-plegando');
-                await new Promise(r => setTimeout(r, 420));
-            }
-            pintarAvisosSimple($cont, { animar: true });
+            await plegarOferta();
+            pintarAvisosSimple($app, { animar: true });
         } catch (err) {
             btn.disabled = false;
             btn.textContent = orig;
-            // Si el navegador negó el permiso, NO lo damos por preguntado
-            // para siempre: se pospone y se vuelve a ofrecer.
+            // Permiso negado: NO lo damos por preguntado para siempre.
             posponerAvisos();
-            pintarAvisosSimple($cont);
+            await plegarOferta();
+            pintarAvisosSimple($app, { animar: true });
             await modal({
                 titulo: 'No pude activar los avisos',
                 cuerpo: `<p>${h(err?.message || err)}</p>`,
@@ -340,36 +330,38 @@ async function pintarAvisosSimple($cont, { animar = false } = {}) {
         }
     }
 
-    if (st.estado === 'activado')  { pintarIcono('on');   return; }
-    if (st.estado === 'bloqueado') { pintarIcono('bloq'); return; }
+    /** La franja se pliega y se va hacia el rincón. */
+    function plegarOferta() {
+        const $caja = $oferta?.querySelector('.avisos-oferta');
+        if (!$caja) return Promise.resolve();
+        $caja.classList.add('is-plegando');
+        return new Promise(r => setTimeout(r, 380));
+    }
 
-    // Desactivado: cartel grande sólo si toca ofrecerlo.
-    if (!tocaOfrecerAvisos()) { pintarIcono('off'); return; }
+    if (st.estado === 'activado')  { pintarPin('on');   return; }
+    if (st.estado === 'bloqueado') { pintarPin('bloq'); return; }
+    if (!tocaOfrecerAvisos())      { pintarPin('off');  return; }
 
-    $cont.innerHTML = `
-        <section class="card avisos-cta">
-            <p class="t-emocional avisos-cta__titulo">🔔 ¿Querés que te avise?</p>
-            <p class="avisos-cta__texto">
-                Cuando tu familia te deje algo, o cuando toque un remedio,
-                te suena el teléfono. Si no, no te enterás.
-            </p>
-            <button class="btn btn--xl btn--inicio btn--full" id="btn-avisos-on">
-                Sí, avisame
-            </button>
-            <button class="btn btn--full avisos-cta__no" id="btn-avisos-ahora-no">
-                Ahora no
-            </button>
-        </section>
+    // ---- ofrecimiento, dentro del bloque de Nube -----------------------
+    if (!$oferta) { pintarPin('off'); return; }
+    if ($pin) $pin.innerHTML = '';
+    $oferta.innerHTML = `
+        <div class="avisos-oferta">
+            <p class="avisos-oferta__txt">¿Te aviso cuando te dejen algo?</p>
+            <div class="avisos-oferta__acciones">
+                <button type="button" class="avisos-oferta__si" id="btn-avisos-on">Sí, avisame</button>
+                <button type="button" class="avisos-oferta__no" id="btn-avisos-ahora-no">Ahora no</button>
+            </div>
+        </div>
     `;
-    $cont.querySelector('#btn-avisos-on')
-         .addEventListener('click', (ev) => activar(ev.currentTarget));
-    $cont.querySelector('#btn-avisos-ahora-no')
-         .addEventListener('click', () => {
-             posponerAvisos();
-             const $cta = $cont.querySelector('.avisos-cta');
-             if ($cta) $cta.classList.add('is-plegando');
-             setTimeout(() => pintarAvisosSimple($cont, { animar: true }), 420);
-         });
+    $oferta.querySelector('#btn-avisos-on')
+           .addEventListener('click', (ev) => activar(ev.currentTarget));
+    $oferta.querySelector('#btn-avisos-ahora-no')
+           .addEventListener('click', async () => {
+               posponerAvisos();
+               await plegarOferta();
+               pintarAvisosSimple($app, { animar: true });
+           });
 }
 
 /** Activa el sync scroll → dots + tap → lightbox de la galería. */
