@@ -1688,6 +1688,40 @@ export async function activarAvisos(vapidPublicKey) {
  * a todas las suscripciones dashboard del círculo. Devuelve la
  * respuesta JSON; tira error si falla.
  */
+/**
+ * Últimos avisos del círculo, leídos de public.push_outbox.
+ *
+ * Existe porque un aviso puede salir perfecto del servidor y el sistema
+ * operativo del teléfono no mostrarlo igual — permisos, ahorro de
+ * batería, el navegador equivocado. Cuando eso pasa el usuario no se
+ * entera de nada. Mostrarlos acá adentro hace que el aviso siempre se
+ * pueda ver, aunque Android no lo dibuje, y de paso deja a la vista si
+ * salió o falló (columna `resultado`).
+ */
+export async function listarAvisosRecientes(circleId, limite = 15) {
+    if (!circleId) return [];
+    const sb = await sbClient();
+    const { data, error } = await sb
+        .from('push_outbox')
+        .select('id, payload, creado, enviado_at, intentos, resultado')
+        .eq('circle_id', circleId)
+        .order('creado', { ascending: false })
+        .limit(limite);
+    if (error) {
+        console.warn('[listarAvisosRecientes]', error);
+        return [];
+    }
+    return (data || []).map(r => ({
+        id:       r.id,
+        titulo:   r.payload?.title || 'Pensándote',
+        cuerpo:   r.payload?.body || '',
+        cuando:   r.creado,
+        entregados: r.resultado?.sent ?? null,
+        fallados:   r.resultado?.failed ?? null,
+        pendiente:  !r.enviado_at
+    }));
+}
+
 export async function probarAviso(circleId) {
     if (!circleId) throw new Error('sin círculo activo');
     const cfg = (typeof window !== 'undefined') ? window.PENSANDOTE_CONFIG : null;

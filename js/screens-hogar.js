@@ -33,6 +33,7 @@ import {
     listarPuntas, crearPunta, descartarPunta,
     ultimosCheckinsPorMiembro, solicitarCheckin,
     estadoAvisos, activarAvisos, desactivarAvisos, probarAviso,
+    listarAvisosRecientes,
     actividadReciente, listarEstudios,
     listarMedicamentos, tomasDeHoy
 } from './data-emotiva.js';
@@ -453,6 +454,7 @@ export async function renderAccesos($app) {
 
         <section class="card stack hogar-avisos" id="hogar-avisos">
             <div id="sec-avisos-estado"><p class="muted">Cargando avisos…</p></div>
+            <div id="sec-avisos-lista"></div>
         </section>
 
         <section class="card stack">
@@ -558,6 +560,7 @@ export async function renderAccesos($app) {
 
     // --- Avisos (Web Push) ---
     pintarAvisos($app.querySelector('#sec-avisos-estado'));
+    pintarListaAvisos($app.querySelector('#sec-avisos-lista'), c.id);
 
     // --- Sub-secciones Contactos + Accesos/Trámites (delegadas a screens-admin) ---
     montarSeccionContactos($app.querySelector('#sec-contactos-admin'), c.id);
@@ -1598,6 +1601,69 @@ function renderSugeridas($cont, yaCargadas, c, u, $app) {
 // =====================================================================
 // Avisos (Web Push) — UI de activación
 // =====================================================================
+/**
+ * Lista de los últimos avisos del círculo, leída de la cola del servidor.
+ *
+ * Un aviso puede salir perfecto y el teléfono no mostrarlo igual: permisos
+ * del sistema, ahorro de batería, o directamente otro navegador. Cuando
+ * eso pasa el usuario no se entera de que su familia le dejó algo, y no
+ * tiene forma de saber si el problema es suyo o de la app. Acá los avisos
+ * se ven siempre, con la hora y si el envío salió o falló — la app deja de
+ * depender de que Android tenga ganas de dibujar el cartelito.
+ */
+async function pintarListaAvisos($cont, circleId) {
+    if (!$cont || !circleId) return;
+    $cont.innerHTML = '<p class="muted avisos-help">Buscando avisos…</p>';
+    let avisos = [];
+    try {
+        avisos = await listarAvisosRecientes(circleId);
+    } catch (err) {
+        console.warn('[pintarListaAvisos]', err);
+        $cont.innerHTML = '<p class="muted avisos-help">No pude leer los avisos.</p>';
+        return;
+    }
+    if (!avisos.length) {
+        $cont.innerHTML = `
+            <p class="muted avisos-help">
+                Todavía no salió ningún aviso en este círculo. Cuando tu familiar
+                responda algo, suba una foto o marque un remedio, va a aparecer acá
+                aunque el teléfono no muestre la notificación.
+            </p>`;
+        return;
+    }
+    const filas = avisos.map(a => {
+        const fecha = new Date(a.cuando);
+        const cuando = fecha.toLocaleString('es-AR', {
+            day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit'
+        });
+        let estado;
+        if (a.pendiente)            estado = '<span class="aviso-item__estado" title="Todavía no salió">⏳ en cola</span>';
+        else if (a.entregados > 0)  estado = `<span class="aviso-item__estado aviso-item__estado--ok" title="El servidor lo entregó">✓ enviado a ${a.entregados}</span>`;
+        else if (a.fallados > 0)    estado = '<span class="aviso-item__estado aviso-item__estado--mal" title="Falló el envío">✕ falló</span>';
+        else                        estado = '<span class="aviso-item__estado" title="No había ningún dispositivo suscripto">— sin dispositivos</span>';
+        return `
+            <li class="aviso-item">
+                <div class="aviso-item__texto">
+                    <strong>${h(a.titulo)}</strong>
+                    ${a.cuerpo ? `<span>${h(a.cuerpo)}</span>` : ''}
+                </div>
+                <div class="aviso-item__meta">
+                    <span class="muted">${h(cuando)}</span>
+                    ${estado}
+                </div>
+            </li>`;
+    }).join('');
+    $cont.innerHTML = `
+        <details class="avisos-lista" open>
+            <summary>📥 Últimos avisos (${avisos.length})</summary>
+            <p class="muted avisos-help">
+                Esto es lo que el servidor mandó. Si acá aparece y en el teléfono no
+                sonó, el aviso salió bien y lo está tapando el sistema operativo.
+            </p>
+            <ul class="aviso-lista">${filas}</ul>
+        </details>`;
+}
+
 async function pintarAvisos($cont, { portada = false } = {}) {
     if (!$cont) return;
     const vapid = window.PENSANDOTE_CONFIG?.VAPID_PUBLIC_KEY || '';

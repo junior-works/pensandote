@@ -18,7 +18,7 @@
  * correcto en ambos entornos.
  */
 
-const CACHE_NAME = 'pensandote-shell-v0.10.32-probar-dos-avisos';
+const CACHE_NAME = 'pensandote-shell-v0.10.33-avisos-visibles-en-app';
 
 const SHELL_FILES = [
     './',

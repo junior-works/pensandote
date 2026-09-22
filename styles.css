@@ -4615,3 +4615,44 @@ body[data-mode="dashboard"] .circulo-card__chip--activo {
 @media (prefers-reduced-motion: reduce) {
     .splash-nube { animation: none; }
 }
+
+/* --- Lista de ultimos avisos (tarjeta Avisos en Accesos) ------------ */
+/* Un aviso que el sistema operativo no muestra igual tiene que poder
+   verse. Esta lista es la prueba visible de que el servidor lo mando. */
+.avisos-lista summary {
+    cursor: pointer;
+    font-weight: 600;
+    padding: 0.35rem 0;
+}
+.aviso-lista {
+    list-style: none;
+    margin: 0.4rem 0 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.45rem;
+}
+.aviso-item {
+    border: 1px solid rgba(0, 0, 0, 0.09);
+    border-radius: 10px;
+    padding: 0.5rem 0.65rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+}
+.aviso-item__texto {
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
+    font-size: 0.95rem;
+}
+.aviso-item__meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.82rem;
+}
+.aviso-item__estado { opacity: 0.85; }
+.aviso-item__estado--ok  { color: #2f7d5a; }
+.aviso-item__estado--mal { color: var(--accent-anecdota, #c43c2f); }
