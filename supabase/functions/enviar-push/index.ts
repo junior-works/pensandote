@@ -136,13 +136,38 @@ Deno.serve(async (req) => {
 
         if (!circle_id) return json({ error: "circle_id_requerido" }, 400);
 
-        // Cierra la fila del outbox con el resultado, para que un aviso que
+        // Deja constancia del aviso con su resultado, para que uno que
         // falla quede visible en vez de desaparecer.
+        //
+        // Si la llamada vino con outbox_id, la fila ya existe y sólo se
+        // cierra. Si vino de un cron (service role) o del botón Probar,
+        // NO existe: esos caminos le pegan a la función directo. Antes
+        // esos avisos no quedaban registrados en ningún lado, así que la
+        // lista que ve el usuario en la app mostraba unos sí y otros no,
+        // justo los de los recordatorios y los remedios. Los insertamos
+        // acá ya cerrados: una sola escritura y la lista queda completa,
+        // sin tener que tocar las tres funciones que llaman.
         const cerrar = async (resultado: Record<string, unknown>) => {
-            if (!outboxId) return;
-            await sb.from("push_outbox")
-                .update({ enviado_at: new Date().toISOString(), resultado })
-                .eq("id", outboxId);
+            try {
+                if (outboxId) {
+                    await sb.from("push_outbox")
+                        .update({ enviado_at: new Date().toISOString(), resultado })
+                        .eq("id", outboxId);
+                } else {
+                    const ahora = new Date().toISOString();
+                    await sb.from("push_outbox").insert({
+                        circle_id:  circle_id,
+                        payload:    cuerpo,
+                        claimed_at: ahora,
+                        enviado_at: ahora,
+                        intentos:   1,
+                        resultado
+                    });
+                }
+            } catch (e) {
+                // Registrar es secundario: que falle no puede tumbar el envío.
+                console.warn("[enviar-push] no pude registrar el aviso", e);
+            }
         };
 
         // --- Destinatarios ------------------------------------------
