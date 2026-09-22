@@ -12,12 +12,14 @@ import { state } from './state.js';
 import { h, speakES, stopSpeak, atraparFoco, liberarFoco } from './ui.js';
 import { crearDictado } from './utils/dictado.js';
 import { crearGrabadorVoz } from './utils/grabador-voz.js';
+import { tocaOfrecerAvisos } from './utils/avisos-prompt.js';
 import {
     consultarAsistente,
     consultarOrganismos,
     obtenerTutorialPorSlug,
     marcarCheckin,
     checkinDeHoy,
+    estadoAvisos,
     solicitudCheckinPendiente,
     responderSolicitudCheckin,
     listarPuntas,
@@ -109,6 +111,7 @@ export function montarNubeInicio($app) {
     let relatoPendiente = null;
     let preguntaRelatoIdx = 0;
     let relatoTimer = null;
+    let avisosTimer = null;
     let relatoPollTimer = null;
 
     // Todos los gestos viven en una única textura. Cambiar coordenadas de
@@ -351,6 +354,39 @@ export function montarNubeInicio($app) {
             try { localStorage.setItem(claveRelatoDemo(), '1'); } catch (_) {}
         }
         return true;
+    }
+
+    // ---- Avisos: que lo diga Nube ------------------------------------
+    // El cartel esta arriba y es grande, pero un adulto mayor no lee
+    // carteles: escucha. Nube lo menciona una vez por dia mientras
+    // sigan apagados, y deja de hacerlo apenas los activa.
+    const CLAVE_AVISOS_DICHO = 'pensandote:avisos:mencionado-el';
+
+    function yaLoMencionoHoy() {
+        try { return localStorage.getItem(CLAVE_AVISOS_DICHO) === fechaArgentina(); }
+        catch (_) { return true; }
+    }
+    function marcarMencionado() {
+        try { localStorage.setItem(CLAVE_AVISOS_DICHO, fechaArgentina()); }
+        catch (_) {}
+    }
+
+    async function ofrecerAvisosHablando() {
+        if (!vivo || ocupado || checkinPendiente || recordatorioPendiente || relatoPendiente) return;
+        if (state.modo !== 'real' || esPreview()) return;
+        if (!tocaOfrecerAvisos() || yaLoMencionoHoy()) return;
+        try {
+            const st = await estadoAvisos();
+            if (st?.estado === 'activado' || st?.estado === 'no-soporta') return;
+        } catch (_) { return; }
+        if (!vivo || ocupado || checkinPendiente || recordatorioPendiente || relatoPendiente) return;
+
+        marcarMencionado();
+        ultimaRespuesta = 'Ahí arriba te dejé un cartel. Si tocás “Sí, avisame”, '
+                        + 'te aviso cuando tu familia te deje algo o cuando toque un remedio.';
+        decir(ultimaRespuesta, 'speaking');
+        empezarHabla();
+        speakES(ultimaRespuesta, { onEnd: terminarHabla });
     }
 
     async function buscarRelatoPendiente() {
@@ -934,6 +970,8 @@ export function montarNubeInicio($app) {
     // Las preguntas de la familia no viven en una pantalla aparte: Nube
     // las trae a la conversación cuando la persona está tranquila y libre.
     relatoTimer = setTimeout(buscarRelatoPendiente, 10000);
+    // Después del saludo y antes de cualquier otra cosa que quiera decir.
+    avisosTimer = setTimeout(ofrecerAvisosHablando, 6000);
     if (state.modo === 'real' && !esPreview()) {
         checkinPollTimer = setInterval(buscarPreguntaDeTutor, 20000);
         relatoPollTimer = setInterval(buscarRelatoPendiente, 60000);
@@ -948,6 +986,7 @@ export function montarNubeInicio($app) {
         clearTimeout(hablandoTimer);
         clearTimeout(checkinTimer);
         clearTimeout(relatoTimer);
+        clearTimeout(avisosTimer);
         clearInterval(checkinPollTimer);
         clearInterval(relatoPollTimer);
         cerrarGuiaActiva?.();

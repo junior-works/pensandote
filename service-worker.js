@@ -18,7 +18,7 @@
  * correcto en ambos entornos.
  */
 
-const CACHE_NAME = 'pensandote-shell-v0.10.25-una-sola-tarjeta';
+const CACHE_NAME = 'pensandote-shell-v0.10.26-avisos-visibles';
 
 const SHELL_FILES = [
     './',
@@ -55,6 +55,7 @@ const SHELL_FILES = [
     './js/utils/dictado.js',
     './js/utils/escucha-relato.js',
     './js/utils/grabador-voz.js',
+    './js/utils/avisos-prompt.js',
     './js/utils/genero.js',
     './js/utils/panico.js',
     './js/utils/parentesco.js',

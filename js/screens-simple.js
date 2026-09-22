@@ -28,6 +28,7 @@ import { dispararPanico } from './utils/panico.js';
 import { crearDictado } from './utils/dictado.js';
 import { iconoContacto } from './utils/genero.js';
 import { montarNubeInicio } from './nube-asistente.js';
+import { tocaOfrecerAvisos, posponerAvisos, olvidarEspera } from './utils/avisos-prompt.js';
 import { renderFotoInteracciones, wireFotoInteracciones } from './foto-interacciones.js';
 
 // =====================================================================
@@ -68,6 +69,10 @@ export async function renderInicio($app) {
             </p>
         ` : ''}
 
+        ${(state.modo === 'real' && !esPreview())
+            ? `<section id="avisos-simple" aria-live="polite"></section>`
+            : ''}
+
         <section class="nube-home" aria-label="Nube, tu asistente">
             <div class="nube-avatar" id="nube-rig" data-state="idle" role="img"
                  aria-label="Nube, tu asistente de Pensándote">
@@ -98,9 +103,6 @@ export async function renderInicio($app) {
             <div class="nube-respuesta" id="nube-respuesta"></div>
         </section>
 
-        ${(state.modo === 'real' && !esPreview())
-            ? `<section id="avisos-simple" aria-live="polite"></section>`
-            : ''}
 
         ${(() => {
             const pendientes = remediosPendientesAhora();
@@ -229,46 +231,106 @@ export async function renderInicio($app) {
 // gesto del usuario y no se puede pedir solo en el bootstrap), y una
 // fila discreta el resto del tiempo para activar/desactivar.
 // =====================================================================
-const AVISOS_PROMPT_KEY = 'pensandote:avisos:prompt-visto';
-
-function avisosYaPrompteado() {
-    try { return localStorage.getItem(AVISOS_PROMPT_KEY) === '1'; }
-    catch { return false; }
-}
-function marcarAvisosPrompteado() {
-    try { localStorage.setItem(AVISOS_PROMPT_KEY, '1'); } catch (_) {}
-}
-
 function wireAvisosSimple($app) {
     const $cont = $app.querySelector('#avisos-simple');
     if ($cont) pintarAvisosSimple($cont);
 }
 
-async function pintarAvisosSimple($cont) {
+/**
+ * Pinta el ofrecimiento de avisos arriba de Nube.
+ *
+ * Tres estados visibles:
+ *   - Sin activar y toca ofrecer  -> cartel grande, imposible de no ver.
+ *   - Activados                   -> se pliega hacia la derecha y queda
+ *                                    un icono chico que no molesta.
+ *   - Sin activar pero pospuesto  -> directamente el icono chico.
+ *
+ * "Ahora no" ya no mata el cartel para siempre: pospone unos dias
+ * (ver utils/avisos-prompt.js) y Nube lo recuerda hablando mientras
+ * tanto.
+ */
+async function pintarAvisosSimple($cont, { animar = false } = {}) {
     if (!$cont) return;
     const vapid = window.PENSANDOTE_CONFIG?.VAPID_PUBLIC_KEY || '';
-    // Sin VAPID configurado no hay forma de suscribir — no mostramos
-    // nada (el papá no debería ver una tarjeta rota).
     if (!vapid || vapid.startsWith('REEMPLAZAR')) { $cont.innerHTML = ''; return; }
 
     let st;
     try { st = await estadoAvisos(); }
     catch (_) { st = { estado: 'desactivado' }; }
 
-    // El navegador no soporta push: no hay nada que ofrecer.
     if (st.estado === 'no-soporta') { $cont.innerHTML = ''; return; }
 
-    // Activar: suscribe bajo el usuario logueado y repinta. Marcamos el
-    // flag pase lo que pase, así el cartel grande no vuelve a aparecer
-    // (si lo deniegan queda el toggle discreto, no el nag).
-    const activar = async (btn) => {
+    // --- icono plegado -----------------------------------------------
+    const pintarIcono = (modo) => {
+        const etiqueta = modo === 'on'  ? 'Avisos activados'
+                       : modo === 'bloq' ? 'Avisos bloqueados en el teléfono'
+                       : 'Avisos apagados';
+        $cont.innerHTML = `
+            <div class="avisos-pin avisos-pin--${modo}${animar ? ' is-entrando' : ''}">
+                <button type="button" class="avisos-pin__btn" id="avisos-pin-btn"
+                        aria-label="${etiqueta}" title="${etiqueta}">
+                    ${modo === 'on' ? '🔔' : '🔕'}
+                </button>
+            </div>
+        `;
+        const $btn = $cont.querySelector('#avisos-pin-btn');
+        if (modo === 'off') {
+            // Apagados: tocar el icono vuelve a intentar activarlos.
+            $btn.addEventListener('click', (ev) => activar(ev.currentTarget));
+        } else if (modo === 'on') {
+            // Activados: el icono despliega la opción de apagarlos. No
+            // dejamos un botón "Desactivar" suelto a la vista: es lo
+            // último que queremos que toque sin querer.
+            $btn.addEventListener('click', () => {
+                const $caja = $cont.querySelector('.avisos-pin');
+                if ($caja.classList.contains('is-abierto')) {
+                    $caja.classList.remove('is-abierto');
+                    $caja.querySelector('.avisos-pin__accion')?.remove();
+                    return;
+                }
+                $caja.classList.add('is-abierto');
+                const $acc = document.createElement('button');
+                $acc.type = 'button';
+                $acc.className = 'avisos-pin__accion';
+                $acc.textContent = 'Apagar avisos';
+                $acc.addEventListener('click', async () => {
+                    $acc.disabled = true; $acc.textContent = 'Apagando…';
+                    try {
+                        await desactivarAvisos();
+                        posponerAvisos();
+                        pintarAvisosSimple($cont);
+                    } catch (_) {
+                        $acc.disabled = false; $acc.textContent = 'Apagar avisos';
+                    }
+                });
+                $caja.appendChild($acc);
+            });
+        }
+    };
+
+    // --- activar ------------------------------------------------------
+    async function activar(btn) {
         const orig = btn.textContent;
-        btn.disabled = true; btn.textContent = 'Pidiendo permiso…';
-        marcarAvisosPrompteado();
+        btn.disabled = true;
+        btn.textContent = 'Un momento…';
         try {
             await activarAvisos(vapid);
-            pintarAvisosSimple($cont);
+            olvidarEspera();
+            // El cartel se pliega y se va hacia la derecha; recién
+            // después aparece el icono. La animación es la que le dice
+            // "listo, quedó" sin tener que leer nada.
+            const $cta = $cont.querySelector('.avisos-cta');
+            if ($cta) {
+                $cta.classList.add('is-plegando');
+                await new Promise(r => setTimeout(r, 420));
+            }
+            pintarAvisosSimple($cont, { animar: true });
         } catch (err) {
+            btn.disabled = false;
+            btn.textContent = orig;
+            // Si el navegador negó el permiso, NO lo damos por preguntado
+            // para siempre: se pospone y se vuelve a ofrecer.
+            posponerAvisos();
             pintarAvisosSimple($cont);
             await modal({
                 titulo: 'No pude activar los avisos',
@@ -276,84 +338,38 @@ async function pintarAvisosSimple($cont) {
                 acciones: [{ label: 'Listo', clase: 'btn--familia btn--full', value: 'ok' }]
             });
         }
-    };
-
-    // Estado: activados → toggle discreto para apagar.
-    if (st.estado === 'activado') {
-        $cont.innerHTML = `
-            <div class="avisos-mini">
-                <span class="avisos-mini__txt">🔔 Avisos activados</span>
-                <button class="btn btn--mini" id="btn-avisos-off">Desactivar</button>
-            </div>
-        `;
-        $cont.querySelector('#btn-avisos-off').addEventListener('click', async (ev) => {
-            const btn = ev.currentTarget;
-            btn.disabled = true; btn.textContent = 'Desactivando…';
-            try {
-                await desactivarAvisos();
-                marcarAvisosPrompteado();
-                pintarAvisosSimple($cont);
-            } catch (err) {
-                btn.disabled = false; btn.textContent = 'Desactivar';
-                await modal({
-                    titulo: 'No pude desactivar',
-                    cuerpo: `<p>${h(err?.message || err)}</p>`,
-                    acciones: [{ label: 'Listo', clase: 'btn--familia btn--full', value: 'ok' }]
-                });
-            }
-        });
-        return;
     }
 
-    // Estado: bloqueado en el navegador → no podemos re-pedir permiso.
-    if (st.estado === 'bloqueado') {
-        $cont.innerHTML = `
-            <div class="avisos-mini avisos-mini--bloq">
-                <span class="avisos-mini__txt">🔕 Avisos bloqueados</span>
-            </div>
-            <p class="muted avisos-mini__ayuda">
-                Están bloqueados en el navegador. Para activarlos: tocá el candado
-                de arriba (en la barra de direcciones) → Notificaciones → Permitir.
-            </p>
-        `;
-        return;
-    }
+    if (st.estado === 'activado')  { pintarIcono('on');   return; }
+    if (st.estado === 'bloqueado') { pintarIcono('bloq'); return; }
 
-    // Estado: desactivado. Primera vez (nunca lo prompteamos) → cartel
-    // grande y cálido. Después → fila discreta para reactivar.
-    if (!avisosYaPrompteado()) {
-        $cont.innerHTML = `
-            <section class="card avisos-cta">
-                <p class="t-emocional avisos-cta__titulo">🔔 Activá los avisos</p>
-                <p class="avisos-cta__texto">
-                    Así tu familia puede recordarte cosas y te avisamos a tiempo.
-                </p>
-                <button class="btn btn--xl btn--inicio btn--full" id="btn-avisos-on">
-                    Sí, activar
-                </button>
-                <button class="btn btn--full avisos-cta__no" id="btn-avisos-ahora-no">
-                    Ahora no
-                </button>
-            </section>
-        `;
-        $cont.querySelector('#btn-avisos-on')
-             .addEventListener('click', (ev) => activar(ev.currentTarget));
-        $cont.querySelector('#btn-avisos-ahora-no')
-             .addEventListener('click', () => {
-                 marcarAvisosPrompteado();
-                 pintarAvisosSimple($cont);
-             });
-        return;
-    }
+    // Desactivado: cartel grande sólo si toca ofrecerlo.
+    if (!tocaOfrecerAvisos()) { pintarIcono('off'); return; }
 
     $cont.innerHTML = `
-        <div class="avisos-mini">
-            <span class="avisos-mini__txt">🔕 Avisos desactivados</span>
-            <button class="btn btn--mini btn--inicio" id="btn-avisos-on">Activar</button>
-        </div>
+        <section class="card avisos-cta">
+            <p class="t-emocional avisos-cta__titulo">🔔 ¿Querés que te avise?</p>
+            <p class="avisos-cta__texto">
+                Cuando tu familia te deje algo, o cuando toque un remedio,
+                te suena el teléfono. Si no, no te enterás.
+            </p>
+            <button class="btn btn--xl btn--inicio btn--full" id="btn-avisos-on">
+                Sí, avisame
+            </button>
+            <button class="btn btn--full avisos-cta__no" id="btn-avisos-ahora-no">
+                Ahora no
+            </button>
+        </section>
     `;
     $cont.querySelector('#btn-avisos-on')
          .addEventListener('click', (ev) => activar(ev.currentTarget));
+    $cont.querySelector('#btn-avisos-ahora-no')
+         .addEventListener('click', () => {
+             posponerAvisos();
+             const $cta = $cont.querySelector('.avisos-cta');
+             if ($cta) $cta.classList.add('is-plegando');
+             setTimeout(() => pintarAvisosSimple($cont, { animar: true }), 420);
+         });
 }
 
 /** Activa el sync scroll → dots + tap → lightbox de la galería. */
