@@ -71,12 +71,24 @@ async function main() {
   twaManifest.themeColor = new Color(THEME_COLOR);
   twaManifest.backgroundColor = new Color(BACKGROUND_COLOR);
   twaManifest.navigationColor = new Color(THEME_COLOR);
-  twaManifest.appVersionCode = 1;
-  twaManifest.appVersionName = '1.0.0';
+  twaManifest.appVersionCode = 2;
+  twaManifest.appVersionName = '1.0.1';
   twaManifest.minSdkVersion = 21;
   twaManifest.signingKey = { path: KEYSTORE_PATH, alias: KEY_ALIAS };
   twaManifest.generatorApp = 'bubblewrap-cli';
-  twaManifest.enableNotifications = false;
+  // enableNotifications en true: sin esto el TWA no declara el permiso ni
+  // habilita el DelegationService, asi que la app instalada NO muestra
+  // ninguna notificacion web. Estuvo en false hasta el 23/09/2026, o sea
+  // que el bundle que habia listo para subir a Play Store era una app que
+  // no avisaba nada — el mismo problema que en el navegador, pero peor,
+  // porque parece una app de verdad.
+  //
+  // En true, los avisos pasan a pertenecer a la app instalada 'Pensandote',
+  // que aparece en la lista de aplicaciones de Android con su propio
+  // permiso de notificaciones y su propio inicio automatico. Eso es lo que
+  // falta hoy: en Xiaomi el sistema no despierta a Chrome, pero una app
+  // instalada es otra cosa.
+  twaManifest.enableNotifications = true;
 
   const validationError = twaManifest.validate();
   if (validationError) {
