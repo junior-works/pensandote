@@ -476,7 +476,7 @@ export function montarNubeInicio($app) {
         stopSpeak();
         const pendiente = checkinPendiente;
         const estadoAnimo = estadoDesdeRespuesta(texto);
-        decir('Gracias por contarme. Estoy avisando a tu familia…', 'thinking');
+        decir('Gracias por contarme. Lo estoy anotando…', 'thinking');
         setFrame('thinking', 'thinking');
         try {
             if (state.modo === 'real' && !esPreview()) {
@@ -498,9 +498,16 @@ export function montarNubeInicio($app) {
                     ? 'Me alegra saberlo. En la aplicación real, le avisaría ahora a tu familia.'
                     : 'Gracias por decírmelo. En la aplicación real, se lo contaría ahora a tu familia para que pueda acompañarte.';
             } else {
+                // OJO con prometer que ya se avisó. Acá lo único que sabemos
+                // es que la respuesta se guardó: el push a la familia lo
+                // dispara después un trigger que, si falla, falla en
+                // silencio (RAISE WARNING). Durante meses Nube le dijo a un
+                // adulto mayor "ya le avisé a tu familia" mientras el
+                // gateway devolvía 401 y no salía nada. Decir sólo lo que
+                // efectivamente pasó.
                 ultimaRespuesta = estadoAnimo === 'bien'
-                    ? 'Me alegra saberlo. Ya le avisé a tu familia que estás bien.'
-                    : 'Gracias por decírmelo. Ya se lo conté a tu familia para que pueda acompañarte.';
+                    ? 'Me alegra saberlo. Listo, ya lo anoté para tu familia.'
+                    : 'Gracias por decírmelo. Listo, ya lo anoté para tu familia.';
             }
             decir(ultimaRespuesta, estadoAnimo === 'bien' ? 'happy' : 'empathy');
             empezarHabla();
@@ -510,7 +517,7 @@ export function montarNubeInicio($app) {
             relatoTimer = setTimeout(buscarRelatoPendiente, 4500);
         } catch (err) {
             console.error('[nube guardar checkin]', err);
-            decir('No pude avisar ahora. Voy a intentarlo de nuevo cuando me respondas.', 'empathy');
+            decir('No pude anotarlo ahora. Probemos de nuevo en un ratito.', 'empathy');
             setFrame('empathy', 'empathy');
         } finally {
             ocupado = false;
