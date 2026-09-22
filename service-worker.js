@@ -18,7 +18,7 @@
  * correcto en ambos entornos.
  */
 
-const CACHE_NAME = 'pensandote-shell-v0.10.31-nube-no-promete';
+const CACHE_NAME = 'pensandote-shell-v0.10.32-probar-dos-avisos';
 
 const SHELL_FILES = [
     './',

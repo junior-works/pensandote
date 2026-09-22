@@ -1655,12 +1655,43 @@ async function pintarAvisos($cont, { portada = false } = {}) {
             btn.disabled = true; btn.textContent = 'Enviando…';
             $feedback.textContent = '';
             $feedback.style.color = '';
+            // La prueba son DOS avisos y no uno, a propósito. Cuando "no
+            // llega nada" hay dos culpables posibles y desde el servidor
+            // no se distinguen: el envío puede salir perfecto (Google
+            // contesta que lo aceptó) y el teléfono no mostrarlo igual,
+            // por permisos del sistema o ahorro de batería. Entonces:
+            //   1) uno LOCAL, que dibuja el propio teléfono sin pasar por
+            //      internet. Si este no aparece, el problema son los
+            //      permisos de notificaciones del teléfono.
+            //   2) uno REAL, que va y vuelve por el servidor. Si aparece
+            //      el local pero no este, el problema es el envío.
+            // Con eso sabés en una tocada dónde estás parado, en vez de
+            // revisar ajustes al azar.
+            let localOk = false;
+            try {
+                const reg = await navigator.serviceWorker?.getRegistration();
+                if (reg) {
+                    await reg.showNotification('Prueba 1 de 2 🔔', {
+                        body:  'Esta la dibuja tu teléfono solo, sin internet.',
+                        icon:  './assets/icon-192.png',
+                        badge: './assets/icon-192.png',
+                        tag:   'prueba-local'
+                    });
+                    localOk = true;
+                }
+            } catch (e) {
+                console.warn('[probar aviso] notificación local', e);
+            }
+
             try {
                 const r = await probarAviso(state.circuloActivoIdReal);
+                const linea1 = localOk
+                    ? 'Prueba 1 (local) mostrada.'
+                    : '⚠️ La prueba 1 (local) NO se pudo mostrar: este dispositivo tiene bloqueadas las notificaciones de la app.';
                 if (r?.sent > 0) {
-                    $feedback.textContent = `✅ Enviado — fijate que te llegue (${r.sent} dispositivo${r.sent === 1 ? '' : 's'}).`;
+                    $feedback.textContent = `${linea1} Prueba 2 enviada y aceptada por el servidor (${r.sent} dispositivo${r.sent === 1 ? '' : 's'}). Fijate cuáles de las dos te aparecen: si no aparece ninguna es el permiso del teléfono; si aparece la 1 y no la 2, el aviso se pierde en el camino.`;
                 } else {
-                    $feedback.textContent = 'Se envió pero ningún dispositivo del círculo está suscripto. Si recién activaste, esperá unos segundos.';
+                    $feedback.textContent = `${linea1} La prueba 2 no salió: ningún dispositivo del círculo está suscripto. Si recién activaste, esperá unos segundos.`;
                 }
             } catch (err) {
                 $feedback.style.color = 'var(--accent-anecdota, #c43c2f)';
