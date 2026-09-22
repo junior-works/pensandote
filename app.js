@@ -13,8 +13,7 @@
  */
 
 import { onRouteChange, refresh as refreshRouter, currentRoute, go, goReplace } from './js/router.js';
-import { state, onStateChange, miembroActivo, setSesionReal, setModo,
-         circuloRecordado, setResolviendoSesion } from './js/state.js';
+import { state, onStateChange, miembroActivo, setSesionReal, setModo } from './js/state.js';
 import { montarDevPanel } from './js/dev-panel.js';
 import { esEntornoDev } from './js/ui.js';
 import { montarInstall } from './js/install-prompt.js';
@@ -181,6 +180,21 @@ function hayCallbackMagicLink() {
  * tarda: hay que importarlo de la red primero. No valida el token —
  * puede estar vencido — sólo contesta "hay algo que esperar o no".
  */
+/**
+ * Lee el círculo que el usuario eligió la última vez. Quien lo ESCRIBE es
+ * setSesionReal en state.js — el único punto por el que pasan los cuatro
+ * lugares que cambian de círculo. Acá sólo se lee, con la misma clave, a
+ * propósito: importar un símbolo nuevo de otro módulo rompe la app entera
+ * durante los ~10 minutos en que Pages sigue sirviendo el js viejo desde
+ * su caché (app.js nuevo + state.js viejo = "does not provide an export").
+ * Duplicar cuatro líneas es más barato que eso.
+ */
+function circuloRecordado(userId) {
+    if (!userId) return null;
+    try { return localStorage.getItem(`pensandote:circulo-activo:${userId}`) || null; }
+    catch (_) { return null; }
+}
+
 function haySesionGuardada() {
     try {
         for (let i = 0; i < localStorage.length; i++) {
@@ -453,7 +467,7 @@ async function bootstrap() {
     //     desde el primer frame.
     if (configEsReal()) {
         if (haySesionGuardada() || hayCallbackMagicLink()) {
-            setResolviendoSesion(true);
+            state.resolviendoSesion = true;
             renderResolviendo($app);
         } else {
             renderBienvenida($app);
@@ -557,7 +571,7 @@ async function bootstrap() {
     }
 
     // Ya sabemos si hay sesión: el router puede volver a decidir pantalla.
-    setResolviendoSesion(false);
+    state.resolviendoSesion = false;
 
     // Coordinador del botón "Atrás" — anchor + popstate + doble-tap
     // toast para salir desde el home. Corre DESPUÉS de procesarCallback
@@ -673,7 +687,7 @@ bootstrap().catch(err => {
     console.error('[bootstrap]', err);
     // Si reventó en medio del arranque, apagar el flag: si no, el router
     // se queda pintando el splash para siempre y el error no se ve.
-    setResolviendoSesion(false);
+    state.resolviendoSesion = false;
     $app.innerHTML = `<section class="card"><h2>Algo salió mal</h2><pre>${(err && err.message) || err}</pre></section>`;
 });
 

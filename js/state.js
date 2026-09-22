@@ -104,26 +104,17 @@ export function setSesionReal({ usuario, circulos, circuloActivoId, membresia })
 // ---------------------------------------------------------------------
 // Círculo activo recordado entre recargas
 // ---------------------------------------------------------------------
-// La clave lleva el user id para que dos personas en el mismo teléfono no
-// se pisen. Si el círculo guardado ya no está entre los suyos, app.js lo
-// ignora y cae al primero.
+// Acá se ESCRIBE; quien lee es app.js en el arranque, con la misma clave
+// (no la importa: ver el comentario de circuloRecordado allá). La clave
+// lleva el user id para que dos personas en el mismo teléfono no se pisen.
+// Si el círculo guardado ya no está entre los suyos, app.js lo ignora y
+// cae al primero.
 const CIRCULO_RECORDADO_KEY = 'pensandote:circulo-activo';
 
 function recordarCirculo(userId, circleId) {
     if (!userId || !circleId) return;
     try { localStorage.setItem(`${CIRCULO_RECORDADO_KEY}:${userId}`, circleId); }
     catch (_) {}
-}
-
-export function circuloRecordado(userId) {
-    if (!userId) return null;
-    try { return localStorage.getItem(`${CIRCULO_RECORDADO_KEY}:${userId}`) || null; }
-    catch (_) { return null; }
-}
-
-/** app.js lo usa durante el arranque (ver state.resolviendoSesion). */
-export function setResolviendoSesion(v) {
-    state.resolviendoSesion = !!v;
 }
 
 export function limpiarSesionReal() {
