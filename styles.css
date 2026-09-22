@@ -4602,3 +4602,16 @@ body[data-mode="dashboard"] .circulo-card__chip--activo {
     }
 }
 
+/* --- Splash de arranque (mientras se resuelve la sesion) ------------ */
+/* Nube respirando: le da algo vivo que mirar al que espera, sin decirle
+   nada todavia sobre si tiene cuenta o no. */
+.splash-nube {
+    animation: splash-respira 2.6s ease-in-out infinite;
+}
+@keyframes splash-respira {
+    0%, 100% { transform: translateY(0)     scale(1);    }
+    50%      { transform: translateY(-6px)  scale(1.03); }
+}
+@media (prefers-reduced-motion: reduce) {
+    .splash-nube { animation: none; }
+}

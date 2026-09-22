@@ -13,7 +13,8 @@
  */
 
 import { onRouteChange, refresh as refreshRouter, currentRoute, go, goReplace } from './js/router.js';
-import { state, onStateChange, miembroActivo, setSesionReal, setModo } from './js/state.js';
+import { state, onStateChange, miembroActivo, setSesionReal, setModo,
+         circuloRecordado, setResolviendoSesion } from './js/state.js';
 import { montarDevPanel } from './js/dev-panel.js';
 import { esEntornoDev } from './js/ui.js';
 import { montarInstall } from './js/install-prompt.js';
@@ -79,6 +80,12 @@ const RUTAS = {
 // ---------------------------------------------------------------------
 function renderRoute(ruta) {
     document.body.dataset.modoApp = state.modo;
+
+    // Todavía no sabemos si hay sesión: no decidimos pantalla. Cualquier
+    // cosa que pintemos ahora sería una adivinanza, y adivinar mal
+    // significa mostrarle un login a alguien que ya está logueado.
+    if (state.resolviendoSesion) return renderResolviendo($app);
+    if ($app.dataset.pantalla === 'resolviendo') $app.dataset.pantalla = '';
     // La barra sticky del círculo activo se evalúa en cada render —
     // así también se desmonta limpia cuando se cambia a demo o se
     // cierra sesión, no sólo cuando el flow entra a renderRouteReal.
@@ -103,6 +110,32 @@ function renderRoute(ruta) {
     if (configEsReal()) montarSalidaDemo();
     else desmontarSalidaDemo();
     return renderRouteDemo(ruta);
+}
+
+// ---------------------------------------------------------------------
+// Arranque: esperando a saber si hay sesión
+// ---------------------------------------------------------------------
+
+/**
+ * Splash neutro mientras se resuelve la sesión. No decide nada: no dice
+ * "ingresá" ni "no tenés cuenta", porque todavía no lo sabemos. Recuperar
+ * la sesión implica bajar el SDK de Supabase de la red, así que en un
+ * teléfono lento puede tardar unos segundos; lo que NO puede pasar es que
+ * en esos segundos el usuario vea la pantalla de login y después la de
+ * pedir el mail antes de entrar a su propia cuenta.
+ */
+function renderResolviendo($app) {
+    if ($app.dataset.pantalla === 'resolviendo') return;   // no repintar
+    $app.dataset.pantalla = 'resolviendo';
+    $app.innerHTML = `
+        <section class="card stack" style="margin-top:4rem;text-align:center;">
+            <img src="./assets/nube/nube-reposo.png" alt="" width="120" height="120"
+                 style="margin:0 auto;display:block;" class="splash-nube">
+            <h1 class="t-emocional center" style="margin:0;">Pensándote</h1>
+            <p class="center muted" style="margin:0;">Un momentito…</p>
+        </section>
+    `;
+    window.scrollTo({ top: 0 });
 }
 
 // ---------------------------------------------------------------------
@@ -142,12 +175,30 @@ function hayCallbackMagicLink() {
 }
 
 /**
+ * ¿El SDK de Supabase dejó una sesión guardada en este navegador? Lee
+ * localStorage directamente (clave `sb-<ref>-auth-token`) en vez de
+ * preguntarle al SDK, porque preguntarle al SDK es justamente lo que
+ * tarda: hay que importarlo de la red primero. No valida el token —
+ * puede estar vencido — sólo contesta "hay algo que esperar o no".
+ */
+function haySesionGuardada() {
+    try {
+        for (let i = 0; i < localStorage.length; i++) {
+            const k = localStorage.key(i);
+            if (k && /^sb-.+-auth-token$/.test(k)) return true;
+        }
+    } catch (_) {}
+    return false;
+}
+
+/**
  * Pantalla de bienvenida en frío. Dos acciones grandes:
  *   - "Ingresar"  → modo real → renderRouteReal dibuja el login existente
  *                   (Real.renderLogin, flujo magic-link). No reimplementa.
  *   - "Ver demo"  → marca demoElegido y cae al demo (Roberto) a propósito.
  */
 function renderBienvenida($app) {
+    $app.dataset.pantalla = '';
     $app.innerHTML = `
         <section class="card stack" style="margin-top: 3rem;">
             <h1 class="t-emocional center">Pensándote</h1>
@@ -390,12 +441,23 @@ async function bootstrap() {
     montarInstall();
     onStateChange(() => refreshRouter());
 
-    // Pintamos una pantalla útil antes de consultar la sesión. La sesión se
-    // recupera en segundo plano y, si existe, el primer render del router ya
-    // abrirá el círculo correcto. Así una demora del SDK nunca deja al usuario
-    // mirando el texto "Cargando Pensándote…".
-    if (configEsReal() && !hayCallbackMagicLink()) {
-        renderBienvenida($app);
+    // Pintamos algo antes de consultar la sesión — recuperarla implica bajar
+    // el SDK de la red y puede tardar. Pero QUÉ pintamos depende de si hay
+    // algo que recuperar: mirar el token guardado por el SDK en
+    // localStorage cuesta cero y contesta la pregunta al instante.
+    //   - Con token (o volviendo del magic link): splash neutro. Antes acá
+    //     se pintaba la bienvenida, así que alguien ya logueado veía primero
+    //     un "Ingresar" y después la pantalla de pedir el mail antes de
+    //     entrar a su cuenta.
+    //   - Sin token: no hay sesión que esperar, la bienvenida es correcta
+    //     desde el primer frame.
+    if (configEsReal()) {
+        if (haySesionGuardada() || hayCallbackMagicLink()) {
+            setResolviendoSesion(true);
+            renderResolviendo($app);
+        } else {
+            renderBienvenida($app);
+        }
         window.__pensandoteReady = true;
     }
 
@@ -494,6 +556,9 @@ async function bootstrap() {
         }
     }
 
+    // Ya sabemos si hay sesión: el router puede volver a decidir pantalla.
+    setResolviendoSesion(false);
+
     // Coordinador del botón "Atrás" — anchor + popstate + doble-tap
     // toast para salir desde el home. Corre DESPUÉS de procesarCallback
     // (que hace replaceState para limpiar tokens del magic-link), así
@@ -515,29 +580,6 @@ async function bootstrap() {
  * usuario o algo falló (fallback silencioso, no rompe la navegación que
  * venga después).
  */
-// ---------------------------------------------------------------------
-// Círculo activo: recordarlo entre recargas.
-// ---------------------------------------------------------------------
-// El arranque tomaba siempre `circulos[0].id`, así que si el usuario
-// cambiaba al círculo de su mamá y refrescaba, volvía al de su papá.
-// Guardamos la elección por usuario (la clave lleva el user id) para que
-// dos personas en el mismo teléfono no se pisen. Si el círculo guardado
-// ya no está entre los suyos — lo sacaron, o cambió de cuenta — se
-// ignora y vuelve al primero.
-const CIRCULO_RECORDADO_KEY = 'pensandote:circulo-activo';
-
-function recordarCirculo(userId, circleId) {
-    if (!userId || !circleId) return;
-    try { localStorage.setItem(`${CIRCULO_RECORDADO_KEY}:${userId}`, circleId); }
-    catch (_) {}
-}
-
-function circuloRecordado(userId) {
-    if (!userId) return null;
-    try { return localStorage.getItem(`${CIRCULO_RECORDADO_KEY}:${userId}`) || null; }
-    catch (_) { return null; }
-}
-
 async function cambiarCirculoActivo(circleId) {
     if (!circleId || !state.usuarioReal) return false;
     if (state.circuloActivoIdReal === circleId) return true;
@@ -551,7 +593,6 @@ async function cambiarCirculoActivo(circleId) {
             circuloActivoId: circleId,
             membresia:       memb
         });
-        recordarCirculo(state.usuarioReal.id, circleId);
         return true;
     } catch (err) {
         console.warn('[cambiarCirculoActivo]', err);
@@ -630,6 +671,9 @@ function mostrarToastSalida(texto) {
 
 bootstrap().catch(err => {
     console.error('[bootstrap]', err);
+    // Si reventó en medio del arranque, apagar el flag: si no, el router
+    // se queda pintando el splash para siempre y el error no se ve.
+    setResolviendoSesion(false);
     $app.innerHTML = `<section class="card"><h2>Algo salió mal</h2><pre>${(err && err.message) || err}</pre></section>`;
 });
 
@@ -773,7 +817,6 @@ function wireSelectorCirculo(h) {
                     circuloActivoId: cid,
                     membresia:       memb
                 });
-                recordarCirculo(state.usuarioReal.id, cid);
                 // setSesionReal emite → onStateChange dispara refresh del
                 // router, que repinta el Hogar contra el nuevo círculo y
                 // re-llama actualizarShellAdmin (header + nav actualizados).

@@ -18,7 +18,7 @@
  * correcto en ambos entornos.
  */
 
-const CACHE_NAME = 'pensandote-shell-v0.10.28-sin-aviso-duplicado';
+const CACHE_NAME = 'pensandote-shell-v0.10.29-arranque-y-circulo';
 
 const SHELL_FILES = [
     './',
@@ -60,7 +60,8 @@ const SHELL_FILES = [
     './js/utils/panico.js',
     './js/utils/parentesco.js',
     './js/foto-interacciones.js',
-    './assets/nube/nube-sprites-v1.png'
+    './assets/nube/nube-sprites-v1.png',
+    './assets/nube/nube-reposo.png'
 ];
 
 const STATIC_EXT = /\.(?:png|jpg|jpeg|svg|ico|webp|gif|woff2?|ttf)$/i;

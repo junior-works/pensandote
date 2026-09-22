@@ -21,6 +21,14 @@ export const state = {
     // --- Modo ---
     modo: 'demo',                  // 'demo' | 'real'
 
+    // --- Arranque: la sesión todavía no se resolvió ---
+    // Mientras esto es true el router NO decide pantalla: pinta un splash
+    // neutro. Antes el arranque pintaba la bienvenida ("Ingresar / Ver
+    // demo") ANTES de saber si había sesión, así que un usuario logueado
+    // veía una pantalla de login y después la de pedir el mail antes de
+    // entrar. app.js lo prende sólo si hay token guardado o callback.
+    resolviendoSesion: false,
+
     // --- Bienvenida en frío ---
     // En arranque genuino (config real, sin sesión, sin invitación ni
     // callback de magic-link) app.js muestra la pantalla de bienvenida en
@@ -83,7 +91,39 @@ export function setSesionReal({ usuario, circulos, circuloActivoId, membresia })
     state.circulosReal      = circulos || [];
     state.circuloActivoIdReal = circuloActivoId || null;
     state.membresiaReal     = membresia || null;
+    // Recordar la elección ACÁ y no en cada botón: hay cuatro lugares que
+    // cambian de círculo (el chip del header, "Tus círculos" en Hogar, la
+    // pantalla de cuenta y el deep-link de un push) y sólo el chip lo
+    // guardaba. Por eso cambiabas al círculo de mamá, refrescabas y volvías
+    // al de papá. Guardando en el único punto por el que pasan todos, no
+    // se puede volver a olvidar.
+    recordarCirculo(state.usuarioReal?.id, state.circuloActivoIdReal);
     _emit();
+}
+
+// ---------------------------------------------------------------------
+// Círculo activo recordado entre recargas
+// ---------------------------------------------------------------------
+// La clave lleva el user id para que dos personas en el mismo teléfono no
+// se pisen. Si el círculo guardado ya no está entre los suyos, app.js lo
+// ignora y cae al primero.
+const CIRCULO_RECORDADO_KEY = 'pensandote:circulo-activo';
+
+function recordarCirculo(userId, circleId) {
+    if (!userId || !circleId) return;
+    try { localStorage.setItem(`${CIRCULO_RECORDADO_KEY}:${userId}`, circleId); }
+    catch (_) {}
+}
+
+export function circuloRecordado(userId) {
+    if (!userId) return null;
+    try { return localStorage.getItem(`${CIRCULO_RECORDADO_KEY}:${userId}`) || null; }
+    catch (_) { return null; }
+}
+
+/** app.js lo usa durante el arranque (ver state.resolviendoSesion). */
+export function setResolviendoSesion(v) {
+    state.resolviendoSesion = !!v;
 }
 
 export function limpiarSesionReal() {
