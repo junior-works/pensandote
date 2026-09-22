@@ -39,3 +39,7 @@ output/
 
 # Worktrees y settings locales de Claude
 .claude/
+
+# Temporales de las herramientas de trabajo (no van al repo)
+_subir_log.txt
+*.bundle

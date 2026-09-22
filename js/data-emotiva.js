@@ -1817,7 +1817,48 @@ export async function solicitarCheckin(circleId, targetUserId) {
         solicitado_por: user.id
     }).select().single();
     if (error) throw enriquecer('insert checkin_solicitudes', error);
+
+    // Sin aviso, el pedido se queda esperando: Nube solo lo levanta si la
+    // persona tiene la app abierta en ese momento, y casi nunca la tiene.
+    // Va solo cuando se crea un pedido nuevo — si ya habia uno pendiente
+    // salimos antes, asi no se avisa dos veces por lo mismo.
+    _avisarCheckinPedido(circleId, targetUserId);
     return data;
+}
+
+/**
+ * Avisa a la persona que su familia quiere saber como esta. Va dirigido
+ * a ESE usuario (parametro user_id de enviar-push) y no a todo el modo
+ * simple del circulo: puede haber mas de un adulto mayor y no tiene
+ * sentido molestar a quien no le preguntaron.
+ */
+async function _avisarCheckinPedido(circleId, targetUserId) {
+    const cfg = (typeof window !== 'undefined') ? window.PENSANDOTE_CONFIG : null;
+    if (!cfg?.SUPABASE_URL || !cfg?.SUPABASE_ANON_KEY) return;
+    try {
+        const sb = await sbClient();
+        const { data: { session } } = await sb.auth.getSession();
+        if (!session?.access_token) return;
+        await fetch(`${cfg.SUPABASE_URL}/functions/v1/enviar-push`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${session.access_token}`,
+                'apikey':        cfg.SUPABASE_ANON_KEY,
+                'Content-Type':  'application/json'
+            },
+            body: JSON.stringify({
+                circle_id: circleId,
+                user_id:   targetUserId,
+                tipo:      'checkin_pedido',
+                title:     'Pensándote',
+                body:      'Nube te quiere preguntar cómo estás hoy.',
+                url:       '#/inicio',
+                tag:       `checkin-${targetUserId}`
+            })
+        });
+    } catch (err) {
+        console.warn('[push checkin pedido]', err);
+    }
 }
 
 /** Pedido más reciente que Nube todavía debe formularle al usuario. */

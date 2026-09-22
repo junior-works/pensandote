@@ -113,6 +113,19 @@ export async function renderHogar($app) {
             </div>
         </section>
 
+        <section class="card stack hogar-preguntar">
+            <h2>🗣 Preguntale algo</h2>
+            <form id="form-preguntar-rapido" class="preguntar-rapido">
+                <input type="text" id="preguntar-rapido-texto" class="input-real"
+                       maxlength="240" required autocomplete="off"
+                       placeholder="Ma, ¿cómo era la casa donde creciste?">
+                <button type="submit" class="btn btn--inicio">Enviar</button>
+            </form>
+            <p class="muted" id="preguntar-rapido-estado" role="status" aria-live="polite">
+                Nube se lo pregunta y te trae la respuesta.
+            </p>
+        </section>
+
         <section class="card stack hogar-ultimo-carino" id="sec-ultimo-carino" hidden></section>
 
 
@@ -138,6 +151,34 @@ export async function renderHogar($app) {
             </div>
         </section>
     `;
+
+    // Preguntar desde el inicio. Antes habia que ir hasta Familia, bajar
+    // hasta una tarjeta y escribir ahi: demasiado para un impulso de
+    // "se me ocurrio algo". crearPunta ya dispara el aviso al telefono.
+    const $formRapido = $app.querySelector('#form-preguntar-rapido');
+    if ($formRapido) {
+        $formRapido.addEventListener('submit', async (ev) => {
+            ev.preventDefault();
+            const $inp = $app.querySelector('#preguntar-rapido-texto');
+            const $est = $app.querySelector('#preguntar-rapido-estado');
+            const $btn = $formRapido.querySelector('button[type=submit]');
+            const texto = String($inp?.value || '').trim();
+            if (!texto) return;
+            $btn.disabled = true; $inp.disabled = true;
+            $est.textContent = 'Enviando…';
+            try {
+                await crearPunta(c.id, texto);
+                $inp.value = '';
+                $est.textContent = '✅ Listo. Nube se lo va a preguntar.';
+            } catch (err) {
+                console.error('[preguntar rapido]', err);
+                $est.textContent = 'No pude enviarla. Probá de nuevo en un momento.';
+            } finally {
+                $btn.disabled = false; $inp.disabled = false;
+                $inp.focus();
+            }
+        });
+    }
 
     pintarAvisos($app.querySelector('#sec-avisos-inicio'), { portada: true });
     cargarHeroFoto(c, $app.querySelector('#sec-hero'));

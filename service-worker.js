@@ -18,7 +18,7 @@
  * correcto en ambos entornos.
  */
 
-const CACHE_NAME = 'pensandote-shell-v0.10.23-circulo-recordado';
+const CACHE_NAME = 'pensandote-shell-v0.10.24-preguntar-inicio';
 
 const SHELL_FILES = [
     './',

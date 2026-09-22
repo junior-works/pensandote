@@ -1518,6 +1518,29 @@ body[data-mode="dashboard"] .actividad-item__hace {
 }
 
 /* ---- Estado del día (admin Hogar — checkins de simples) ---- */
+/* ---- Preguntar desde el inicio -------------------------------------
+ * Un renglon, no un formulario. El impulso de "se me ocurrio algo que
+ * quiero preguntarle" dura poco: si hay que navegar hasta otra seccion
+ * y bajar hasta una tarjeta, se pierde. El campo grande de Familia
+ * sigue existiendo para cuando uno se sienta a pensar preguntas. */
+.preguntar-rapido {
+    display: flex;
+    gap: 0.5rem;
+    align-items: stretch;
+}
+.preguntar-rapido .input-real {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+.preguntar-rapido button {
+    flex: 0 0 auto;
+    white-space: nowrap;
+}
+@media (max-width: 430px) {
+    .preguntar-rapido { flex-direction: column; }
+    .preguntar-rapido button { width: 100%; }
+}
+
 body[data-mode="dashboard"] .checkin-estado-lista {
     list-style: none; padding: 0; margin: 0; display: grid; gap: 0.5rem;
 }
