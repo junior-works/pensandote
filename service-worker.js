@@ -18,7 +18,7 @@
  * correcto en ambos entornos.
  */
 
-const CACHE_NAME = 'pensandote-shell-v0.10.27-avisos-en-nube';
+const CACHE_NAME = 'pensandote-shell-v0.10.28-sin-aviso-duplicado';
 
 const SHELL_FILES = [
     './',
