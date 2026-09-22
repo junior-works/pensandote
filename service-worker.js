@@ -18,7 +18,7 @@
  * correcto en ambos entornos.
  */
 
-const CACHE_NAME = 'pensandote-shell-v0.10.24-preguntar-inicio';
+const CACHE_NAME = 'pensandote-shell-v0.10.25-una-sola-tarjeta';
 
 const SHELL_FILES = [
     './',

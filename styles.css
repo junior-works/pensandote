@@ -1518,6 +1518,30 @@ body[data-mode="dashboard"] .actividad-item__hace {
 }
 
 /* ---- Estado del día (admin Hogar — checkins de simples) ---- */
+/* El pedido de check-in dejo de ser un boton grande: es una accion
+ * secundaria al lado del estado, no algo que compita con el renglon
+ * para escribir. Menos botones, una sola cosa protagonica por tarjeta. */
+.checkin-estado-item__pedir {
+    display: inline-block;
+    margin-top: 0.15rem;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--accent-inicio, #3b6ea5);
+    font: inherit;
+    font-size: 0.85em;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    cursor: pointer;
+}
+.checkin-estado-item__pedir:hover { opacity: 0.8; }
+.checkin-estado-item__pedir:disabled {
+    color: inherit;
+    opacity: 0.65;
+    text-decoration: none;
+    cursor: default;
+}
+
 /* ---- Preguntar desde el inicio -------------------------------------
  * Un renglon, no un formulario. El impulso de "se me ocurrio algo que
  * quiero preguntarle" dura poco: si hay que navegar hasta otra seccion

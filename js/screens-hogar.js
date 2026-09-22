@@ -106,19 +106,15 @@ export async function renderHogar($app) {
         </section>
 
         <section class="card stack hogar-checkin">
-            <h2>📅 Estado de hoy</h2>
+            <h2>🗣 Nube y la familia</h2>
             <div id="sec-checkin-estado">
                 <div class="skel skel--line" aria-hidden="true"></div>
                 <div class="skel skel--line skel--short" aria-hidden="true"></div>
             </div>
-        </section>
-
-        <section class="card stack hogar-preguntar">
-            <h2>🗣 Preguntale algo</h2>
             <form id="form-preguntar-rapido" class="preguntar-rapido">
                 <input type="text" id="preguntar-rapido-texto" class="input-real"
                        maxlength="240" required autocomplete="off"
-                       placeholder="Ma, ¿cómo era la casa donde creciste?">
+                       placeholder="Preguntale algo…">
                 <button type="submit" class="btn btn--inicio">Enviar</button>
             </form>
             <p class="muted" id="preguntar-rapido-estado" role="status" aria-live="polite">
@@ -341,17 +337,10 @@ export async function renderFamilia($app) {
         <section class="card stack hogar-puntas">
             <h2>🗣 Lo que le va a preguntar Nube</h2>
             <p class="muted">
-                Escribí algo que quieras que ${h(narradorPosesivo)} cuente.
-                <strong>Nube se lo pregunta sola</strong>, en algún momento del día,
-                y guarda la charla para que no se pierda.
+                Las preguntas se escriben desde el <strong>Inicio</strong>.
+                Acá ves las que Nube todavía no hizo, y podés sumar
+                alguna de las sugeridas.
             </p>
-            <form id="form-punta" class="form-punta">
-                <textarea id="punta-texto" class="input-real" rows="3" required
-                          placeholder="${narradorParentesco
-                            ? `${h(narradorParentesco)}, contame cuándo empezaste a trabajar en la verdulería en la villa…`
-                            : 'Contame cuándo empezaste a trabajar en la verdulería…'}"></textarea>
-                <button type="submit" class="btn btn--inicio">➕ Que Nube se lo pregunte</button>
-            </form>
 
             <details class="ideas-sugeridas">
                 <summary class="ideas-sugeridas__summary">
@@ -410,33 +399,13 @@ export async function renderFamilia($app) {
         actualizarPrompt();
     }
 
-    // --- Ideas para contar (puntas) ---
-    const $formPunta = $app.querySelector('#form-punta');
-    if ($formPunta) {
-        $formPunta.addEventListener('submit', async (ev) => {
-            ev.preventDefault();
-            const $txt = $app.querySelector('#punta-texto');
-            const texto = ($txt.value || '').trim();
-            if (!texto) return;
-            const btn = ev.target.querySelector('button[type="submit"]');
-            btn.disabled = true; btn.textContent = 'Mandando…';
-            try {
-                await crearPunta(c.id, texto);
-                $txt.value = '';
-                await actualizarSeccionPuntas(c, u, $app);
-            } catch (err) {
-                await modal({
-                    titulo: 'No pude mandarla',
-                    cuerpo: `<pre>${h(err?.message || err)}</pre>`,
-                    acciones: [{ label: 'OK', clase: 'btn--inicio', value: 'ok' }]
-                });
-            } finally {
-                btn.disabled = false; btn.textContent = '➕ Que Nube se lo pregunte';
-            }
-        });
-        actualizarSeccionPuntas(c, u, $app);
-        cargarCharlasNube(c, $app.querySelector('#sec-charlas-nube'));
-    }
+    // --- Cola de preguntas y charlas ya guardadas ---
+    // El campo para escribir vive en el Inicio; aca solo se muestra
+    // lo pendiente y lo que Nube ya guardo. OJO: estas dos llamadas
+    // estaban dentro del `if` del formulario que se quito, asi que
+    // sin esto la lista quedaba cargando para siempre.
+    actualizarSeccionPuntas(c, u, $app);
+    cargarCharlasNube(c, $app.querySelector('#sec-charlas-nube'));
 
     cargarMuroFotos(c, $app.querySelector('#sec-foto'));
     cargarFechas(c, puedeEscribir, $app.querySelector('#sec-fechas'));
@@ -1781,18 +1750,16 @@ async function cargarCheckinsDelDia(c, $cont) {
                             <small>${ok
                                 ? `respondió “${h(respuesta)}” hoy a las ${h(hora)}`
                                 : 'todavía no respondió hoy'}</small>
-                            <button class="btn btn--mini btn--inicio" type="button"
+                            <button class="checkin-estado-item__pedir" type="button"
                                     data-pedir-checkin="${h(m.user_id)}">
-                                ${ok ? 'Preguntar de nuevo con Nube' : 'Preguntarle con Nube'}
+                                ${ok ? 'Preguntarle de nuevo cómo está' : 'Preguntarle cómo está'}
                             </button>
                         </div>
                     </li>
                 `;
             }).join('')}
         </ul>
-        <p class="muted" style="font-size:0.85em; margin:0;">
-            Nube se lo pregunta una vez al día y te acerca su respuesta.
-        </p>
+
     `;
     $cont.querySelectorAll('[data-pedir-checkin]').forEach(btn => {
         btn.addEventListener('click', async () => {
@@ -1800,7 +1767,7 @@ async function cargarCheckinsDelDia(c, $cont) {
             btn.textContent = 'Avisando a Nube…';
             try {
                 await solicitarCheckin(c.id, btn.dataset.pedirCheckin);
-                btn.textContent = 'Nube se lo preguntará';
+                btn.textContent = '✓ Nube se lo va a preguntar';
             } catch (err) {
                 console.error('[solicitar checkin]', err);
                 btn.disabled = false;
