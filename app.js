@@ -463,10 +463,15 @@ async function bootstrap() {
                     // cold start), arrancamos en ese círculo en vez del
                     // primero. Si el circle_id no está entre los del
                     // usuario, fallback al primero.
-                    const qCircle = currentRoute().query?.circle;
-                    circuloActivoId = (qCircle && circulos.some(c => c.id === qCircle))
-                        ? qCircle
-                        : circulos[0].id;
+                    // Prioridad: el círculo que viene en la URL (llegó de
+                    // un push), después el último que eligió a mano, y
+                    // recién si no hay ninguno válido, el primero.
+                    const qCircle  = currentRoute().query?.circle;
+                    const guardado = circuloRecordado(usr.id);
+                    const esValido = id => id && circulos.some(c => c.id === id);
+                    circuloActivoId = esValido(qCircle) ? qCircle
+                                    : esValido(guardado) ? guardado
+                                    : circulos[0].id;
                     membresia = await membresiaActiva(usr.id, circuloActivoId);
                 }
                 setSesionReal({
@@ -510,6 +515,29 @@ async function bootstrap() {
  * usuario o algo falló (fallback silencioso, no rompe la navegación que
  * venga después).
  */
+// ---------------------------------------------------------------------
+// Círculo activo: recordarlo entre recargas.
+// ---------------------------------------------------------------------
+// El arranque tomaba siempre `circulos[0].id`, así que si el usuario
+// cambiaba al círculo de su mamá y refrescaba, volvía al de su papá.
+// Guardamos la elección por usuario (la clave lleva el user id) para que
+// dos personas en el mismo teléfono no se pisen. Si el círculo guardado
+// ya no está entre los suyos — lo sacaron, o cambió de cuenta — se
+// ignora y vuelve al primero.
+const CIRCULO_RECORDADO_KEY = 'pensandote:circulo-activo';
+
+function recordarCirculo(userId, circleId) {
+    if (!userId || !circleId) return;
+    try { localStorage.setItem(`${CIRCULO_RECORDADO_KEY}:${userId}`, circleId); }
+    catch (_) {}
+}
+
+function circuloRecordado(userId) {
+    if (!userId) return null;
+    try { return localStorage.getItem(`${CIRCULO_RECORDADO_KEY}:${userId}`) || null; }
+    catch (_) { return null; }
+}
+
 async function cambiarCirculoActivo(circleId) {
     if (!circleId || !state.usuarioReal) return false;
     if (state.circuloActivoIdReal === circleId) return true;
@@ -523,6 +551,7 @@ async function cambiarCirculoActivo(circleId) {
             circuloActivoId: circleId,
             membresia:       memb
         });
+        recordarCirculo(state.usuarioReal.id, circleId);
         return true;
     } catch (err) {
         console.warn('[cambiarCirculoActivo]', err);
@@ -744,6 +773,7 @@ function wireSelectorCirculo(h) {
                     circuloActivoId: cid,
                     membresia:       memb
                 });
+                recordarCirculo(state.usuarioReal.id, cid);
                 // setSesionReal emite → onStateChange dispara refresh del
                 // router, que repinta el Hogar contra el nuevo círculo y
                 // re-llama actualizarShellAdmin (header + nav actualizados).
