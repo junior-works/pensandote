@@ -219,7 +219,22 @@ Deno.serve(async (req) => {
                 await webpush.sendNotification({
                     endpoint: s.endpoint,
                     keys: { p256dh: s.p256dh, auth: s.auth }
-                }, payload);
+                }, payload, {
+                    // urgency 'high' NO es un capricho. Con la pantalla
+                    // apagada Android entra en reposo profundo y Google
+                    // solo entrega al instante los mensajes marcados como
+                    // urgentes; el resto queda en cola hasta que el
+                    // telefono despierta solo. Sin esto, los avisos
+                    // aparecian todos juntos recien cuando el usuario
+                    // abria la app, que es justo lo contrario de una
+                    // notificacion. La libreria usa 'normal' por defecto.
+                    urgency: 'high',
+                    // Si el telefono estuvo apagado o sin señal, que el
+                    // aviso siga siendo util un rato: 24 horas. Despues
+                    // deja de tener sentido avisar que no tomo el remedio
+                    // de ayer.
+                    TTL: 86400
+                });
                 sent++;
             } catch (err: any) {
                 const status = err?.statusCode ?? err?.status ?? 0;
