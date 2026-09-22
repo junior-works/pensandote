@@ -18,7 +18,7 @@
  * correcto en ambos entornos.
  */
 
-const CACHE_NAME = 'pensandote-shell-v0.10.19-auth-timeout';
+const CACHE_NAME = 'pensandote-shell-v0.10.22-avisos-plegado';
 
 const SHELL_FILES = [
     './',
@@ -54,6 +54,7 @@ const SHELL_FILES = [
     './js/screens-biografia.js',
     './js/utils/dictado.js',
     './js/utils/escucha-relato.js',
+    './js/utils/grabador-voz.js',
     './js/utils/genero.js',
     './js/utils/panico.js',
     './js/utils/parentesco.js',

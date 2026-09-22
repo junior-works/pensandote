@@ -11,6 +11,7 @@
 import { state } from './state.js';
 import { h, speakES, stopSpeak, atraparFoco, liberarFoco } from './ui.js';
 import { crearDictado } from './utils/dictado.js';
+import { crearGrabadorVoz } from './utils/grabador-voz.js';
 import {
     consultarAsistente,
     consultarOrganismos,
@@ -301,6 +302,32 @@ export function montarNubeInicio($app) {
         catch (_) { return false; }
     }
 
+    // ---- Audio del relato -------------------------------------------
+    // El texto lo da el dictado; el audio lo graba este grabador aparte.
+    // Arranca DESPUES de que Nube termina de hablar, para no grabarse a
+    // si misma haciendo la pregunta. Si falla, seguimos con texto solo.
+    let relatoGrabador = null;
+
+    async function arrancarGrabacionRelato() {
+        if (relatoGrabador) return;
+        relatoGrabador = crearGrabadorVoz();
+        const ok = await relatoGrabador.arrancar();
+        if (!ok) relatoGrabador = null;
+    }
+
+    async function pararGrabacionRelato() {
+        if (!relatoGrabador) return { audio: null, durSeg: null };
+        const g = relatoGrabador;
+        relatoGrabador = null;
+        try { return await g.parar(); }
+        catch (_) { return { audio: null, durSeg: null }; }
+    }
+
+    function descartarGrabacionRelato() {
+        try { relatoGrabador?.descartar(); } catch (_) {}
+        relatoGrabador = null;
+    }
+
     function formularRelato(punta) {
         if (!vivo || ocupado || checkinPendiente || recordatorioPendiente || relatoPendiente) return false;
         const pregunta = String(punta?.texto || '').trim();
@@ -312,7 +339,14 @@ export function montarNubeInicio($app) {
         ultimaRespuesta = `Quiero preguntarte algo. ${pregunta}`;
         decir(ultimaRespuesta, 'speaking');
         empezarHabla();
-        speakES(ultimaRespuesta, { onEnd: terminarHabla });
+        speakES(ultimaRespuesta, {
+            onEnd: () => {
+                terminarHabla();
+                // Recien ahora abrimos el microfono: lo que viene es la
+                // voz de la persona, no la de Nube.
+                arrancarGrabacionRelato();
+            }
+        });
         if (state.modo !== 'real') {
             try { localStorage.setItem(claveRelatoDemo(), '1'); } catch (_) {}
         }
@@ -345,6 +379,9 @@ export function montarNubeInicio($app) {
         const relato = relatoPendiente;
         ocupado = true;
         stopSpeak();
+        // Cerramos el microfono ANTES de guardar. Si no hubo audio,
+        // `audio` viene null y grabarHistoria guarda solo el texto.
+        const { audio, durSeg } = await pararGrabacionRelato();
         $texto.disabled = true;
         $enviar.disabled = true;
         decir('Gracias por contármelo. Lo estoy guardando…', 'thinking');
@@ -354,8 +391,8 @@ export function montarNubeInicio($app) {
                 await grabarHistoria({
                     circleId: state.circuloActivoIdReal,
                     narradorId: state.usuarioReal.id,
-                    audioBlob: null,
-                    durSeg: null,
+                    audioBlob: audio,
+                    durSeg,
                     visibilidad: 'todos',
                     titulo: relato.pregunta.slice(0, 140),
                     transcripcion: respuesta,
@@ -916,6 +953,9 @@ export function montarNubeInicio($app) {
         cerrarGuiaActiva?.();
         try { micObserver.disconnect(); } catch (_) {}
         try { dictado.destroy(); } catch (_) {}
+        // Si quedo una pregunta sin responder, soltamos el microfono:
+        // nunca dejamos el micro abierto en una pantalla que ya no se ve.
+        descartarGrabacionRelato();
         stopSpeak();
         window.removeEventListener('hashchange', onHash);
         if (cleanupAnterior === cleanup) cleanupAnterior = null;

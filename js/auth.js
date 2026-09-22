@@ -93,7 +93,7 @@ export async function enviarMagicLink(email) {
     // lock viejo. La interfaz nunca debe quedar congelada en "Mandando…".
     const sb = await conTimeout(
         client(),
-        10000,
+        20000,
         'No pudimos iniciar la conexión. Revisá internet y volvé a intentar.'
     );
     const { error } = await conTimeout(
@@ -122,9 +122,14 @@ export async function procesarCallback() {
     // El SDK con detectSessionInUrl=true ya consume los parámetros al
     // instanciar el cliente. Acá esperamos a que termine y limpiamos
     // la URL si quedó residuo.
+    // OJO con bajar este número. getSession() espera a que termine el
+    // intercambio del código PKCE, que es una llamada de red contra Auth.
+    // En septiembre de 2026 los logs mostraban al backend respondiendo
+    // entre 10 y 17 segundos: con el timeout en 8s se cancelaba un
+    // ingreso VALIDO y el usuario veia "no puedo entrar" con el link bien.
     await conTimeout(
         sb.auth.getSession(),
-        8000,
+        45000,
         'La validación del enlace demoró demasiado.'
     );
     if (window.location.hash.includes('access_token')) {
@@ -139,14 +144,14 @@ export async function usuarioActual() {
     try {
         const sb = await conTimeout(
             client(),
-            8000,
+            20000,
             'No se pudo iniciar la conexión.'
         );
         // Para decidir la pantalla inicial alcanza con la sesión local. Esto
         // evita una llamada de red bloqueante antes de mostrar cualquier UI.
         const { data, error } = await conTimeout(
             sb.auth.getSession(),
-            5000,
+            15000,
             'La sesión demoró demasiado en responder.'
         );
         if (error || !data?.session?.user) return null;

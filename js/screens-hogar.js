@@ -1771,6 +1771,11 @@ async function cargarCheckinsDelDia(c, $cont) {
 
 function pintarAvisosPortada($cont, st, vapid) {
     const nube = './assets/nube/nube-reposo.png';
+    // Las clases de estado se acumulaban: si activabas y despues
+    // desactivabas, quedaba pegado el estilo anterior. Reseteamos.
+    const $caja = $cont.parentElement;
+    $caja?.classList.remove('is-active', 'is-blocked');
+    if ($caja) $caja.hidden = false;
     const base = (contenido, accion = '') => `
         <div class="avisos-inicio__nube" aria-hidden="true">
             <img src="${nube}" alt="">
@@ -1778,22 +1783,25 @@ function pintarAvisosPortada($cont, st, vapid) {
         <div class="avisos-inicio__texto">${contenido}</div>
         ${accion}`;
 
+    // Ya activados: el cartel deja de pedir algo, asi que se pliega a una
+    // tira fina. El bloque grande solo se justifica cuando hay que
+    // convencer a alguien de tocar un boton.
     if (st.estado === 'activado') {
-        $cont.parentElement.classList.add('is-active');
-        $cont.innerHTML = base(`
-            <strong>Nube te mantiene al tanto</strong>
-            <span>Los avisos están activos en este teléfono.</span>
-        `, '<span class="avisos-inicio__estado">Activo</span>');
+        $caja?.classList.add('is-active');
+        $cont.innerHTML = base(
+            '<strong>Nube te mantiene al tanto</strong>',
+            '<span class="avisos-inicio__estado">Activo</span>'
+        );
         return;
     }
 
     if (st.estado === 'no-soporta') {
-        $cont.parentElement.hidden = true;
+        if ($caja) $caja.hidden = true;
         return;
     }
 
     if (st.estado === 'bloqueado') {
-        $cont.parentElement.classList.add('is-blocked');
+        $caja?.classList.add('is-blocked');
         $cont.innerHTML = base(`
             <strong>Nube no puede avisarte todavía</strong>
             <span>Habilitá las notificaciones de Pensándote desde el candado del navegador.</span>

@@ -2563,9 +2563,44 @@ body[data-mode="dashboard"] .meds-admin-slot.is-pend { background: #fff8e9; }
     font-size: 0.76rem;
     font-weight: 750;
 }
+/* ---- Plegado: avisos ya activados ----------------------------------
+ * Mientras hay que convencer a alguien de tocar "Activar", el bloque
+ * grande se justifica. Una vez activados el cartel no pide nada: pasa a
+ * ser una confirmacion discreta y deja de robarle altura al inicio.
+ * La especificidad (.avisos-inicio.is-active ...) le gana al bloque
+ * @media de mas abajo, asi que tambien queda fino en pantalla chica. */
 .avisos-inicio.is-active {
+    margin-bottom: 0.6rem;
+    border-radius: 999px;
     border-color: rgba(132, 204, 22, 0.18);
+    background: linear-gradient(120deg, rgba(31, 41, 55, 0.92), rgba(24, 24, 30, 0.94));
     box-shadow: none;
+}
+.avisos-inicio.is-active::after { display: none; }
+.avisos-inicio.is-active > div {
+    grid-template-columns: 30px minmax(0, 1fr) auto;
+    gap: 0.6rem;
+    min-height: 0;
+    padding: 0.38rem 0.6rem;
+}
+.avisos-inicio.is-active .avisos-inicio__nube {
+    width: 30px;
+    height: 30px;
+    border-radius: 10px;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.4);
+}
+.avisos-inicio.is-active .avisos-inicio__texto strong {
+    margin-bottom: 0;
+    color: rgba(226, 232, 240, 0.9);
+    font-size: 0.86rem;
+    font-weight: 700;
+}
+.avisos-inicio.is-active .avisos-inicio__texto span { display: none; }
+.avisos-inicio.is-active .avisos-inicio__estado {
+    grid-column: auto;
+    justify-self: end;
+    padding: 0.2rem 0.5rem;
+    font-size: 0.7rem;
 }
 .avisos-inicio.is-blocked { border-color: rgba(251, 113, 133, 0.3); }
 @media (max-width: 430px) {

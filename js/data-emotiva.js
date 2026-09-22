@@ -320,7 +320,14 @@ export async function grabarHistoria({
         const { error: e1 } = await sb.storage.from('historias').upload(path, audioBlob, {
             contentType: audioBlob.type, upsert: false
         });
-        if (e1) throw e1;
+        if (e1) {
+            // Antes acá se tiraba el error y se perdía TODO, incluido el
+            // texto. Es justo lo contrario de lo que dice el comentario
+            // de arriba: si no podemos guardar la voz, al menos que no
+            // se pierda lo que la persona contó.
+            console.warn('[grabarHistoria] no se pudo subir el audio, guardo solo el texto', e1);
+            path = null;
+        }
     }
 
     const { error: e2 } = await sb.from('historias').insert({
@@ -485,6 +492,47 @@ export async function crearPunta(circleId, texto) {
         texto: String(texto || '').trim()
     });
     if (error) throw enriquecer('crearPunta', error);
+
+    // Sin este aviso, la pregunta se queda esperando a que el adulto
+    // mayor abra la app por su cuenta — y no lo hace. Nube sólo busca
+    // preguntas nuevas mientras la pantalla está abierta. Es
+    // best-effort: si el push falla, la pregunta igual quedó guardada.
+    _avisarPuntaNueva(circleId);
+}
+
+/**
+ * Avisa al adulto mayor que le dejaron una pregunta. No mandamos el
+ * texto de la pregunta en la notificación a propósito: aparece en la
+ * pantalla bloqueada, a la vista de cualquiera, y estas preguntas son
+ * íntimas. Que la haga Nube adentro de la app.
+ */
+async function _avisarPuntaNueva(circleId) {
+    const cfg = (typeof window !== 'undefined') ? window.PENSANDOTE_CONFIG : null;
+    if (!cfg?.SUPABASE_URL || !cfg?.SUPABASE_ANON_KEY) return;
+    try {
+        const sb = await sbClient();
+        const { data: { session } } = await sb.auth.getSession();
+        if (!session?.access_token) return;
+        await fetch(`${cfg.SUPABASE_URL}/functions/v1/enviar-push`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${session.access_token}`,
+                'apikey':        cfg.SUPABASE_ANON_KEY,
+                'Content-Type':  'application/json'
+            },
+            body: JSON.stringify({
+                circle_id: circleId,
+                target:    'simple',
+                tipo:      'relato_pregunta',
+                title:     'Pensándote',
+                body:      'Te dejaron una pregunta. Tocá y Nube te la cuenta.',
+                url:       '#/inicio',
+                tag:       `punta-${circleId}`
+            })
+        });
+    } catch (err) {
+        console.warn('[push punta nueva]', err);
+    }
 }
 
 export async function marcarPuntaUsada(id) {
