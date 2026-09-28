@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="es-AR">
+<html lang="es-AR" data-style-state="pending">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -25,7 +25,56 @@
     <link rel="stylesheet"
           href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Caveat:wght@400;700&family=Plus+Jakarta+Sans:wght@400;500;700&display=swap">
 
-    <link rel="stylesheet" href="./styles.css">
+    <!-- Este respaldo no depende de styles.css ni borra la sesión. -->
+    <style>
+        html[data-style-state="pending"] body > :not(#style-recovery) { visibility: hidden; }
+        html[data-style-state="failed"] body > :not(#style-recovery) { display: none; }
+        #style-recovery { display: none; }
+        html:not([data-style-state="ready"]) #style-recovery {
+            display: block; box-sizing: border-box; max-width: 34rem;
+            margin: 3rem auto; padding: 1.5rem; border: 2px solid #111;
+            border-radius: 22px; background: #fffdf6; color: #111;
+            font: 1.25rem/1.5 system-ui, sans-serif; text-align: center;
+        }
+        html:not([data-style-state="ready"]) body { margin: 1rem; background: #faf5e9; }
+        #style-recovery button {
+            font: inherit; padding: 1rem; border-radius: 14px;
+            border: 2px solid #111; background: #f4b860; cursor: pointer;
+        }
+        html[data-style-state="pending"] #style-recovery button { display: none; }
+    </style>
+    <script>
+        (() => {
+            let retried = false;
+            let timer;
+            window.pensandoteStylesLoaded = () => {
+                clearTimeout(timer);
+                document.documentElement.dataset.styleState = 'ready';
+            };
+            window.pensandoteStylesFailed = () => {
+                clearTimeout(timer);
+                if (document.documentElement.dataset.styleState === 'ready') return;
+                const link = document.getElementById('app-styles');
+                if (!retried && link) {
+                    retried = true;
+                    link.href = './styles.css?v=estilos34&retry=' + Date.now();
+                    timer = setTimeout(window.pensandoteStylesFailed, 10000);
+                    return;
+                }
+                document.documentElement.dataset.styleState = 'failed';
+                const explain = () => {
+                    const message = document.getElementById('style-recovery-message');
+                    if (message) message.textContent = 'No pudimos cargar la pantalla. Tocá “Volver a cargar” para intentarlo de nuevo.';
+                };
+                if (document.readyState === 'loading') {
+                    document.addEventListener('DOMContentLoaded', explain, { once: true });
+                } else explain();
+            };
+            timer = setTimeout(window.pensandoteStylesFailed, 10000);
+        })();
+    </script>
+    <link id="app-styles" rel="stylesheet" href="./styles.css?v=estilos34"
+          onload="pensandoteStylesLoaded()" onerror="pensandoteStylesFailed()">
 
     <!-- Config local (SUPABASE_URL + anon/publishable key). NO va al repo.
          Si el archivo no existe, el stub deja la app en "modo demo"
@@ -40,6 +89,11 @@
     </script>
 </head>
 <body>
+    <aside id="style-recovery" role="status" aria-live="polite">
+        <h1>Pensándote</h1>
+        <p id="style-recovery-message">Preparando la pantalla…</p>
+        <button type="button" onclick="window.location.reload()">Volver a cargar</button>
+    </aside>
     <!-- Punto de montaje único. app.js decide qué pantalla renderizar -->
     <main id="app" aria-live="polite">
         <div class="boot-loader">
@@ -80,7 +134,7 @@
             });
         }, 12000);
     </script>
-    <script type="module" src="./app.js?v=nube31"></script>
+    <script type="module" src="./app.js?v=nube34"></script>
 
     <!-- Registro del service worker (sólo si el navegador lo soporta) -->
     <script>

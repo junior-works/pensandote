@@ -18,7 +18,7 @@
  * correcto en ambos entornos.
  */
 
-const CACHE_NAME = 'pensandote-shell-v0.10.33-avisos-visibles-en-app';
+const CACHE_NAME = 'pensandote-shell-v0.10.34-estilos-resilientes';
 
 const SHELL_FILES = [
     './',
@@ -87,8 +87,24 @@ self.addEventListener('install', (event) => {
 self.addEventListener('activate', (event) => {
     event.waitUntil((async () => {
         const keys = await caches.keys();
+        const previous = keys.filter(k => k.startsWith('pensandote-') && k !== CACHE_NAME);
+        const current = await caches.open(CACHE_NAME);
+        const cssUrl = new URL('./styles.css', self.location.href).href;
+        const currentCss = await current.match(cssUrl, { ignoreSearch: true });
+        // El precache es best-effort: si falló justo el CSS del nuevo
+        // deploy, conservar el último válido antes de borrar el shell viejo.
+        if (!currentCss?.ok || !/^text\/css(?:;|$)/i.test(currentCss.headers.get('content-type') || '')) {
+            for (const key of previous.slice().reverse()) {
+                const old = await caches.open(key);
+                const css = await old.match(cssUrl, { ignoreSearch: true });
+                if (css?.ok && /^text\/css(?:;|$)/i.test(css.headers.get('content-type') || '')) {
+                    await current.put(cssUrl, css);
+                    break;
+                }
+            }
+        }
         await Promise.all(
-            keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k))
+            previous.map(k => caches.delete(k))
         );
         await self.clients.claim();
     })());
@@ -120,13 +136,27 @@ async function networkFirst(request) {
     const cache = await caches.open(CACHE_NAME);
     try {
         const fresh = await fetch(request, { cache: 'no-store' });
+        // fetch no rechaza los 404/503. No reemplazar una copia útil por
+        // una página de error (en CSS deja toda la app sin diseño).
+        if (!fresh || !fresh.ok || fresh.type === 'opaque') {
+            throw new Error('No se pudo descargar el archivo de la app');
+        }
+        if (new URL(request.url).pathname.endsWith('.css') &&
+            !/^text\/css(?:;|$)/i.test(fresh.headers.get('content-type') || '')) {
+            throw new Error('El servidor no devolvió una hoja de estilos');
+        }
         if (fresh && fresh.ok && fresh.type !== 'opaque') {
             cache.put(request, fresh.clone()).catch(() => {});
         }
         return fresh;
     } catch (_) {
-        const hit = await cache.match(request);
-        if (hit) return hit;
+        const hit = await cache.match(request, {
+            // La versión en el link cambia con cada publicación; el CSS
+            // guardado sin query sigue sirviendo como respaldo offline.
+            ignoreSearch: new URL(request.url).pathname.endsWith('.css')
+        });
+        const isCss = new URL(request.url).pathname.endsWith('.css');
+        if (hit?.ok && (!isCss || /^text\/css(?:;|$)/i.test(hit.headers.get('content-type') || ''))) return hit;
         if (request.mode === 'navigate') {
             const idx = await cache.match('./index.html');
             if (idx) return idx;
