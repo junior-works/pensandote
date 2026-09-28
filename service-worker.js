@@ -18,7 +18,7 @@
  * correcto en ambos entornos.
  */
 
-const CACHE_NAME = 'pensandote-shell-v0.10.36-botones-suaves';
+const CACHE_NAME = 'pensandote-shell-v0.10.37-controles-unificados';
 
 const SHELL_FILES = [
     './',
