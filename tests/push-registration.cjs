@@ -1,0 +1,65 @@
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const vm = require('node:vm');
+const path = require('node:path');
+const text = fs.readFileSync(path.join(__dirname, '../js/data-emotiva.js'), 'utf8');
+const source = text.slice(text.indexOf('function urlBase64ToUint8Array'), text.indexOf('export async function desactivarAvisos')).replaceAll('export async function', 'async function');
+
+function scenario({ permission = 'granted', row = true, dbError = null, expired = false, old = true } = {}) {
+    const calls = { unsubscribed: 0, subscribed: 0, written: 0 };
+    const subscription = endpoint => ({ endpoint, expirationTime: expired ? 1 : null,
+        unsubscribe: async () => { calls.unsubscribed++; return true; },
+        toJSON: () => ({ keys: { p256dh: 'key', auth: 'auth' } }) });
+    const reg = { pushManager: {
+        getSubscription: async () => old ? subscription('old-endpoint') : null,
+        subscribe: async () => { calls.subscribed++; return subscription('new-endpoint'); }
+    } };
+    const sb = {
+        auth: { getUser: async () => ({ data: { user: { id: 'me' } } }),
+            getSession: async () => ({ data: { session: { access_token: 'token', user: { id: 'me' } } } }) },
+        from: () => ({ select() { return this; }, eq() { return this; },
+            maybeSingle: async () => ({ data: row ? { endpoint: 'old-endpoint' } : null, error: dbError }),
+            insert: async record => { calls.written++; calls.record = record; return { error: null }; }
+        })
+    };
+    const context = vm.createContext({
+        window: { Notification: {}, PushManager: {}, PENSANDOTE_CONFIG: { SUPABASE_URL: 'https://example.com', SUPABASE_ANON_KEY: 'public' } },
+        navigator: { serviceWorker: { ready: Promise.resolve(reg) }, userAgent: 'Android' },
+        Notification: { permission, requestPermission: async () => 'granted' },
+        sbClient: async () => sb, enriquecer: (_, error) => new Error(error.message),
+        setTimeout, clearTimeout, Date, console, Uint8Array, atob,
+        fetch: async (_, options) => { calls.payload = JSON.parse(options.body); return { ok: true, json: async () => ({ sent: 1 }) }; }
+    });
+    vm.runInContext(source, context);
+    return { context, calls };
+}
+(async () => {
+    let s = scenario({ row: false });
+    assert.equal((await vm.runInContext('estadoAvisos()', s.context)).renovar, true);
+    await vm.runInContext('activarAvisos("AQID")', s.context);
+    assert.equal(s.calls.unsubscribed, 1);
+    assert.equal(s.calls.subscribed, 1);
+    assert.equal(s.calls.record.endpoint, 'new-endpoint');
+    console.log('OK: registro eliminado se renueva, no se recicla');
+    s = scenario();
+    assert.equal((await vm.runInContext('estadoAvisos()', s.context)).estado, 'activado');
+    await vm.runInContext('activarAvisos("AQID")', s.context);
+    assert.equal(s.calls.unsubscribed, 0);
+    assert.equal(s.calls.subscribed, 0);
+    assert.equal(s.calls.written, 0);
+    console.log('OK: registro válido se conserva');
+    s = scenario({ expired: true });
+    await vm.runInContext('activarAvisos("AQID")', s.context);
+    assert.equal(s.calls.subscribed, 1);
+    s = scenario({ permission: 'denied' });
+    assert.equal((await vm.runInContext('estadoAvisos()', s.context)).estado, 'bloqueado');
+    s = scenario({ dbError: { message: 'sin conexión' } });
+    assert.equal((await vm.runInContext('estadoAvisos()', s.context)).estado, 'error');
+    await assert.rejects(vm.runInContext('activarAvisos("AQID")', s.context));
+    assert.equal(s.calls.unsubscribed, 0);
+    console.log('OK: una falla de conexión no elimina un registro válido');
+    s = scenario();
+    await vm.runInContext('probarAviso("circle")', s.context);
+    assert.equal(s.calls.payload.user_id, 'me');
+    console.log('OK: la prueba se dirige sólo a la cuenta actual');
+})().catch(error => { console.error(error); process.exitCode = 1; });

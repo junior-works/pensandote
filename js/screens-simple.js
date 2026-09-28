@@ -29,6 +29,7 @@ import { crearDictado } from './utils/dictado.js';
 import { iconoContacto } from './utils/genero.js';
 import { montarNubeInicio } from './nube-asistente.js';
 import { tocaOfrecerAvisos, posponerAvisos, olvidarEspera } from './utils/avisos-prompt.js';
+import { ayudaAvisos, probarAvisosGuiados } from './utils/avisos-ayuda.js';
 import { renderFotoInteracciones, wireFotoInteracciones } from './foto-interacciones.js';
 
 // =====================================================================
@@ -268,7 +269,19 @@ async function pintarAvisosSimple($app, { animar = false } = {}) {
     try { st = await estadoAvisos(); }
     catch (_) { st = { estado: 'desactivado' }; }
 
-    if (st.estado === 'no-soporta') { limpiar(); return; }
+    if (['bloqueado', 'no-soporta', 'error'].includes(st.estado)) {
+        if ($pin) $pin.innerHTML = '';
+        if (!$oferta) return;
+        $oferta.innerHTML = `<div class="avisos-oferta">
+            <p class="avisos-oferta__txt">${st.estado === 'error' ? 'No pude comprobar tus avisos.' : 'Todavía no puedo avisarte cuando tu familia te deje algo.'}</p>
+            <button type="button" class="avisos-oferta__si" id="btn-avisos-ayuda">${st.estado === 'error' ? 'Volver a comprobar' : 'Te ayudo a activarlos'}</button>
+        </div>`;
+        $oferta.querySelector('#btn-avisos-ayuda').addEventListener('click', async () => {
+            if (st.estado !== 'error') await ayudaAvisos();
+            pintarAvisosSimple($app);
+        });
+        return;
+    }
 
     // ---- reposo: un icono en el rincon --------------------------------
     const pintarPin = (modo) => {
@@ -280,7 +293,7 @@ async function pintarAvisosSimple($app, { animar = false } = {}) {
         $pin.innerHTML = `
             <button type="button" class="avisos-pin avisos-pin--${modo}${animar ? ' is-entrando' : ''}"
                     id="avisos-pin-btn" aria-label="${etiqueta}" title="${etiqueta}">
-                ${modo === 'on' ? '🔔' : '🔕'}
+                ${modo === 'on' ? '🔔' : 'Avisos'}
             </button>
         `;
         const $btn = $pin.querySelector('#avisos-pin-btn');
@@ -291,13 +304,15 @@ async function pintarAvisosSimple($app, { animar = false } = {}) {
             // queremos que toque sin querer.
             $btn.addEventListener('click', async () => {
                 const ok = await modal({
-                    titulo: '¿Apagar los avisos?',
-                    cuerpo: '<p>No te vamos a avisar más cuando tu familia te deje algo.</p>',
+                    titulo: 'Tus avisos de Nube',
+                    cuerpo: '<p>Podés probar que llegan. Si elegís apagarlos, ya no te avisaremos cuando tu familia te deje algo.</p>',
                     acciones: [
+                        { label: 'Probar un aviso', clase: 'btn--inicio btn--full', value: 'probar' },
                         { label: 'No, dejalos', clase: 'btn--inicio btn--full', value: 'no' },
                         { label: 'Sí, apagar',  clase: 'btn--full',             value: 'si' }
                     ]
                 });
+                if (ok === 'probar') { await probarAvisosGuiados(state.circuloActivoIdReal); return; }
                 if (ok !== 'si') return;
                 try { await desactivarAvisos(); posponerAvisos(); } catch (_) {}
                 pintarAvisosSimple($app);
@@ -315,6 +330,7 @@ async function pintarAvisosSimple($app, { animar = false } = {}) {
             olvidarEspera();
             await plegarOferta();
             pintarAvisosSimple($app, { animar: true });
+            await probarAvisosGuiados(state.circuloActivoIdReal);
         } catch (err) {
             btn.disabled = false;
             btn.textContent = orig;
@@ -339,15 +355,14 @@ async function pintarAvisosSimple($app, { animar = false } = {}) {
     }
 
     if (st.estado === 'activado')  { pintarPin('on');   return; }
-    if (st.estado === 'bloqueado') { pintarPin('bloq'); return; }
-    if (!tocaOfrecerAvisos())      { pintarPin('off');  return; }
+    if (!st.renovar && !tocaOfrecerAvisos()) { pintarPin('off'); return; }
 
     // ---- ofrecimiento, dentro del bloque de Nube -----------------------
     if (!$oferta) { pintarPin('off'); return; }
     if ($pin) $pin.innerHTML = '';
     $oferta.innerHTML = `
         <div class="avisos-oferta">
-            <p class="avisos-oferta__txt">¿Te aviso cuando te dejen algo?</p>
+            <p class="avisos-oferta__txt">${st.renovar ? 'Tus avisos necesitan activarse de nuevo.' : '¿Te aviso cuando tu familia te deje algo?'}</p>
             <div class="avisos-oferta__acciones">
                 <button type="button" class="avisos-oferta__si" id="btn-avisos-on">Sí, avisame</button>
                 <button type="button" class="avisos-oferta__no" id="btn-avisos-ahora-no">Ahora no</button>

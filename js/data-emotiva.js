@@ -1619,6 +1619,18 @@ function urlBase64ToUint8Array(base64String) {
  *   - 'activado'  : hay PushSubscription Y está en nuestra DB.
  *   - 'desactivado': default — el admin nunca lo activó (o lo desactivó).
  */
+async function registroAvisos() {
+    let timer;
+    try {
+        return await Promise.race([
+            navigator.serviceWorker.ready,
+            new Promise((_, reject) => {
+                timer = setTimeout(() => reject(new Error('La app todavía no está lista para recibir avisos. Volvé a cargarla e intentá otra vez.')), 8000);
+            })
+        ]);
+    } finally { clearTimeout(timer); }
+}
+
 export async function estadoAvisos() {
     if (!('Notification' in window) || !('serviceWorker' in navigator) || !('PushManager' in window)) {
         return { estado: 'no-soporta' };
@@ -1627,18 +1639,21 @@ export async function estadoAvisos() {
         return { estado: 'bloqueado' };
     }
     try {
-        const reg = await navigator.serviceWorker.ready;
+        const reg = await registroAvisos();
         const sub = await reg.pushManager.getSubscription();
-        if (!sub) return { estado: 'desactivado' };
-        // Confirmamos que esta suscripción esté en nuestra DB.
+        if (!sub) return { estado: 'desactivado', renovar: Notification.permission === 'granted' };
+        if (sub.expirationTime && sub.expirationTime <= Date.now()) return { estado: 'desactivado', renovar: true };
+        // Confirmamos que esta suscripción pertenezca a esta cuenta.
         const sb = await sbClient();
+        const { data: { user }, error: authError } = await sb.auth.getUser();
+        if (authError || !user) return { estado: 'error' };
         const { data, error } = await sb.from('push_subscriptions')
-            .select('endpoint').eq('endpoint', sub.endpoint).maybeSingle();
-        if (error) return { estado: 'desactivado' };
-        return data ? { estado: 'activado', endpoint: sub.endpoint } : { estado: 'desactivado' };
+            .select('endpoint').eq('endpoint', sub.endpoint).eq('user_id', user.id).maybeSingle();
+        if (error) return { estado: 'error' };
+        return data ? { estado: 'activado', endpoint: sub.endpoint } : { estado: 'desactivado', renovar: true };
     } catch (err) {
         console.warn('[estadoAvisos]', err);
-        return { estado: 'desactivado' };
+        return { estado: 'error' };
     }
 }
 
@@ -1657,8 +1672,21 @@ export async function activarAvisos(vapidPublicKey) {
     }
     if (permiso !== 'granted') throw new Error('No diste permiso para mostrar avisos.');
 
-    const reg = await navigator.serviceWorker.ready;
+    const reg = await registroAvisos();
     let sub = await reg.pushManager.getSubscription();
+    const sb = await sbClient();
+    const { data: { user }, error: authError } = await sb.auth.getUser();
+    if (authError || !user) throw new Error('Ingresá a tu cuenta para activar los avisos.');
+    if (sub) {
+        const { data, error } = await sb.from('push_subscriptions')
+            .select('endpoint').eq('endpoint', sub.endpoint).eq('user_id', user.id).maybeSingle();
+        if (error) throw enriquecer('comprobar push_subscriptions', error);
+        // No reutilizar el endpoint que el servidor borró tras un 410.
+        if (!data || (sub.expirationTime && sub.expirationTime <= Date.now())) {
+            await sub.unsubscribe();
+            sub = null;
+        } else return { endpoint: sub.endpoint };
+    }
     if (!sub) {
         sub = await reg.pushManager.subscribe({
             userVisibleOnly: true,
@@ -1666,18 +1694,16 @@ export async function activarAvisos(vapidPublicKey) {
         });
     }
     const json = sub.toJSON();
-    const sb = await sbClient();
-    const { data: { user } } = await sb.auth.getUser();
-    if (!user) throw new Error('sin sesión');
+    if (!json.keys?.p256dh || !json.keys?.auth) throw new Error('El teléfono no completó el registro. Intentá otra vez.');
 
-    const { error } = await sb.from('push_subscriptions').upsert({
+    const { error } = await sb.from('push_subscriptions').insert({
         user_id:    user.id,
         endpoint:   sub.endpoint,
         p256dh:     json.keys?.p256dh || null,
         auth:       json.keys?.auth   || null,
         user_agent: navigator.userAgent.slice(0, 500)
-    }, { onConflict: 'endpoint' });
-    if (error) throw enriquecer('upsert push_subscriptions', error);
+    });
+    if (error) throw enriquecer('registrar push_subscriptions', error);
     return { endpoint: sub.endpoint };
 }
 
@@ -1741,6 +1767,7 @@ export async function probarAviso(circleId) {
         },
         body: JSON.stringify({
             circle_id: circleId,
+            user_id:   session.user.id,
             title:     'Prueba 🔔',
             body:      '¡Las notificaciones funcionan!',
             url:       '#/inicio'

@@ -12,6 +12,7 @@
 import { state, setModo, setSesionReal, limpiarSesionReal } from './state.js';
 import { go, refresh } from './router.js';
 import { cerrarSesion } from './auth.js';
+import { ayudaAvisos, probarAvisosGuiados } from './utils/avisos-ayuda.js';
 import {
     miembrosDelCirculo, membresiaActiva,
     crearCirculo, actualizarParentesco, actualizarPerfilUsuario
@@ -1684,6 +1685,15 @@ async function pintarAvisos($cont, { portada = false } = {}) {
         return;
     }
 
+    if (['no-soporta', 'bloqueado', 'error'].includes(st.estado)) {
+        $cont.innerHTML = `<div class="avisos-row"><span class="avisos-row__label">Avisos de Nube</span>
+            <button class="btn btn--inicio" id="btn-ayuda-avisos">${st.estado === 'error' ? 'Volver a comprobar' : 'Ayudame a activarlos'}</button></div>`;
+        $cont.querySelector('#btn-ayuda-avisos').addEventListener('click', async () => {
+            if (st.estado !== 'error') await ayudaAvisos();
+            pintarAvisos($cont);
+        });
+        return;
+    }
     if (st.estado === 'no-soporta') {
         $cont.innerHTML = `
             <div class="avisos-row">
@@ -1799,6 +1809,7 @@ async function pintarAvisos($cont, { portada = false } = {}) {
         try {
             await activarAvisos(vapid);
             pintarAvisos($cont);
+            await probarAvisosGuiados(state.circuloActivoIdReal);
         } catch (err) {
             btn.disabled = false; btn.textContent = 'Activar avisos';
             await modal({
@@ -1895,22 +1906,23 @@ function pintarAvisosPortada($cont, st, vapid) {
         $caja?.classList.add('is-active');
         $cont.innerHTML = base(
             '<strong>Nube te mantiene al tanto</strong>',
-            '<span class="avisos-inicio__estado">Activo</span>'
+            '<button class="avisos-inicio__accion" id="btn-probar-avisos-inicio">Probar avisos</button>'
         );
+        $cont.querySelector('#btn-probar-avisos-inicio').addEventListener('click', () => probarAvisosGuiados(state.circuloActivoIdReal));
         return;
     }
 
-    if (st.estado === 'no-soporta') {
-        if ($caja) $caja.hidden = true;
-        return;
-    }
-
-    if (st.estado === 'bloqueado') {
+    if (['no-soporta', 'bloqueado', 'error'].includes(st.estado)) {
         $caja?.classList.add('is-blocked');
         $cont.innerHTML = base(`
             <strong>Nube no puede avisarte todavía</strong>
-            <span>Habilitá las notificaciones de Pensándote desde el candado del navegador.</span>
+            <span>${st.estado === 'error' ? 'No pude comprobar la conexión. Volvé a intentarlo.' : 'Te acompaño paso a paso para activarlos en este teléfono.'}</span>
         `);
+        $cont.insertAdjacentHTML('beforeend', `<button class="avisos-inicio__accion" id="btn-ayuda-avisos-inicio">${st.estado === 'error' ? 'Volver a comprobar' : 'Ayudame a activarlos'}</button>`);
+        $cont.querySelector('#btn-ayuda-avisos-inicio').addEventListener('click', async () => {
+            if (st.estado !== 'error') await ayudaAvisos();
+            pintarAvisos($cont, { portada: true });
+        });
         return;
     }
 
@@ -1926,6 +1938,7 @@ function pintarAvisosPortada($cont, st, vapid) {
         try {
             await activarAvisos(vapid);
             pintarAvisos($cont, { portada: true });
+            await probarAvisosGuiados(state.circuloActivoIdReal);
         } catch (err) {
             btn.disabled = false;
             btn.textContent = 'Activar';

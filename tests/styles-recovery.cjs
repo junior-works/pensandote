@@ -56,7 +56,7 @@ async function check(name, fresh, cached, expected) {
             addEventListener: (name, callback) => { listeners[name] = callback; },
             clients: { claim: async () => { claimed = true; } } },
         caches: {
-            keys: async () => ['otra-app', 'pensandote-shell-viejo', 'pensandote-shell-v0.10.34-estilos-resilientes'],
+            keys: async () => ['otra-app', 'pensandote-shell-viejo', source.match(/const CACHE_NAME = '([^']+)'/)[1]],
             open: async key => ({
                 match: async () => key === 'pensandote-shell-viejo' ? css() : undefined,
                 put: async (_, response) => { preserved = response; }

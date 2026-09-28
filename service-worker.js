@@ -18,7 +18,7 @@
  * correcto en ambos entornos.
  */
 
-const CACHE_NAME = 'pensandote-shell-v0.10.34-estilos-resilientes';
+const CACHE_NAME = 'pensandote-shell-v0.10.35-avisos-guiados';
 
 const SHELL_FILES = [
     './',
@@ -56,6 +56,7 @@ const SHELL_FILES = [
     './js/utils/escucha-relato.js',
     './js/utils/grabador-voz.js',
     './js/utils/avisos-prompt.js',
+    './js/utils/avisos-ayuda.js',
     './js/utils/genero.js',
     './js/utils/panico.js',
     './js/utils/parentesco.js',
