@@ -57,7 +57,7 @@
                 const link = document.getElementById('app-styles');
                 if (!retried && link) {
                     retried = true;
-                    link.href = './styles.css?v=estilos34&retry=' + Date.now();
+                    link.href = './styles.css?v=suave36&retry=' + Date.now();
                     timer = setTimeout(window.pensandoteStylesFailed, 10000);
                     return;
                 }
@@ -73,7 +73,7 @@
             timer = setTimeout(window.pensandoteStylesFailed, 10000);
         })();
     </script>
-    <link id="app-styles" rel="stylesheet" href="./styles.css?v=estilos34"
+    <link id="app-styles" rel="stylesheet" href="./styles.css?v=suave36"
           onload="pensandoteStylesLoaded()" onerror="pensandoteStylesFailed()">
 
     <!-- Config local (SUPABASE_URL + anon/publishable key). NO va al repo.
@@ -134,7 +134,7 @@
             });
         }, 12000);
     </script>
-    <script type="module" src="./app.js?v=nube35"></script>
+    <script type="module" src="./app.js?v=nube36"></script>
 
     <!-- Registro del service worker (sólo si el navegador lo soporta) -->
     <script>

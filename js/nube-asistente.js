@@ -9,7 +9,8 @@
  */
 
 import { state } from './state.js';
-import { h, speakES, stopSpeak, atraparFoco, liberarFoco } from './ui.js';
+import { h, speakES as sintetizarVoz, stopSpeak, atraparFoco, liberarFoco } from './ui.js';
+import { gestoNube, aperturaNube, suavizar } from './utils/nube-movimiento.js';
 import { crearDictado } from './utils/dictado.js';
 import { crearGrabadorVoz } from './utils/grabador-voz.js';
 import { tocaOfrecerAvisos } from './utils/avisos-prompt.js';
@@ -94,11 +95,18 @@ export function montarNubeInicio($app) {
 
     let vivo = true;
     let ocupado = false;
-    let hablandoTimer = null;
-    let bocaVisible = -1;
-    let ultimoVisema = '';
+    let animacionFrame = null;
+    let vozActiva = false;
+    let turnoVoz = 0;
+    let faseVoz = 0;
+    let apertura = 0;
+    let intensidad = 0;
+    const movimientoReducido = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const $cuerpo = $rig.querySelector('.nube-avatar__body');
+    $rig.classList.add('nube-avatar--fluida');
+    $bocas[0].style.backgroundPosition = FRAMES.talkSoft;
+    $bocas[1].style.backgroundPosition = FRAMES.talkOpen;
     let blinkTimer = null;
-    let microTimer = null;
     let sugerenciaTimer = null;
     let checkinTimer = null;
     let checkinPollTimer = null;
@@ -127,31 +135,8 @@ export function montarNubeInicio($app) {
     function apagarRasgos() {
         $ojos.classList.remove('is-visible');
         $bocas.forEach(el => el.classList.remove('is-visible'));
-        bocaVisible = -1;
-        ultimoVisema = '';
-    }
-
-    function setBoca(nombre) {
-        if (!vivo) return;
-        if (nombre === 'closed') {
-            $bocas.forEach(el => el.classList.remove('is-visible'));
-            bocaVisible = -1;
-            ultimoVisema = nombre;
-            return;
-        }
-        const next = bocaVisible === 0 ? 1 : 0;
-        const el = $bocas[next];
-        el.style.backgroundPosition = FRAMES[nombre];
-        // El reflow hace que el fundido arranque siempre desde cero aun
-        // cuando esta capa fue usada dos sílabas atrás.
-        el.classList.remove('is-visible');
-        void el.offsetWidth;
-        el.classList.add('is-visible');
-        $bocas.forEach((otra, i) => {
-            if (i !== next) otra.classList.remove('is-visible');
-        });
-        bocaVisible = next;
-        ultimoVisema = nombre;
+        apertura = 0;
+        $bocas.forEach(el => { el.style.opacity = '0'; });
     }
 
     function decir(texto, estado = 'idle') {
@@ -163,32 +148,61 @@ export function montarNubeInicio($app) {
         clearTimeout(blinkTimer);
         blinkTimer = setTimeout(async () => {
             if (!vivo) return;
-            if (!ocupado && $rig.dataset.state === 'idle') {
-                $rig.dataset.state = 'blink';
+            if (!movimientoReducido.matches && !document.hidden && ['idle', 'speaking'].includes($rig.dataset.state)) {
                 $ojos.classList.add('is-visible');
-                await espera(155);
+                await espera(115 + Math.random() * 55);
                 $ojos.classList.remove('is-visible');
-                await espera(135);
-                if (vivo && !ocupado) $rig.dataset.state = 'idle';
             }
             programarParpadeo();
         }, 3200 + Math.random() * 3000);
     }
 
-    // Pequeños desplazamientos continuos con transición CSS. No son poses:
-    // el navegador interpola cada cambio y evita la quietud de una estampa.
+    // Una fase que no se reinicia: respiración, balanceo y boca se interpolan
+    // en cada frame. Las dos texturas de boca son fijas, sin reflow ni saltos.
     function programarMicroMovimiento() {
-        clearTimeout(microTimer);
-        microTimer = setTimeout(() => {
+        let anterior = performance.now();
+        let fase = 0;
+        const animar = ahora => {
             if (!vivo) return;
-            const x = (Math.random() * 2 - 1) * 3.5;
-            const y = (Math.random() * 2 - 1) * 2.2;
-            const r = (Math.random() * 2 - 1) * 0.8;
-            $rig.style.setProperty('--nube-x', `${x}px`);
-            $rig.style.setProperty('--nube-y', `${y}px`);
-            $rig.style.setProperty('--nube-r', `${r}deg`);
-            programarMicroMovimiento();
-        }, 1800 + Math.random() * 1800);
+            const delta = Math.min(0.05, Math.max(0, (ahora - anterior) / 1000));
+            anterior = ahora;
+            if (!document.hidden) {
+                fase += delta;
+                const hablando = vozActiva && $rig.dataset.state === 'speaking';
+                intensidad = suavizar(intensidad, hablando ? 1 : 0, delta, 0.45);
+                const gesto = gestoNube(fase, intensidad);
+                if ($cuerpo) $cuerpo.style.transform = movimientoReducido.matches ? 'none' :
+                    `translate3d(${gesto.x}px,${gesto.y}px,0) rotate(${gesto.giro}deg) scale(${gesto.escala})`;
+                if (hablando) faseVoz += delta;
+                apertura = suavizar(apertura, hablando ? aperturaNube(faseVoz) : 0, delta);
+                if (!hablando && apertura < 0.001) apertura = 0;
+                $bocas[0].style.opacity = String(Math.min(1, apertura * 2));
+                $bocas[1].style.opacity = String(Math.max(0, (apertura - 0.5) * 2));
+            }
+            animacionFrame = requestAnimationFrame(animar);
+        };
+        animacionFrame = requestAnimationFrame(animar);
+    }
+
+    function speakES(texto, opciones = {}) {
+        empezarHabla();
+        const turno = ++turnoVoz;
+        const vigente = () => vivo && turno === turnoVoz;
+        sintetizarVoz(texto, {
+            onStart: () => { if (vigente()) vozActiva = true; },
+            onBoundary: evento => {
+                // No todas las voces Android emiten límites de palabra.
+                // Cuando existen ajustamos la cadencia; si no, sigue fluida.
+                if (vigente() && evento.name === 'word') faseVoz = 0.04;
+            },
+            onPause: () => { if (vigente()) vozActiva = false; },
+            onResume: () => { if (vigente()) vozActiva = true; },
+            onEnd: () => {
+                if (!vigente()) return;
+                vozActiva = false;
+                (opciones.onEnd || terminarHabla)();
+            }
+        });
     }
 
     function programarSugerencia(delay = 18000) {
@@ -527,41 +541,17 @@ export function montarNubeInicio($app) {
     }
 
     function empezarHabla() {
-        clearTimeout(hablandoTimer);
+        vozActiva = false;
+        faseVoz = 0;
         apagarRasgos();
         $sprite.style.backgroundPosition = FRAMES.idle;
         $rig.dataset.state = 'speaking';
-        setBoca('talkSoft');
-
-        const siguienteSilaba = () => {
-            if (!vivo || $rig.dataset.state !== 'speaking') return;
-            const azar = Math.random();
-            let proximo;
-            if (azar < 0.16) proximo = 'closed';
-            else if (azar < 0.58) proximo = 'talkSoft';
-            else proximo = 'talkOpen';
-            // Evita sostener exactamente la misma forma dos veces.
-            if (proximo === ultimoVisema) {
-                proximo = proximo === 'talkOpen' ? 'talkSoft' : 'talkOpen';
-            }
-            setBoca(proximo);
-            const pausa = proximo === 'closed'
-                ? 70 + Math.random() * 55
-                : 115 + Math.random() * 85;
-            hablandoTimer = setTimeout(siguienteSilaba, pausa);
-        };
-        hablandoTimer = setTimeout(siguienteSilaba, 125);
     }
 
     function terminarHabla() {
-        clearTimeout(hablandoTimer);
-        hablandoTimer = null;
-        apagarRasgos();
-        setFrame('happy', 'happy');
-        setTimeout(() => {
-            if (!vivo || ocupado) return;
-            setFrame('idle', 'idle');
-        }, 900);
+        vozActiva = false;
+        // La boca vuelve gradualmente al reposo, sin sustituir toda la cara.
+        $rig.dataset.state = 'idle';
         registrarActividad();
     }
 
@@ -932,7 +922,7 @@ export function montarNubeInicio($app) {
         $btnMic: $mic,
         $estado,
         labels: {
-            hablar: '🎤 HABLAR',
+            hablar: 'Hablar con Nube',
             terminar: '⏹ TERMINAR',
             grabando: 'Te escucho…'
         }
@@ -988,9 +978,8 @@ export function montarNubeInicio($app) {
         if (!vivo) return;
         vivo = false;
         clearTimeout(blinkTimer);
-        clearTimeout(microTimer);
+        cancelAnimationFrame(animacionFrame);
         clearTimeout(sugerenciaTimer);
-        clearTimeout(hablandoTimer);
         clearTimeout(checkinTimer);
         clearTimeout(relatoTimer);
         clearTimeout(avisosTimer);

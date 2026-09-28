@@ -35,6 +35,16 @@ import { renderFotoInteracciones, wireFotoInteracciones } from './foto-interacci
 // =====================================================================
 // INICIO
 // =====================================================================
+function iconoAccionNube(tipo) {
+    const trazos = {
+        familia: '<path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 2 .7 2.9a2 2 0 0 1-.5 2.1L8 10a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.5c.9.3 1.9.6 2.9.7a2 2 0 0 1 1.7 2z"/>',
+        remedios: '<path d="M8.5 3.5a7.1 7.1 0 0 1 10 10l-5 5a7.1 7.1 0 0 1-10-10zM8 8l8 8"/>',
+        salud: '<path d="M9 3h6v6h6v6h-6v6H9v-6H3V9h6z"/>',
+        ayuda: '<circle cx="12" cy="12" r="9"/><path d="M12 7v6m0 4h.01"/>'
+    };
+    return `<svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">${trazos[tipo] || trazos.salud}</svg>`;
+}
+
 export async function renderInicio($app) {
     const yo = getMiembroVisto();
     const fotos = getFotosDia();
@@ -90,7 +100,7 @@ export async function renderInicio($app) {
                 ? `<div id="avisos-oferta" aria-live="polite"></div>`
                 : ''}
 
-            <button class="nube-mic" id="nube-mic" type="button">🎤 HABLAR</button>
+            <button class="nube-mic" id="nube-mic" type="button">Hablar con Nube</button>
 
             <div class="nube-escribir">
                 <label class="sr-only" for="nube-texto">También podés escribir</label>
@@ -133,21 +143,17 @@ export async function renderInicio($app) {
 
         <nav class="nube-atajos" aria-label="Ayudas rápidas">
             <button class="nube-atajo nube-atajo--familia" data-go="#/familia">
-                <span class="nube-atajo__icono" aria-hidden="true">👨‍👩‍👧</span>
+                <span class="nube-atajo__icono" aria-hidden="true">${iconoAccionNube('familia')}</span>
                 <span>Llamar a<br>mi familia</span>
             </button>
             <button class="nube-atajo nube-atajo--remedios" data-go="#/remedios">
-                <span class="nube-atajo__icono" aria-hidden="true">💊</span>
+                <span class="nube-atajo__icono" aria-hidden="true">${iconoAccionNube('remedios')}</span>
                 <span>Mis<br>remedios</span>
-            </button>
-            <button class="nube-atajo nube-atajo--recordar" data-go="#/estudios">
-                <span class="nube-atajo__icono" aria-hidden="true">📄</span>
-                <span>Mis<br>estudios</span>
             </button>
         </nav>
 
         <button class="nube-emergencia" data-go="#/emergencias">
-            <span aria-hidden="true">☎</span> Necesito ayuda
+            ${iconoAccionNube('ayuda')} Necesito ayuda
         </button>
 
         <section class="nube-hoy" aria-label="Información de hoy">
@@ -205,7 +211,7 @@ export async function renderInicio($app) {
         })()}
 
         <nav class="nube-mas" aria-label="Más opciones">
-            <button class="btn btn--xl btn--medico" data-go="#/salud">🩺 Salud</button>
+            <button class="btn btn--xl btn--medico nube-salud" data-go="#/salud">${iconoAccionNube('salud')} Mi salud</button>
         </nav>
     `;
     wireNav($app);
@@ -564,7 +570,7 @@ async function confirmarToma(medId, horario, $btn, onOk) {
 /** Pantalla "Salud" — menú con Médico + Mis remedios. */
 export function renderSalud($app) {
     $app.innerHTML = `
-        ${barraVolver('Salud', 'medico')}
+        ${barraVolver('Mi salud', 'medico')}
 
         <p class="simple-instruccion">Elegí qué necesitás.</p>
 
@@ -576,10 +582,6 @@ export function renderSalud($app) {
             <button class="tarjeton tarjeton--medico" data-go="#/remedios">
                 <span class="tarjeton__icono">💊</span>
                 <span class="tarjeton__label">Mis remedios</span>
-            </button>
-            <button class="tarjeton tarjeton--medico" data-go="#/pami-anses">
-                <span class="tarjeton__icono">🏛️</span>
-                <span class="tarjeton__label">PAMI y ANSES</span>
             </button>
             <button class="tarjeton tarjeton--medico" data-go="#/estudios">
                 <span class="tarjeton__icono">📄</span>

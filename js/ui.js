@@ -120,7 +120,7 @@ export function cleanupModalBackButton(overlay) {
  * naturalmente como en cancel/error. Útil para que la UI vuelva al
  * estado "leer" cuando la voz se calla sola.
  */
-export function speakES(texto, { onEnd } = {}) {
+export function speakES(texto, { onEnd, onStart, onBoundary, onPause, onResume } = {}) {
     if (!('speechSynthesis' in window)) { onEnd?.(); return; }
     try {
         window.speechSynthesis.cancel();
@@ -133,6 +133,10 @@ export function speakES(texto, { onEnd } = {}) {
         u.rate = 0.88;
         u.pitch = 1.06;
         u.volume = 0.94;
+        u.onstart = onStart;
+        u.onboundary = onBoundary;
+        u.onpause = onPause;
+        u.onresume = onResume;
         if (onEnd) {
             u.onend   = onEnd;
             u.onerror = onEnd;

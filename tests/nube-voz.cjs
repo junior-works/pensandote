@@ -1,0 +1,22 @@
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const vm = require('node:vm');
+const source = fs.readFileSync(require('node:path').join(__dirname, '../js/nube-asistente.js'), 'utf8');
+const wrapper = source.slice(source.indexOf('    function speakES(texto, opciones'), source.indexOf('    function programarSugerencia'));
+const turns = [];
+let ended = 0;
+const context = vm.createContext({ vivo: true, turnoVoz: 0, vozActiva: false, faseVoz: 0,
+    empezarHabla: () => {}, terminarHabla: () => ended++, sintetizarVoz: (_, events) => turns.push(events) });
+vm.runInContext(wrapper + '\nspeakES("primera"); speakES("segunda");', context);
+turns[0].onStart();
+assert.equal(context.vozActiva, false, 'Un evento viejo no puede activar la boca');
+turns[0].onEnd();
+assert.equal(ended, 0, 'Una voz cancelada no puede terminar la nueva');
+turns[1].onStart(); assert.equal(context.vozActiva, true);
+turns[1].onPause(); assert.equal(context.vozActiva, false);
+turns[1].onResume(); assert.equal(context.vozActiva, true);
+turns[1].onBoundary({ name: 'word' }); assert.equal(context.faseVoz, 0.04);
+turns[1].onEnd(); assert.equal(context.vozActiva, false); assert.equal(ended, 1);
+context.vivo = false;
+turns[1].onStart(); assert.equal(context.vozActiva, false);
+console.log('OK: inicio, pausa, continuación, final, límites de palabra y descarte de eventos de voces anteriores');

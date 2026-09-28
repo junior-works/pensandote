@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Prueba local de Nube</title><link rel="stylesheet" href="../styles.css">
+<script>
+// Banco de pruebas aislado: sin configuración ni llamadas al backend.
+window.PENSANDOTE_CONFIG = { _demo: true };
+if (new URLSearchParams(location.search).has('grande')) document.documentElement.style.fontSize = '200%';
+const reduced = new URLSearchParams(location.search).has('reducido');
+const originalMatchMedia = window.matchMedia.bind(window);
+window.matchMedia = query => query === '(prefers-reduced-motion: reduce)' ? { matches: reduced } : originalMatchMedia(query);
+let pending = [];
+Object.defineProperty(window, 'speechSynthesis', { value: {
+    getVoices: () => [], addEventListener: () => {},
+    cancel: () => { pending.forEach(clearTimeout); pending = []; },
+    speak: utterance => {
+        pending.push(setTimeout(() => utterance.onstart?.(), 0));
+        for (let i = 1; i < 20; i++) pending.push(setTimeout(() => utterance.onboundary?.({ name: 'word' }), i * 420));
+        pending.push(setTimeout(() => utterance.onpause?.(), 2200));
+        pending.push(setTimeout(() => utterance.onresume?.(), 2900));
+        pending.push(setTimeout(() => utterance.onend?.(), 9000));
+    }
+} });
+window.SpeechSynthesisUtterance = class { constructor(text) { this.text = text; } };
+</script></head>
+<body data-mode="simple"><main id="app"></main>
+<script type="module">
+import { renderInicio } from '../js/screens-simple.js';
+await renderInicio(document.getElementById('app'));
+</script></body></html>
