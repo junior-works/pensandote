@@ -1658,8 +1658,8 @@ async function pintarListaAvisos($cont, circleId) {
         <details class="avisos-lista" open>
             <summary>📥 Últimos avisos (${avisos.length})</summary>
             <p class="muted avisos-help">
-                Esto es lo que el servidor mandó. Si acá aparece y en el teléfono no
-                sonó, el aviso salió bien y lo está tapando el sistema operativo.
+                Estos avisos quedan guardados acá aunque no lleguen al teléfono.
+                Que aparezcan en esta lista no confirma su recepción.
             </p>
             <ul class="aviso-lista">${filas}</ul>
         </details>`;
