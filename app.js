@@ -222,7 +222,7 @@ function renderBienvenida($app) {
                 <p class="bienvenida__eyebrow">Un lugar para estar cerca</p>
                 <h1 class="t-emocional" id="bienvenida-titulo">Pensándote</h1>
                 <p>Tu familia, tus cuidados y Nube, siempre a mano.</p>
-                <button class="btn btn--xl btn--inicio btn--full" id="btn-bienvenida-ingresar" type="button">Ingresar a mi cuenta</button>
+                <button class="btn btn--xl btn--inicio btn--full" id="btn-bienvenida-ingresar" type="button">Entrar</button>
                 <button class="btn btn--xl btn--familia btn--full" id="btn-bienvenida-demo" type="button">Conocer la app</button>
                 <small>La demostración no muestra datos de tu familia.</small>
             </div>

@@ -18,7 +18,7 @@
  * correcto en ambos entornos.
  */
 
-const CACHE_NAME = 'pensandote-shell-v0.10.39-cuidado-familiar';
+const CACHE_NAME = 'pensandote-shell-v0.10.40-portada';
 
 const SHELL_FILES = [
     './',
