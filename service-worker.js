@@ -18,7 +18,9 @@
  * correcto en ambos entornos.
  */
 
-const CACHE_NAME = 'pensandote-shell-v0.10.42-avisos';
+const CACHE_NAME = 'pensandote-shell-v0.10.43-push-diagnostico';
+const PUSH_DIAG_DB = 'pensandote-push-diagnostico';
+const PUSH_DIAG_VERSION = '1';
 
 const SHELL_FILES = [
     './',
@@ -59,6 +61,7 @@ const SHELL_FILES = [
     './js/utils/grabador-voz.js',
     './js/utils/avisos-prompt.js',
     './js/utils/avisos-ayuda.js',
+    './js/utils/avisos-diagnostico.js',
     './js/utils/genero.js',
     './js/utils/panico.js',
     './js/utils/parentesco.js',
@@ -184,7 +187,34 @@ async function cacheFirst(request) {
 // la PWA. Aún no lo usamos desde app.js, pero queda listo.
 self.addEventListener('message', (event) => {
     if (event.data === 'skipWaiting') self.skipWaiting();
+    if (event.data?.type === 'push-diagnostico-version') {
+        event.ports?.[0]?.postMessage({ version: PUSH_DIAG_VERSION });
+    }
 });
+
+// Guarda sólo el último push recibido en este dispositivo. No guarda el
+// contenido del aviso: alcanza para distinguir "Google lo aceptó" de
+// "el receptor del teléfono lo procesó" sin conservar datos familiares.
+function guardarDiagnosticoPush(info) {
+    return new Promise((resolve, reject) => {
+        if (!self.indexedDB) { resolve(); return; }
+        const request = self.indexedDB.open(PUSH_DIAG_DB, 1);
+        request.onupgradeneeded = () => {
+            if (!request.result.objectStoreNames.contains('estado')) {
+                request.result.createObjectStore('estado');
+            }
+        };
+        request.onerror = () => reject(request.error);
+        request.onsuccess = () => {
+            const db = request.result;
+            const tx = db.transaction('estado', 'readwrite');
+            tx.objectStore('estado').put(info, 'ultimo');
+            tx.oncomplete = () => { db.close(); resolve(); };
+            tx.onerror = () => { db.close(); reject(tx.error); };
+            tx.onabort = () => { db.close(); reject(tx.error); };
+        };
+    });
+}
 
 // ---------------------------------------------------------------------
 // Web Push — handler `push` y `notificationclick`
@@ -250,7 +280,23 @@ self.addEventListener('push', (event) => {
         // mande al usuario al círculo correcto, no al último activo.
         data:  { url: data.url || './', circle_id: data.circle_id || null }
     };
-    event.waitUntil(self.registration.showNotification(title, opts));
+    event.waitUntil((async () => {
+        const recibido = new Date().toISOString();
+        let aceptado = false;
+        let error = '';
+        try {
+            await self.registration.showNotification(title, opts);
+            aceptado = true;
+        } catch (err) {
+            error = String(err?.message || err).slice(0, 160);
+            console.error('[sw] no pude mostrar push', err);
+        }
+        try {
+            await guardarDiagnosticoPush({ recibido, aceptado, error, version: PUSH_DIAG_VERSION });
+        } catch (err) {
+            console.warn('[sw] no pude guardar diagnóstico push', err);
+        }
+    })());
 });
 
 self.addEventListener('notificationclick', (event) => {

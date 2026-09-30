@@ -13,6 +13,7 @@ import { state, setModo, setSesionReal, limpiarSesionReal } from './state.js';
 import { go, refresh } from './router.js';
 import { cerrarSesion } from './auth.js';
 import { ayudaAvisos, probarAvisosGuiados } from './utils/avisos-ayuda.js';
+import { diagnosticoPushLocal } from './utils/avisos-diagnostico.js';
 import {
     miembrosDelCirculo, membresiaActiva,
     crearCirculo, actualizarParentesco, actualizarPerfilUsuario
@@ -1741,7 +1742,28 @@ async function pintarAvisos($cont, { portada = false } = {}) {
             </div>
             <p id="probar-feedback" class="muted avisos-feedback"></p>
             <p class="muted avisos-help">Esta prueba se hace con la app abierta. Para comprobar el segundo plano, volvé a la pantalla principal del teléfono, apagá la pantalla y pedile a otro familiar que te mande algo. No uses “Forzar detención”.</p>
+            <details class="avisos-diagnostico">
+                <summary>Diagnóstico de recepción en este teléfono</summary>
+                <p id="diagnostico-push-local" class="muted avisos-help">Comprobando receptor…</p>
+            </details>
         `;
+        const $diag = $cont.querySelector('#diagnostico-push-local');
+        diagnosticoPushLocal().then(({ version, ultimo }) => {
+            if (!$diag.isConnected) return;
+            if (!version) {
+                $diag.textContent = 'El receptor de diagnóstico todavía no está activo. Cerrá y abrí Pensándote una vez para actualizarlo.';
+            } else if (!ultimo) {
+                $diag.textContent = 'Receptor actualizado. Todavía no registró ningún push en este teléfono.';
+            } else {
+                const fecha = new Date(ultimo.recibido);
+                const cuando = Number.isNaN(fecha.getTime()) ? 'hora desconocida' : fecha.toLocaleString('es-ES');
+                $diag.textContent = ultimo.aceptado
+                    ? `Último push recibido: ${cuando}. El receptor aceptó mostrarlo; Android aún puede ocultarlo.`
+                    : `Último push recibido: ${cuando}, pero no se pudo mostrar: ${ultimo.error || 'error desconocido'}.`;
+            }
+        }).catch(err => {
+            if ($diag.isConnected) $diag.textContent = `No pude leer el diagnóstico: ${err?.message || err}`;
+        });
         const $feedback = $cont.querySelector('#probar-feedback');
         $cont.querySelector('#btn-probar-aviso').addEventListener('click', async (ev) => {
             const btn = ev.currentTarget;

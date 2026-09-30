@@ -1707,6 +1707,17 @@ body[data-mode="dashboard"] .avisos-feedback {
     min-height: 1em;
     line-height: 1.35;
 }
+.avisos-diagnostico {
+    margin-top: 0.65rem;
+    padding-top: 0.55rem;
+    border-top: 1px solid rgba(40, 65, 73, 0.14);
+}
+.avisos-diagnostico summary {
+    cursor: pointer;
+    color: var(--ink);
+    font-size: 0.9rem;
+    font-weight: 600;
+}
 
 /* ---- Muro de actividad (admin Hogar) ----
    Feed compacto: icon a la izquierda, texto en el medio, tiempo
