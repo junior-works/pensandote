@@ -47,7 +47,7 @@ export async function probarAvisosGuiados(circleId) {
     } catch (_) { error = 'No pude completar la prueba. Revisá la conexión y volvé a intentarlo.'; }
     const value = await modal({
         titulo: '¿Te llegaron los dos avisos?',
-        cuerpo: `<p>${local ? 'El teléfono aceptó la primera prueba.' : 'El teléfono no aceptó la primera prueba.'}</p><p>${enviado ? 'La segunda se envió por internet. Buscá los dos avisos en la parte superior del teléfono.' : error}</p><p>Hasta que los veas, no podemos confirmar que llegan.</p>`,
+        cuerpo: `<p>${local ? 'El teléfono aceptó la primera prueba.' : 'El teléfono no aceptó la primera prueba.'}</p><p>${enviado ? 'La segunda se envió por internet. Buscá los dos avisos en la parte superior del teléfono.' : error}</p><p>Esta prueba se hizo con la app abierta. Para comprobar el segundo plano, volvé a la pantalla principal del teléfono, apagá la pantalla y pedile a un familiar que te mande algo. No uses “Forzar detención”. Hasta que veas ese aviso, no podemos confirmar la entrega.</p>`,
         acciones: [
             ...(local && enviado ? [{ label: 'Sí, me llegaron', clase: 'btn--inicio btn--full', value: 'si' }] : []),
             { label: 'Necesito ayuda', clase: 'btn--familia btn--full', value: 'ayuda' },

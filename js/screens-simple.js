@@ -16,7 +16,7 @@ import {
     preguntarComoHagoIA, listarTutoriales, obtenerTutorialPorSlug,
     enviarPensamiento,
     marcarToma,
-    activarAvisos, desactivarAvisos, estadoAvisos
+    activarAvisos, desactivarAvisos, estadoAvisos, repararAvisosConPermiso
 } from './data-emotiva.js';
 import {
     getContactos, getMedico, getTutoriales, getFotoDelDia, getFotosDia,
@@ -275,6 +275,12 @@ async function pintarAvisosSimple($app, { animar = false } = {}) {
     const vapid = window.PENSANDOTE_CONFIG?.VAPID_PUBLIC_KEY || '';
     if (!vapid || vapid.startsWith('REEMPLAZAR')) { limpiar(); return; }
 
+    // El permiso puede seguir concedido aunque el servidor haya perdido
+    // el registro (por ejemplo, tras un 410). Repararlo sin pedirle al
+    // adulto que entienda qué es una suscripción push.
+    try { await repararAvisosConPermiso(vapid); }
+    catch (err) { console.warn('[reparar avisos]', err); }
+
     let st;
     try { st = await estadoAvisos(); }
     catch (_) { st = { estado: 'desactivado' }; }
@@ -299,11 +305,11 @@ async function pintarAvisosSimple($app, { animar = false } = {}) {
         if (!$pin) return;
         const etiqueta = modo === 'on'   ? 'Avisos activados'
                        : modo === 'bloq' ? 'Avisos bloqueados en el teléfono'
-                       : 'Avisos apagados';
+                       : 'Activar avisos de Nube';
         $pin.innerHTML = `
             <button type="button" class="avisos-pin avisos-pin--${modo}${animar ? ' is-entrando' : ''}"
                     id="avisos-pin-btn" aria-label="${etiqueta}" title="${etiqueta}">
-                ${modo === 'on' ? '🔔' : 'Avisos'}
+                ${modo === 'on' ? '🔔' : '🔔 Activar'}
             </button>
         `;
         const $btn = $pin.querySelector('#avisos-pin-btn');

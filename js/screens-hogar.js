@@ -33,7 +33,7 @@ import {
     urlInteraccionAudio,
     listarPuntas, crearPunta, descartarPunta,
     ultimosCheckinsPorMiembro, solicitarCheckin,
-    estadoAvisos, activarAvisos, desactivarAvisos, probarAviso,
+    estadoAvisos, activarAvisos, desactivarAvisos, probarAviso, repararAvisosConPermiso,
     listarAvisosRecientes,
     actividadReciente, listarEstudios,
     listarMedicamentos, tomasDeHoy
@@ -1691,6 +1691,8 @@ async function pintarAvisos($cont, { portada = false } = {}) {
             </div>`;
         return;
     }
+    try { await repararAvisosConPermiso(vapid); }
+    catch (err) { console.warn('[reparar avisos]', err); }
     let st;
     try { st = await estadoAvisos(); }
     catch (err) { st = { estado: 'desactivado' }; }
@@ -1738,6 +1740,7 @@ async function pintarAvisos($cont, { portada = false } = {}) {
                 <button class="btn btn--mini" id="btn-desactivar-avisos">Desactivar</button>
             </div>
             <p id="probar-feedback" class="muted avisos-feedback"></p>
+            <p class="muted avisos-help">Esta prueba se hace con la app abierta. Para comprobar el segundo plano, volvé a la pantalla principal del teléfono, apagá la pantalla y pedile a otro familiar que te mande algo. No uses “Forzar detención”.</p>
         `;
         const $feedback = $cont.querySelector('#probar-feedback');
         $cont.querySelector('#btn-probar-aviso').addEventListener('click', async (ev) => {
@@ -1777,7 +1780,7 @@ async function pintarAvisos($cont, { portada = false } = {}) {
             try {
                 const r = await probarAviso(state.circuloActivoIdReal);
                 const linea1 = localOk
-                    ? 'Prueba 1 (local) mostrada.'
+                    ? 'Prueba 1 (local) aceptada por el teléfono.'
                     : '⚠️ La prueba 1 (local) NO se pudo mostrar: este dispositivo tiene bloqueadas las notificaciones de la app.';
                 if (r?.sent > 0) {
                     $feedback.textContent = `${linea1} Prueba 2 enviada y aceptada por el servidor (${r.sent} dispositivo${r.sent === 1 ? '' : 's'}). Fijate cuáles de las dos te aparecen: si no aparece ninguna es el permiso del teléfono; si aparece la 1 y no la 2, el aviso se pierde en el camino.`;

@@ -15,10 +15,12 @@
  * permiso de notificaciones tambien es por dispositivo.
  */
 
-const CLAVE = 'pensandote:avisos:no-insistir-hasta';
+// Clave nueva: las postergaciones anteriores duraban cuatro días y
+// escondían demasiado tiempo una función esencial.
+const CLAVE = 'pensandote:avisos:no-insistir-hasta:v2';
 
 /** Dias que esperamos antes de volver a ofrecerlo. */
-export const DIAS_ESPERA = 4;
+export const DIAS_ESPERA = 1;
 
 function leer() {
     try { return Number(localStorage.getItem(CLAVE) || 0) || 0; }

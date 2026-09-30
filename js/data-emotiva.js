@@ -1631,6 +1631,31 @@ async function registroAvisos() {
     } finally { clearTimeout(timer); }
 }
 
+const AVISOS_APAGADOS_A_PROPOSITO = 'pensandote:avisos:apagados-a-proposito';
+let reparacionAvisosIntentada = null;
+
+/**
+ * Si Android ya concedió permiso, recuperar sin pedirle otro toque a la
+ * persona una suscripción que caducó o desapareció de la base. Nunca
+ * reactivar los avisos que alguien apagó expresamente desde la app.
+ */
+export function repararAvisosConPermiso(vapidPublicKey) {
+    if (!vapidPublicKey || !('Notification' in window) || Notification.permission !== 'granted') {
+        return Promise.resolve(false);
+    }
+    if (reparacionAvisosIntentada) return reparacionAvisosIntentada;
+    reparacionAvisosIntentada = (async () => {
+        try {
+            if (localStorage.getItem(AVISOS_APAGADOS_A_PROPOSITO) === '1') return false;
+        } catch (_) {}
+        const actual = await estadoAvisos();
+        if (actual.estado !== 'desactivado' || !actual.renovar) return false;
+        await activarAvisos(vapidPublicKey);
+        return true;
+    })();
+    return reparacionAvisosIntentada;
+}
+
 export async function estadoAvisos() {
     if (!('Notification' in window) || !('serviceWorker' in navigator) || !('PushManager' in window)) {
         return { estado: 'no-soporta' };
@@ -1685,7 +1710,10 @@ export async function activarAvisos(vapidPublicKey) {
         if (!data || (sub.expirationTime && sub.expirationTime <= Date.now())) {
             await sub.unsubscribe();
             sub = null;
-        } else return { endpoint: sub.endpoint };
+        } else {
+            try { localStorage.removeItem(AVISOS_APAGADOS_A_PROPOSITO); } catch (_) {}
+            return { endpoint: sub.endpoint };
+        }
     }
     if (!sub) {
         sub = await reg.pushManager.subscribe({
@@ -1704,6 +1732,7 @@ export async function activarAvisos(vapidPublicKey) {
         user_agent: navigator.userAgent.slice(0, 500)
     });
     if (error) throw enriquecer('registrar push_subscriptions', error);
+    try { localStorage.removeItem(AVISOS_APAGADOS_A_PROPOSITO); } catch (_) {}
     return { endpoint: sub.endpoint };
 }
 
@@ -1785,6 +1814,7 @@ export async function probarAviso(circleId) {
 }
 
 export async function desactivarAvisos() {
+    try { localStorage.setItem(AVISOS_APAGADOS_A_PROPOSITO, '1'); } catch (_) {}
     if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
     const reg = await navigator.serviceWorker.ready;
     const sub = await reg.pushManager.getSubscription();

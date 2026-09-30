@@ -3,10 +3,13 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 const path = require('node:path');
 const text = fs.readFileSync(path.join(__dirname, '../js/data-emotiva.js'), 'utf8');
-const source = text.slice(text.indexOf('function urlBase64ToUint8Array'), text.indexOf('export async function desactivarAvisos')).replaceAll('export async function', 'async function');
+const source = text.slice(text.indexOf('function urlBase64ToUint8Array'), text.indexOf('export async function desactivarAvisos'))
+    .replaceAll('export async function', 'async function')
+    .replaceAll('export function', 'function');
 
 function scenario({ permission = 'granted', row = true, dbError = null, expired = false, old = true } = {}) {
     const calls = { unsubscribed: 0, subscribed: 0, written: 0 };
+    const saved = new Map();
     const subscription = endpoint => ({ endpoint, expirationTime: expired ? 1 : null,
         unsubscribe: async () => { calls.unsubscribed++; return true; },
         toJSON: () => ({ keys: { p256dh: 'key', auth: 'auth' } }) });
@@ -26,12 +29,17 @@ function scenario({ permission = 'granted', row = true, dbError = null, expired 
         window: { Notification: {}, PushManager: {}, PENSANDOTE_CONFIG: { SUPABASE_URL: 'https://example.com', SUPABASE_ANON_KEY: 'public' } },
         navigator: { serviceWorker: { ready: Promise.resolve(reg) }, userAgent: 'Android' },
         Notification: { permission, requestPermission: async () => 'granted' },
+        localStorage: {
+            getItem: key => saved.get(key) || null,
+            setItem: (key, value) => saved.set(key, value),
+            removeItem: key => saved.delete(key)
+        },
         sbClient: async () => sb, enriquecer: (_, error) => new Error(error.message),
         setTimeout, clearTimeout, Date, console, Uint8Array, atob,
         fetch: async (_, options) => { calls.payload = JSON.parse(options.body); return { ok: true, json: async () => ({ sent: 1 }) }; }
     });
     vm.runInContext(source, context);
-    return { context, calls };
+    return { context, calls, saved };
 }
 (async () => {
     let s = scenario({ row: false });
@@ -62,4 +70,18 @@ function scenario({ permission = 'granted', row = true, dbError = null, expired 
     await vm.runInContext('probarAviso("circle")', s.context);
     assert.equal(s.calls.payload.user_id, 'me');
     console.log('OK: la prueba se dirige sólo a la cuenta actual');
+    s = scenario({ row: false });
+    assert.equal(await vm.runInContext('repararAvisosConPermiso("AQID")', s.context), true);
+    assert.equal(s.calls.subscribed, 1);
+    assert.equal(s.calls.written, 1);
+    console.log('OK: permiso concedido repara un registro perdido');
+    s = scenario({ row: false });
+    s.saved.set('pensandote:avisos:apagados-a-proposito', '1');
+    assert.equal(await vm.runInContext('repararAvisosConPermiso("AQID")', s.context), false);
+    assert.equal(s.calls.subscribed, 0);
+    console.log('OK: no reactiva avisos apagados a propósito');
+    s = scenario({ permission: 'denied', row: false });
+    assert.equal(await vm.runInContext('repararAvisosConPermiso("AQID")', s.context), false);
+    assert.equal(s.calls.subscribed, 0);
+    console.log('OK: no intenta reparar permisos bloqueados');
 })().catch(error => { console.error(error); process.exitCode = 1; });
