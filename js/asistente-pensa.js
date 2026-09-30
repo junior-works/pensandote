@@ -83,10 +83,10 @@ function actualizarVisibilidad() {
     if (!$btn) return;
     const enSesion = state.modo === 'real' && state.usuarioReal && state.circuloActivoIdReal;
     const hash = location.hash || '#/inicio';
-    // En el inicio simple Nube ya es la interfaz principal. Mantener el
-    // botón flotante ahí duplicaría el asistente y agregaría ruido. En el
-    // resto de las pantallas sigue disponible como ayuda contextual.
-    const nubeEsPrincipal = document.body.dataset.mode === 'simple'
+    // En ambos inicios ya hay una acción de Nube a la vista. El botón
+    // flotante tapaba el campo del tutor y duplicaba al asistente del mayor.
+    // En las demás pantallas sigue disponible como ayuda contextual.
+    const nubeEsPrincipal = ['simple', 'dashboard'].includes(document.body.dataset.mode)
         && /^#\/inicio(?:\?|$)/.test(hash);
     const enOnboarding = /^#\/tutorial\/como-usar-pensandote(\?|$)/.test(hash);
     const hayOverpane = document.querySelector('.modal-overlay, .lightbox-overlay');

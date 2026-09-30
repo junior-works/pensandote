@@ -100,29 +100,31 @@ export async function renderHogar($app) {
     _miembrosCache = await miembrosDelCirculo(c.id).catch(() => []);
 
     $app.innerHTML = `
-        <section class="avisos-inicio" id="hogar-avisos-inicio">
+        <section class="avisos-inicio" id="hogar-avisos-inicio" hidden>
             <div id="sec-avisos-inicio"><p class="muted">Comprobando avisos…</p></div>
         </section>
 
-        <section class="card inicio-hero" id="sec-hero">
-            <div class="skel skel--hero" aria-hidden="true"></div>
-        </section>
-
         <section class="card stack hogar-checkin">
-            <h2>🗣 Nube y la familia</h2>
+            <div class="hogar-checkin__intro">
+                <h2>Estado de hoy</h2>
+                <p>Nube consulta a tu familiar y te avisa cuando responde.</p>
+            </div>
             <div id="sec-checkin-estado">
                 <div class="skel skel--line" aria-hidden="true"></div>
                 <div class="skel skel--line skel--short" aria-hidden="true"></div>
             </div>
+            <label class="hogar-checkin__pregunta-label" for="preguntar-rapido-texto">Una pregunta para tu familiar</label>
             <form id="form-preguntar-rapido" class="preguntar-rapido">
                 <input type="text" id="preguntar-rapido-texto" class="input-real"
                        maxlength="240" required autocomplete="off"
-                       placeholder="Preguntale algo…">
-                <button type="submit" class="btn btn--inicio">Enviar</button>
+                       placeholder="Ej.: ¿Cómo dormiste anoche?">
+                <button type="submit" class="btn btn--inicio">Enviar pregunta</button>
             </form>
-            <p class="muted" id="preguntar-rapido-estado" role="status" aria-live="polite">
-                Nube se lo pregunta y te trae la respuesta.
-            </p>
+            <p class="muted" id="preguntar-rapido-estado" role="status" aria-live="polite"></p>
+        </section>
+
+        <section class="card inicio-hero" id="sec-hero">
+            <div class="skel skel--hero" aria-hidden="true"></div>
         </section>
 
         <section class="card stack cuidado-panel" aria-labelledby="cuidado-alertas-titulo">
@@ -1865,17 +1867,16 @@ async function cargarCheckinsDelDia(c, $cont) {
                 const respuesta = ok ? String(row.respuesta || 'Estoy bien').trim() : '';
                 return `
                     <li class="checkin-estado-item ${ok ? 'is-ok' : 'is-pendiente'}">
-                        <span class="checkin-estado-item__icono">${ok ? '✅' : '⏳'}</span>
-                        <div>
+                        <div class="checkin-estado-item__resumen">
                             <strong>${h(par)}</strong>
                             <small>${ok
                                 ? `respondió “${h(respuesta)}” hoy a las ${h(hora)}`
-                                : 'todavía no respondió hoy'}</small>
-                            <button class="checkin-estado-item__pedir" type="button"
-                                    data-pedir-checkin="${h(m.user_id)}">
-                                ${ok ? 'Preguntarle de nuevo cómo está' : 'Preguntarle cómo está'}
-                            </button>
+                                : 'Aún no respondió hoy'}</small>
                         </div>
+                        <button class="checkin-estado-item__pedir" type="button"
+                                data-pedir-checkin="${h(m.user_id)}">
+                            ${ok ? 'Volver a preguntar' : 'Preguntar ahora'}
+                        </button>
                     </li>
                 `;
             }).join('')}
@@ -1913,15 +1914,11 @@ function pintarAvisosPortada($cont, st, vapid) {
         ${accion}`;
 
     // Ya activados: el cartel deja de pedir algo, asi que se pliega a una
-    // tira fina. El bloque grande solo se justifica cuando hay que
-    // convencer a alguien de tocar un boton.
+    // tira fina. La prueba y el estado siguen en Accesos; en Inicio no
+    // necesita ocupar sitio ni competir con el estado familiar.
     if (st.estado === 'activado') {
-        $caja?.classList.add('is-active');
-        $cont.innerHTML = base(
-            '<strong>Nube te mantiene al tanto</strong>',
-            '<button class="avisos-inicio__accion" id="btn-probar-avisos-inicio">Probar avisos</button>'
-        );
-        $cont.querySelector('#btn-probar-avisos-inicio').addEventListener('click', () => probarAvisosGuiados(state.circuloActivoIdReal));
+        if ($caja) $caja.hidden = true;
+        $cont.innerHTML = '';
         return;
     }
 

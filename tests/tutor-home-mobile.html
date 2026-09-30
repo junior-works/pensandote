@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Prueba visual: inicio del tutor</title>
+  <link rel="stylesheet" href="../styles.css">
+</head>
+<body data-mode="dashboard">
+  <main id="app">
+    <section class="avisos-inicio" id="hogar-avisos-inicio" hidden></section>
+    <section class="card stack hogar-checkin">
+      <div class="hogar-checkin__intro">
+        <h2>Estado de hoy</h2>
+        <p>Nube consulta a tu familiar y te avisa cuando responde.</p>
+      </div>
+      <div id="sec-checkin-estado">
+        <ul class="checkin-estado-lista">
+          <li class="checkin-estado-item is-pendiente">
+            <div class="checkin-estado-item__resumen">
+              <strong>Papá</strong>
+              <small>Aún no respondió hoy</small>
+            </div>
+            <button class="checkin-estado-item__pedir" type="button">Preguntar ahora</button>
+          </li>
+        </ul>
+      </div>
+      <label class="hogar-checkin__pregunta-label" for="preguntar-rapido-texto">Una pregunta para tu familiar</label>
+      <form id="form-preguntar-rapido" class="preguntar-rapido">
+        <input type="text" id="preguntar-rapido-texto" class="input-real" placeholder="Ej.: ¿Cómo dormiste anoche?">
+        <button type="button" class="btn btn--inicio">Enviar pregunta</button>
+      </form>
+      <p class="muted" id="preguntar-rapido-estado" role="status" aria-live="polite"></p>
+    </section>
+    <section class="card inicio-hero">
+      <div class="inicio-hero__empty">Foto familiar, después del estado de hoy</div>
+    </section>
+  </main>
+</body>
+</html>
