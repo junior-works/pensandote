@@ -18,7 +18,7 @@
  * correcto en ambos entornos.
  */
 
-const CACHE_NAME = 'pensandote-shell-v0.10.37-controles-unificados';
+const CACHE_NAME = 'pensandote-shell-v0.10.39-cuidado-familiar';
 
 const SHELL_FILES = [
     './',
@@ -38,6 +38,8 @@ const SHELL_FILES = [
     './js/screens-v2.js',
     './js/screens-real.js',
     './js/screens-hogar.js',
+    './js/cuidado-familiar.js',
+    './js/data-cuidado.js',
     './js/screens-admin.js',
     './js/preview.js',
     './js/screens-papa.js',

@@ -212,22 +212,20 @@ function haySesionGuardada() {
  *   - "Ver demo"  → marca demoElegido y cae al demo (Roberto) a propósito.
  */
 function renderBienvenida($app) {
-    $app.dataset.pantalla = '';
+    $app.dataset.pantalla = 'bienvenida';
     $app.innerHTML = `
-        <section class="card stack" style="margin-top: 3rem;">
-            <h1 class="t-emocional center">Pensándote</h1>
-            <p class="center muted">La app para estar cerca de los que están lejos.</p>
-
-            <button class="btn btn--xl btn--inicio btn--full" id="btn-bienvenida-ingresar" type="button">
-                Ingresar
-            </button>
-
-            <p class="center muted" style="margin:0.4rem 0 0;">
-                ¿Todavía no tenés cuenta o sólo querés mirar cómo es?
-            </p>
-            <button class="btn btn--xl btn--familia btn--full" id="btn-bienvenida-demo" type="button">
-                Ver demo
-            </button>
+        <section class="bienvenida" aria-labelledby="bienvenida-titulo">
+            <div class="bienvenida__imagen">
+                <img src="./assets/nube/nube-reposo.png" alt="Nube, el asistente de Pensándote" width="220" height="220">
+            </div>
+            <div class="bienvenida__contenido">
+                <p class="bienvenida__eyebrow">Un lugar para estar cerca</p>
+                <h1 class="t-emocional" id="bienvenida-titulo">Pensándote</h1>
+                <p>Tu familia, tus cuidados y Nube, siempre a mano.</p>
+                <button class="btn btn--xl btn--inicio btn--full" id="btn-bienvenida-ingresar" type="button">Ingresar a mi cuenta</button>
+                <button class="btn btn--xl btn--familia btn--full" id="btn-bienvenida-demo" type="button">Conocer la app</button>
+                <small>La demostración no muestra datos de tu familia.</small>
+            </div>
         </section>
     `;
     document.getElementById('btn-bienvenida-ingresar')
@@ -450,7 +448,9 @@ async function bootstrap() {
     // El panel de dev y los botones "Ver maqueta demo" sólo aparecen en
     // localhost. En producción (Pages, dominio) la app va directo al modo
     // real sin opciones de demo para no confundir al usuario.
-    if (esEntornoDev()) montarDevPanel();
+    // El panel técnico no debe tapar la maqueta cuando se comparte una
+    // vista local. Sigue disponible para pruebas con ?dev=1.
+    if (esEntornoDev() && new URLSearchParams(location.search).has('dev')) montarDevPanel();
     // Cartel "📲 Instalar Pensándote" cuando el browser lo permite.
     montarInstall();
     onStateChange(() => refreshRouter());

@@ -113,6 +113,10 @@ export async function renderInicio($app) {
                 o que te explique cómo hacer cosas.
             </p>
             <div class="nube-respuesta" id="nube-respuesta"></div>
+            <details class="nube-charla" id="nube-charla" hidden>
+                <summary>Leer nuestra charla</summary>
+                <ol id="nube-charla-turnos"></ol>
+            </details>
         </section>
 
 

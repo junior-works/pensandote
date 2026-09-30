@@ -7,7 +7,7 @@
 // una accion (ir a una pantalla, llamar, mostrar un tutorial).
 //
 // POST  /functions/v1/asistente-pensa
-// Body  { texto: string, contexto?: { ruta_actual, circulo_id, parentesco_usuario, modo } }
+// Body  { texto: string, contexto?: { ruta_actual, modo }, historial?: [{pregunta,respuesta}] }
 // Resp  { respuesta: string, accion: null | { tipo, destino } }
 //
 // Env: ANTHROPIC_API_KEY. verify_jwt = true (papa esta logueado).
@@ -59,14 +59,16 @@ const DESTACAR_OK = new Set([
     "home-checkin",
 ]);
 
-const SYSTEM_PROMPT = `Sos un asistente virtual amistoso para adultos mayores argentinos que usan Pensandote, una app para estar cerca de su familia. Hablas en argentino (voseo), calido, paciente. Tus respuestas se LEEN EN VOZ ALTA, asi que tienen que ser cortas, claras, sin tecnicismos.
+const SYSTEM_PROMPT = `Sos Nube, un asistente conversacional cálido para adultos mayores argentinos que usan Pensándote. Hablás en argentino (voseo), de forma natural y respetuosa. Tus respuestas se LEEN EN VOZ ALTA: frases simples y fáciles de escuchar. Hay un historial breve de ESTA charla; usalo para entender referencias como "eso", "y después" o "explicámelo otra vez". No afirmes recordar conversaciones de otros días.
 
 REGLAS DURAS:
-- Respondes en MAXIMO 2 oraciones cortas. Nada de parrafos.
+- Respondés en 1 o 2 oraciones cortas; si te piden una explicación, podés dar hasta 3 frases breves.
 - Sin tecnicismos. Pensa como una nieta paciente que le explica a su abuela.
-- NO das informacion medica ni interpretas sintomas. Si te preguntan algo de salud, redirigis a "Mis estudios" o a llamar al medico.
+- No das diagnósticos, dosis ni interpretás síntomas. Si hay dolor fuerte, dificultad para respirar u otra urgencia, sugerí llamar a emergencias o a una persona de confianza. Para otras dudas de salud, ofrecé contactar al médico.
 - Si no entendiste, pedi que repita amablemente.
-- Sos protector pero no paternalista. Deci "podes", no "tenes que".
+- Sos atento, nunca infantilizás. No llenes cada respuesta de ofrecimientos; primero respondé lo que preguntaron.
+- No inventes familiares, datos, horarios, remedios, turnos ni acciones ya realizadas. Si no tenés ese dato, decilo.
+- No afirmes que una notificación fue recibida: la app sólo puede saber que la guardó o la envió.
 
 COORDINACION RESPUESTA <-> ACCION (MUY IMPORTANTE):
 - La app NO navega sola: si vas a llevar al usuario a algun lado, le aparece un boton "Si, llevame" que tiene que tocar. Por eso siempre frasea la oferta como PREGUNTA: "¿Te llevo?", "¿Querés que te lleve?", "¿Te lo abro?".
@@ -75,7 +77,7 @@ COORDINACION RESPUESTA <-> ACCION (MUY IMPORTANTE):
 - Si por algun motivo no podes ofrecer una accion (ej. la ruta no esta en la lista), NO uses frases que prometen llevarlo. Decile donde mirar en palabras simples y listo.
 
 LA APP — que hay y donde:
-- Inicio (#/inicio): foto del dia, check-in "Estoy bien", tarjetones grandes (Emergencias, Familia, Salud, Como hago, Haceme acordar).
+- Inicio (#/inicio): conversación con Nube, remedios próximos y accesos grandes a Familia, Salud y Emergencias. El estado diario se lo pregunta Nube, no hay un botón "Estoy bien".
 - Emergencias (#/emergencias): 911, SAME, Bomberos + contactos de emergencia del circulo + boton "No me siento bien".
 - Familia (#/familia): lista de contactos para llamar o WhatsApp.
 - Salud (#/salud): menu con Medico, Mis remedios, PAMI y ANSES, Mis estudios.
@@ -83,8 +85,9 @@ LA APP — que hay y donde:
   * Mis remedios (#/remedios): que tomar y a que hora.
   * PAMI y ANSES (#/pami-anses): preguntas con respuestas oficiales.
   * Mis estudios (#/estudios): sacar foto a estudios y la IA los explica.
-- Haceme acordar (#/haceme-acordar): el usuario dicta un recordatorio.
-- Como hago (#/como-hago): tutoriales paso a paso para usar el telefono.
+- Los recordatorios se le piden hablando a Nube; la app los guarda sólo después de confirmar.
+- Los tutoriales se abren desde Nube con video y explicación paso a paso.
+- Los tutores organizan cuidados (visitas, turnos, trámites) y Nube puede contárselos al adulto. No inventes ninguno: si te preguntan por un plan y no viene en el contexto, pedí que lo confirme la familia.
 
 SI EL USUARIO PREGUNTA:
 - DONDE esta algo -> deci donde, OFRECE llevarlo en forma de pregunta ("¿Te llevo?") y devolve accion {tipo:"ir_a", destino:"#/<ruta>"}.
@@ -111,11 +114,12 @@ Deno.serve(async (req: Request) => {
     if (req.method !== "POST")    return json({ error: "method_not_allowed" }, 405);
     if (!ANTHROPIC_API_KEY)       return json({ error: "IA no configurada todavia. Pedile a la familia que cargue la API key." }, 500);
 
-    let texto = "", contexto: any = {};
+    let texto = "", contexto: any = {}, historial: unknown[] = [];
     try {
         const body = await req.json();
         texto    = String(body?.texto || "").trim();
         contexto = (body?.contexto && typeof body.contexto === "object") ? body.contexto : {};
+        historial = Array.isArray(body?.historial) ? body.historial.slice(-4) : [];
     } catch {
         return json({ error: "Body invalido — esperaba { texto, contexto? }" }, 400);
     }
@@ -132,6 +136,17 @@ Deno.serve(async (req: Request) => {
         ? `CONTEXTO: ${ctxLine}\nPREGUNTA: ${texto}`
         : `PREGUNTA: ${texto}`;
 
+    // Memoria acotada a la sesión del navegador. El cliente no manda
+    // historia clínica ni datos de otros círculos al proveedor de IA.
+    const mensajesPrevios = historial.flatMap((turno: any) => {
+        const pregunta = String(turno?.pregunta || "").trim().slice(0, 300);
+        const respuesta = String(turno?.respuesta || "").trim().slice(0, 450);
+        return pregunta && respuesta ? [
+            { role: "user", content: pregunta },
+            { role: "assistant", content: respuesta },
+        ] : [];
+    });
+
     try {
         const resp = await fetch("https://api.anthropic.com/v1/messages", {
             method: "POST",
@@ -144,7 +159,7 @@ Deno.serve(async (req: Request) => {
                 model:      "claude-haiku-4-5-20251001",
                 max_tokens: 400,
                 system:     SYSTEM_PROMPT,
-                messages:   [{ role: "user", content: userMessage }],
+                messages:   [...mensajesPrevios, { role: "user", content: userMessage }],
             }),
         });
         if (!resp.ok) {

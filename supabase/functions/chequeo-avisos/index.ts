@@ -85,7 +85,7 @@ function joinNombres(nombres: string[]): string {
     return nombres.slice(0, -1).join(", ") + " y " + nombres[nombres.length - 1];
 }
 
-async function llamarEnviarPush(payload: { circle_id: string; title: string; body: string; url: string; }): Promise<{ ok: boolean; status: number }> {
+async function llamarEnviarPush(payload: { circle_id: string; title: string; body: string; url: string; user_id?: string; }): Promise<{ ok: boolean; status: number }> {
     try {
         const res = await fetch(`${SUPABASE_URL}/functions/v1/enviar-push`, {
             method: "POST",
@@ -171,6 +171,8 @@ Deno.serve(async (req) => {
 
     let avisosCheckin = 0;
     let avisosMed     = 0;
+    let avisosEscalados = 0;
+    let tareasRecordadas = 0;
     const circulosRevisados = porCirculo.size;
     const errores: Array<{ circle_id: string; err: string }> = [];
 
@@ -235,6 +237,89 @@ Deno.serve(async (req) => {
                     if (r.ok) avisosMed++;
                 }
             }
+
+            // Segunda señal, sólo si después de dos horas nadie de la
+            // familia se hizo cargo. No confundir falta de confirmación
+            // con una urgencia médica ni repetir si la persona respondió.
+            const limiteEscalacion = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+            const desdeAyer = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+            const { data: viejos, error: errViejos } = await sb
+                .from("avisos_enviados")
+                .select("id, tipo, ref, created_at")
+                .eq("circle_id", circleId)
+                .eq("fecha", hoy)
+                .is("escalado_at", null)
+                .in("tipo", ["sin_checkin", "med_no_tomada"])
+                .lt("created_at", limiteEscalacion)
+                .gt("created_at", desdeAyer)
+                .limit(20);
+            if (errViejos) throw errViejos;
+            if (viejos?.length) {
+                const { data: atendidos, error: errAtendidos } = await sb
+                    .from("alerta_seguimiento")
+                    .select("aviso_id, estado")
+                    .eq("circle_id", circleId)
+                    .in("aviso_id", viejos.map((a: any) => a.id));
+                if (errAtendidos) throw errAtendidos;
+                const tomados = new Set((atendidos || [])
+                    .filter((s: any) => s.estado !== "liberada")
+                    .map((s: any) => s.aviso_id));
+                for (const aviso of viejos) {
+                    if (tomados.has(aviso.id)) continue;
+                    if (aviso.tipo === "sin_checkin" &&
+                        miembrosSimples.every(m => marcaronCheckin.has(m.user_id))) continue;
+                    if (aviso.tipo === "med_no_tomada") {
+                        const [medId, horario] = String(aviso.ref || "").split(":");
+                        if (tomasSet.has(`${medId}|${horario}`)) continue;
+                    }
+                    const body = aviso.tipo === "sin_checkin"
+                        ? "Todavía no hay respuesta al contacto diario. ¿Puede alguien de la familia comprobar cómo está?"
+                        : "Una toma sigue sin confirmarse y nadie tomó el aviso. ¿Puede alguien comprobarlo?";
+                    const enviado = await llamarEnviarPush({
+                        circle_id: circleId, title: "Nube necesita una respuesta",
+                        body, url: "#/inicio",
+                    });
+                    if (enviado.ok) {
+                        await sb.from("avisos_enviados")
+                            .update({ escalado_at: new Date().toISOString() })
+                            .eq("id", aviso.id).is("escalado_at", null);
+                        avisosEscalados++;
+                    }
+                }
+            }
+
+            // Recordatorio práctico para quien se comprometió a hacer una
+            // tarea. La persona mayor la escucha de Nube al abrir la app.
+            const ahoraIso = new Date().toISOString();
+            const dentroDeDosHoras = new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString();
+            const { data: tareas, error: errTareas } = await sb
+                .from("tareas_cuidado")
+                .select("id, titulo, fecha_hora, responsable_id")
+                .eq("circle_id", circleId)
+                .in("estado", ["pendiente", "aceptada"])
+                .is("recordado_at", null)
+                .not("responsable_id", "is", null)
+                .gt("fecha_hora", ahoraIso)
+                .lte("fecha_hora", dentroDeDosHoras)
+                .limit(20);
+            if (errTareas) throw errTareas;
+            for (const tarea of tareas || []) {
+                const horario = new Date(tarea.fecha_hora).toLocaleString("es-AR", {
+                    timeZone: "America/Argentina/Buenos_Aires", hour: "2-digit", minute: "2-digit",
+                });
+                const enviado = await llamarEnviarPush({
+                    circle_id: circleId, user_id: tarea.responsable_id,
+                    title: "Hoy te ocupás de un cuidado",
+                    body: `${tarea.titulo} · ${horario}`,
+                    url: "#/inicio",
+                });
+                if (enviado.ok) {
+                    await sb.from("tareas_cuidado")
+                        .update({ recordado_at: new Date().toISOString() })
+                        .eq("id", tarea.id).is("recordado_at", null);
+                    tareasRecordadas++;
+                }
+            }
         } catch (err) {
             console.error("[chequeo-avisos] circulo", circleId, err);
             errores.push({ circle_id: circleId, err: String((err as any)?.message ?? err) });
@@ -248,6 +333,8 @@ Deno.serve(async (req) => {
         circulos_revisados: circulosRevisados,
         avisos_checkin: avisosCheckin,
         avisos_med: avisosMed,
+        avisos_escalados: avisosEscalados,
+        tareas_recordadas: tareasRecordadas,
         errores: errores.length ? errores : undefined,
     });
 });

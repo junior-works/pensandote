@@ -1275,7 +1275,7 @@ export async function consultarOrganismos(pregunta) {
  * contexto (ruta actual, modo, parentesco) y recibimos {respuesta, accion?}
  * para leer en voz alta y ofrecer una acción al usuario.
  */
-export async function consultarAsistente({ texto, contexto = {} }) {
+export async function consultarAsistente({ texto, contexto = {}, historial = [] }) {
     const cfg = window.PENSANDOTE_CONFIG;
     const sb = await sbClient();
     const { data: sess } = await sb.auth.getSession();
@@ -1294,7 +1294,7 @@ export async function consultarAsistente({ texto, contexto = {} }) {
                 'apikey':        cfg.SUPABASE_ANON_KEY,
                 'Authorization': `Bearer ${token}`
             },
-            body: JSON.stringify({ texto, contexto })
+            body: JSON.stringify({ texto, contexto, historial })
         });
     } catch (e) {
         throw enriquecer('asistente-pensa fetch', e);

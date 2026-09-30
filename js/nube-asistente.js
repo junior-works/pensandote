@@ -37,6 +37,8 @@ import {
     emojiPorTipo
 } from './data-recordatorios.js';
 import { esPreview, getMiembroVisto } from './preview.js';
+import { listarTareasCuidado } from './data-cuidado.js';
+import { miembrosDelCirculo } from './circles.js';
 
 const FRAMES = {
     idle:       '0% 0%',
@@ -57,7 +59,8 @@ const SUGERENCIAS = [
     'Podés preguntarme cómo hacer cosas con el teléfono.',
     'Si querés que te recuerde algo, decímelo.',
     'Si tenés ganas, podés contarme una historia de tu vida.',
-    'También puedo ayudarte a encontrar tus remedios o estudios.'
+    'También puedo ayudarte a encontrar tus remedios o estudios.',
+    'Podés preguntarme si tu familia organizó algún plan para vos.'
 ];
 
 const PREGUNTAS_RELATO = [
@@ -91,6 +94,8 @@ export function montarNubeInicio($app) {
     const $enviar    = $app.querySelector('#nube-enviar');
     const $estado    = $app.querySelector('#nube-estado');
     const $respuesta = $app.querySelector('#nube-respuesta');
+    const $charla = $app.querySelector('#nube-charla');
+    const $turnos = $app.querySelector('#nube-charla-turnos');
     if (!$rig || !$sprite || !$ojos || $bocas.length < 2 || !$bubble || !$mic || !$texto) return;
 
     let vivo = true;
@@ -121,6 +126,18 @@ export function montarNubeInicio($app) {
     let relatoTimer = null;
     let avisosTimer = null;
     let relatoPollTimer = null;
+    let cuidadoTimer = null;
+    const conversacion = [];
+
+    function guardarTurno(pregunta, respuesta) {
+        conversacion.push({ pregunta: String(pregunta).slice(0, 300), respuesta: String(respuesta).slice(0, 450) });
+        if (conversacion.length > 6) conversacion.shift();
+        if (!$charla || !$turnos) return;
+        $charla.hidden = false;
+        $turnos.innerHTML = conversacion.map(t => `
+            <li><span>Vos: ${h(t.pregunta)}</span><span>Nube: ${h(t.respuesta)}</span></li>
+        `).join('');
+    }
 
     // Todos los gestos viven en una única textura. Cambiar coordenadas de
     // esa textura es una operación de composición: no descarga, decodifica
@@ -237,6 +254,54 @@ export function montarNubeInicio($app) {
     function clavePreguntaDiaria() {
         const userId = state.usuarioReal?.id || getMiembroVisto()?.id || 'demo';
         return `pensandote:nube:como-estas:${userId}:${fechaArgentina()}`;
+    }
+
+    async function proximoCuidado() {
+        if (state.modo !== 'real' || esPreview() || !state.circuloActivoIdReal) return null;
+        const desde = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+        const tareas = await listarTareasCuidado(state.circuloActivoIdReal, { desde, limite: 20 });
+        const tarea = tareas.find(t => !['hecha', 'cancelada'].includes(t.estado) &&
+            new Date(t.fecha_hora).getTime() > Date.now());
+        if (!tarea) return null;
+        const miembros = await miembrosDelCirculo(state.circuloActivoIdReal);
+        const responsable = miembros.find(m => m.user_id === tarea.responsable_id);
+        const nombre = responsable?.user?.nombre_completo?.trim().split(/\s+/)[0]
+            || responsable?.parentesco || null;
+        const fecha = new Date(tarea.fecha_hora).toLocaleString('es-AR', {
+            timeZone: 'America/Argentina/Buenos_Aires', weekday: 'long',
+            day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit'
+        });
+        return { ...tarea, frase: `${tarea.titulo}, el ${fecha}${nombre ? `. Se ocupa ${nombre}` : ''}.` };
+    }
+
+    async function responderCuidado(pregunta) {
+        decir('Estoy mirando los planes de tu familia…', 'thinking');
+        setFrame('thinking', 'thinking');
+        const tarea = await proximoCuidado();
+        ultimaRespuesta = tarea
+            ? `Lo próximo que veo es: ${tarea.frase}`
+            : 'Todavía no veo planes próximos cargados por tu familia.';
+        decir(ultimaRespuesta, tarea ? 'speaking' : 'empathy');
+        guardarTurno(pregunta, ultimaRespuesta);
+        empezarHabla();
+        speakES(ultimaRespuesta, { onEnd: terminarHabla });
+    }
+
+    async function anunciarCuidadoProximo() {
+        if (!vivo || ocupado || checkinPendiente || recordatorioPendiente || relatoPendiente || $rig.dataset.state !== 'idle') return;
+        try {
+            const tarea = await proximoCuidado();
+            if (!tarea || new Date(tarea.fecha_hora).getTime() - Date.now() > 30 * 60 * 60 * 1000) return;
+            const clave = `pensandote:nube:cuidado:${state.usuarioReal?.id}:${tarea.id}:${fechaArgentina()}`;
+            if (localStorage.getItem(clave) === '1') return;
+            localStorage.setItem(clave, '1');
+            ultimaRespuesta = `Tu familia organizó algo para vos. ${tarea.frase}`;
+            decir(ultimaRespuesta, 'speaking');
+            empezarHabla();
+            speakES(ultimaRespuesta, { onEnd: terminarHabla });
+        } catch (err) {
+            console.warn('[nube cuidado próximo]', err);
+        }
     }
 
     function yaPreguntoHoy() {
@@ -779,6 +844,7 @@ export function montarNubeInicio($app) {
         ultimaRespuesta = String(r?.respuesta || '').trim()
             || 'No encontré una respuesta segura. Podés llamar al 138 para PAMI o al 130 para ANSES.';
         decir(ultimaRespuesta, r?.estado === 'ok' ? 'speaking' : 'empathy');
+        guardarTurno(pregunta, ultimaRespuesta);
         const fuentes = Array.isArray(r?.fuentes) ? r.fuentes.slice(0, 3) : [];
         $respuesta.innerHTML = fuentes.length ? `
             <details class="nube-fuentes">
@@ -894,12 +960,18 @@ export function montarNubeInicio($app) {
                 $texto.value = '';
                 return;
             }
+            if (state.modo === 'real' && pareceConsultaDeCuidado(pregunta)) {
+                await responderCuidado(pregunta);
+                $texto.value = '';
+                return;
+            }
             // El demo permite probar toda la vida del personaje sin sesión.
             // En la app real usa exactamente el asistente existente.
             const r = state.modo === 'real'
-                ? await consultarAsistente({ texto: pregunta, contexto: construirContexto() })
+                ? await consultarAsistente({ texto: pregunta, contexto: construirContexto(), historial: conversacion.slice(-4) })
                 : await respuestaDemo(pregunta);
             ultimaRespuesta = String(r?.respuesta || 'Claro, te ayudo.').trim();
+            guardarTurno(pregunta, ultimaRespuesta);
             decir(ultimaRespuesta, 'speaking');
             pintarAccion(r?.accion || null);
             empezarHabla();
@@ -969,6 +1041,7 @@ export function montarNubeInicio($app) {
     relatoTimer = setTimeout(buscarRelatoPendiente, 10000);
     // Después del saludo y antes de cualquier otra cosa que quiera decir.
     avisosTimer = setTimeout(ofrecerAvisosHablando, 6000);
+    cuidadoTimer = setTimeout(anunciarCuidadoProximo, 18000);
     if (state.modo === 'real' && !esPreview()) {
         checkinPollTimer = setInterval(buscarPreguntaDeTutor, 20000);
         relatoPollTimer = setInterval(buscarRelatoPendiente, 60000);
@@ -983,6 +1056,7 @@ export function montarNubeInicio($app) {
         clearTimeout(checkinTimer);
         clearTimeout(relatoTimer);
         clearTimeout(avisosTimer);
+        clearTimeout(cuidadoTimer);
         clearInterval(checkinPollTimer);
         clearInterval(relatoPollTimer);
         cerrarGuiaActiva?.();
@@ -1035,4 +1109,8 @@ function parecePedidoDeRecordatorio(texto) {
 
 function pareceConsultaDeOrganismo(texto) {
     return /\b(pami|anses)\b/i.test(texto);
+}
+
+function pareceConsultaDeCuidado(texto) {
+    return /\b(qu[eé] tengo (?:ma[ñn]ana|hoy|esta semana)|qui[eé]n me (?:va a )?(?:lleva|llevar|busca|buscar|visita)|cu[aá]ndo viene|mi (?:pr[oó]ximo )?turno|mi (?:pr[oó]xima )?visita|qu[eé] planes (?:hay|tengo)|qu[eé] organiz[oó] mi familia)\b/i.test(texto);
 }
