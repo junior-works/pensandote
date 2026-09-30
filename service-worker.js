@@ -18,7 +18,7 @@
  * correcto en ambos entornos.
  */
 
-const CACHE_NAME = 'pensandote-shell-v0.10.43-push-diagnostico';
+const CACHE_NAME = 'pensandote-shell-v0.10.44-push-diagnostico';
 const PUSH_DIAG_DB = 'pensandote-push-diagnostico';
 const PUSH_DIAG_VERSION = '1';
 

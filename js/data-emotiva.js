@@ -1737,6 +1737,32 @@ export async function activarAvisos(vapidPublicKey) {
 }
 
 /**
+ * Renueva deliberadamente la suscripción de ESTE navegador. Un endpoint
+ * puede seguir aceptado por el proveedor push sin que el dispositivo
+ * despierte el service worker; en ese caso activarAvisos() lo reutiliza.
+ * La reconexión se ofrece sólo tras una prueba fallida y un toque humano.
+ */
+export async function reconectarAvisos(vapidPublicKey) {
+    if (!vapidPublicKey) throw new Error('Falta la configuración de avisos.');
+    if (!('Notification' in window) || Notification.permission !== 'granted') {
+        throw new Error('Primero permití las notificaciones en este teléfono.');
+    }
+    const reg = await registroAvisos();
+    const anterior = await reg.pushManager.getSubscription();
+    if (anterior) {
+        const sb = await sbClient();
+        const { data: { user }, error: authError } = await sb.auth.getUser();
+        if (authError || !user) throw new Error('Ingresá a tu cuenta antes de reconectar los avisos.');
+        const { error } = await sb.from('push_subscriptions')
+            .delete().eq('endpoint', anterior.endpoint).eq('user_id', user.id);
+        if (error) throw enriquecer('borrar la conexión anterior', error);
+        const quitada = await anterior.unsubscribe();
+        if (!quitada) throw new Error('Chrome no pudo soltar la conexión anterior. Volvé a intentarlo.');
+    }
+    return activarAvisos(vapidPublicKey);
+}
+
+/**
  * Llama a la edge function `enviar-push` con la sesión del usuario
  * actual (Authorization Bearer access_token + apikey anon). verify_jwt
  * en la function valida el JWT y adentro usa service role para mandar

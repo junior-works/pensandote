@@ -34,7 +34,7 @@ import {
     urlInteraccionAudio,
     listarPuntas, crearPunta, descartarPunta,
     ultimosCheckinsPorMiembro, solicitarCheckin,
-    estadoAvisos, activarAvisos, desactivarAvisos, probarAviso, repararAvisosConPermiso,
+    estadoAvisos, activarAvisos, reconectarAvisos, desactivarAvisos, probarAviso, repararAvisosConPermiso,
     listarAvisosRecientes,
     actividadReciente, listarEstudios,
     listarMedicamentos, tomasDeHoy
@@ -1745,6 +1745,9 @@ async function pintarAvisos($cont, { portada = false } = {}) {
             <details class="avisos-diagnostico">
                 <summary>Diagnóstico de recepción en este teléfono</summary>
                 <p id="diagnostico-push-local" class="muted avisos-help">Comprobando receptor…</p>
+                <p class="muted avisos-help">Si una prueba no llegó con la app cerrada, renová la conexión de este teléfono. No cambia los avisos de tu familia.</p>
+                <button class="btn btn--mini" id="btn-reconectar-avisos">Reconectar avisos</button>
+                <p id="reconectar-feedback" class="muted avisos-feedback" role="status"></p>
             </details>
         `;
         const $diag = $cont.querySelector('#diagnostico-push-local');
@@ -1763,6 +1766,22 @@ async function pintarAvisos($cont, { portada = false } = {}) {
             }
         }).catch(err => {
             if ($diag.isConnected) $diag.textContent = `No pude leer el diagnóstico: ${err?.message || err}`;
+        });
+        $cont.querySelector('#btn-reconectar-avisos').addEventListener('click', async (ev) => {
+            const btn = ev.currentTarget;
+            const $resultado = $cont.querySelector('#reconectar-feedback');
+            btn.disabled = true;
+            btn.textContent = 'Reconectando…';
+            $resultado.textContent = '';
+            try {
+                await reconectarAvisos(vapid);
+                $resultado.textContent = 'Conexión nueva creada. Cerrá Pensándote y pedí una prueba a otro familiar para comprobar si llega al teléfono.';
+            } catch (err) {
+                $resultado.textContent = `No se pudo reconectar: ${err?.message || err}`;
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Reconectar avisos';
+            }
         });
         const $feedback = $cont.querySelector('#probar-feedback');
         $cont.querySelector('#btn-probar-aviso').addEventListener('click', async (ev) => {
