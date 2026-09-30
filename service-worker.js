@@ -213,23 +213,28 @@ self.addEventListener('message', (event) => {
 /**
  * Le avisa al servidor que este telefono recibio el aviso.
  *
- * `aviso_id` es el id de la fila en push_outbox y viaja dentro del push.
- * Solo lo conoce quien efectivamente lo recibio, asi que sirve de
- * credencial: no hace falta sesion ni clave. Si el envio falla no pasa
- * nada — el acuse es informativo y nunca puede romper la notificacion,
- * que ya se mostro antes de llegar aca.
+ * Se identifica con el endpoint de su propia suscripcion push: es un
+ * valor unico por dispositivo que el servidor ya tiene guardado, asi que
+ * alcanza para saber QUE telefono acuso sin necesidad de sesion ni de
+ * ninguna clave nueva.
+ *
+ * Si el envio falla no pasa nada: el acuse es informativo y nunca puede
+ * romper la notificacion, que ya se mostro antes de llegar aca.
  */
-async function acusarRecibo(avisoId, { recibido, aceptado, error }) {
-    if (!avisoId) return;
+async function acusarRecibo({ recibido, aceptado, error, tag, titulo }) {
     try {
+        const sub = await self.registration.pushManager.getSubscription();
+        if (!sub?.endpoint) return;
         await fetch(PUSH_ACUSE_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                aviso_id: avisoId,
+                endpoint: sub.endpoint,
                 recibido,
                 mostrado: !!aceptado,
                 error:    error || null,
+                tag:      tag || null,
+                titulo:   titulo || null,
                 version:  PUSH_DIAG_VERSION
             })
         });
@@ -339,7 +344,7 @@ self.addEventListener('push', (event) => {
         } catch (err) {
             console.warn('[sw] no pude guardar diagnóstico push', err);
         }
-        await acusarRecibo(data.aviso_id, { recibido, aceptado, error });
+        await acusarRecibo({ recibido, aceptado, error, tag: opts.tag, titulo: title });
     })());
 });
 

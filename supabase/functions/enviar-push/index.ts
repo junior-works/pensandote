@@ -140,44 +140,31 @@ Deno.serve(async (req) => {
         // Deja constancia del aviso con su resultado, para que uno que
         // falla quede visible en vez de desaparecer.
         //
-        // Si la llamada vino con outbox_id la fila ya existe. Si vino de un
-        // cron (service role) o del boton Probar, NO existe: esos caminos le
-        // pegan a la funcion directo. Antes esos avisos no quedaban
-        // registrados en ningun lado — justo los de recordatorios y
-        // remedios, que son los que importan.
-        //
-        // La fila se crea ANTES de mandar, no despues, para que el id exista
-        // a tiempo de viajar dentro del push como aviso_id. Sin eso, los
-        // avisos de los cron no podrian acusar recibo y seguiriamos sin
-        // saber si llegan al telefono o no.
-        if (!outboxId) {
+        // Si la llamada vino con outbox_id, la fila ya existe y solo se
+        // cierra. Si vino de un cron (service role) o del boton Probar,
+        // NO existe: esos caminos le pegan a la funcion directo. Los
+        // insertamos aca ya cerrados: una sola escritura y la lista que ve
+        // el usuario en la app queda completa.
+        const cerrar = async (resultado: Record<string, unknown>) => {
             try {
-                const { data: nueva, error: errNueva } = await sb
-                    .from("push_outbox")
-                    .insert({
+                if (outboxId) {
+                    await sb.from("push_outbox")
+                        .update({ enviado_at: new Date().toISOString(), resultado })
+                        .eq("id", outboxId);
+                } else {
+                    const ahora = new Date().toISOString();
+                    await sb.from("push_outbox").insert({
                         circle_id:  circle_id,
                         payload:    cuerpo,
-                        claimed_at: new Date().toISOString(),
-                        intentos:   1
-                    })
-                    .select("id")
-                    .single();
-                if (errNueva) console.warn("[enviar-push] no pude registrar el aviso", errNueva);
-                else outboxId = nueva?.id || "";
-            } catch (e) {
-                console.warn("[enviar-push] no pude registrar el aviso", e);
-            }
-        }
-
-        const cerrar = async (resultado: Record<string, unknown>) => {
-            if (!outboxId) return;
-            try {
-                await sb.from("push_outbox")
-                    .update({ enviado_at: new Date().toISOString(), resultado })
-                    .eq("id", outboxId);
+                        claimed_at: ahora,
+                        enviado_at: ahora,
+                        intentos:   1,
+                        resultado
+                    });
+                }
             } catch (e) {
                 // Registrar es secundario: que falle no puede tumbar el envio.
-                console.warn("[enviar-push] no pude cerrar el aviso", e);
+                console.warn("[enviar-push] no pude registrar el aviso", e);
             }
         };
 
@@ -229,17 +216,7 @@ Deno.serve(async (req) => {
         }
 
         // --- Envio ---------------------------------------------------
-        // aviso_id viaja dentro del push para que el service worker pueda
-        // acusar recibo (ver push-recibido). Solo lo conoce el telefono que
-        // efectivamente recibio el aviso, asi que hace de credencial y no
-        // hace falta ninguna sesion. Sin esto, "entregado" solo significa
-        // que Google lo acepto, y no hay forma de distinguir un aviso que
-        // llego al telefono de uno que se perdio en el camino.
-        const payload = JSON.stringify({
-            title, body: text, url, tag, circle_id,
-            ...(outboxId ? { aviso_id: outboxId } : {}),
-            ...(tipo ? { tipo } : {})
-        });
+        const payload = JSON.stringify({ title, body: text, url, tag, circle_id, ...(tipo ? { tipo } : {}) });
         let sent = 0, failed = 0;
         const toDelete: string[] = [];
         const errores: string[] = [];
