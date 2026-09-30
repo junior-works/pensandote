@@ -42,6 +42,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
 import webpush from "npm:web-push@3.6.7";
+import { sendNativeFcm } from "./fcm.ts";
 
 const SUPABASE_URL          = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -139,34 +140,44 @@ Deno.serve(async (req) => {
         // Deja constancia del aviso con su resultado, para que uno que
         // falla quede visible en vez de desaparecer.
         //
-        // Si la llamada vino con outbox_id, la fila ya existe y sólo se
-        // cierra. Si vino de un cron (service role) o del botón Probar,
-        // NO existe: esos caminos le pegan a la función directo. Antes
-        // esos avisos no quedaban registrados en ningún lado, así que la
-        // lista que ve el usuario en la app mostraba unos sí y otros no,
-        // justo los de los recordatorios y los remedios. Los insertamos
-        // acá ya cerrados: una sola escritura y la lista queda completa,
-        // sin tener que tocar las tres funciones que llaman.
-        const cerrar = async (resultado: Record<string, unknown>) => {
+        // Si la llamada vino con outbox_id la fila ya existe. Si vino de un
+        // cron (service role) o del boton Probar, NO existe: esos caminos le
+        // pegan a la funcion directo. Antes esos avisos no quedaban
+        // registrados en ningun lado — justo los de recordatorios y
+        // remedios, que son los que importan.
+        //
+        // La fila se crea ANTES de mandar, no despues, para que el id exista
+        // a tiempo de viajar dentro del push como aviso_id. Sin eso, los
+        // avisos de los cron no podrian acusar recibo y seguiriamos sin
+        // saber si llegan al telefono o no.
+        if (!outboxId) {
             try {
-                if (outboxId) {
-                    await sb.from("push_outbox")
-                        .update({ enviado_at: new Date().toISOString(), resultado })
-                        .eq("id", outboxId);
-                } else {
-                    const ahora = new Date().toISOString();
-                    await sb.from("push_outbox").insert({
+                const { data: nueva, error: errNueva } = await sb
+                    .from("push_outbox")
+                    .insert({
                         circle_id:  circle_id,
                         payload:    cuerpo,
-                        claimed_at: ahora,
-                        enviado_at: ahora,
-                        intentos:   1,
-                        resultado
-                    });
-                }
+                        claimed_at: new Date().toISOString(),
+                        intentos:   1
+                    })
+                    .select("id")
+                    .single();
+                if (errNueva) console.warn("[enviar-push] no pude registrar el aviso", errNueva);
+                else outboxId = nueva?.id || "";
             } catch (e) {
-                // Registrar es secundario: que falle no puede tumbar el envío.
                 console.warn("[enviar-push] no pude registrar el aviso", e);
+            }
+        }
+
+        const cerrar = async (resultado: Record<string, unknown>) => {
+            if (!outboxId) return;
+            try {
+                await sb.from("push_outbox")
+                    .update({ enviado_at: new Date().toISOString(), resultado })
+                    .eq("id", outboxId);
+            } catch (e) {
+                // Registrar es secundario: que falle no puede tumbar el envio.
+                console.warn("[enviar-push] no pude cerrar el aviso", e);
             }
         };
 
@@ -202,19 +213,38 @@ Deno.serve(async (req) => {
             await cerrar({ error: "query_fallida", detail: errSubs.message });
             return json({ error: "query_fallida", detail: errSubs.message }, 500);
         }
-        if (!subs?.length) {
-            const r = { sent: 0, failed: 0, deleted: 0, note: "sin suscripciones para los destinatarios" };
+        const { data: nativeTokens, error: errNative } = await sb
+            .from("native_push_tokens")
+            .select("token, user_id")
+            .in("user_id", ids);
+        if (errNative) {
+            console.error("[enviar-push] select native", errNative);
+            await cerrar({ error: "query_fallida", detail: errNative.message });
+            return json({ error: "query_fallida", detail: errNative.message }, 500);
+        }
+        if (!subs?.length && !nativeTokens?.length) {
+            const r = { sent: 0, failed: 0, deleted: 0, note: "sin dispositivos para los destinatarios" };
             await cerrar(r);
             return json({ ok: true, ...r });
         }
 
         // --- Envio ---------------------------------------------------
-        const payload = JSON.stringify({ title, body: text, url, tag, circle_id, ...(tipo ? { tipo } : {}) });
+        // aviso_id viaja dentro del push para que el service worker pueda
+        // acusar recibo (ver push-recibido). Solo lo conoce el telefono que
+        // efectivamente recibio el aviso, asi que hace de credencial y no
+        // hace falta ninguna sesion. Sin esto, "entregado" solo significa
+        // que Google lo acepto, y no hay forma de distinguir un aviso que
+        // llego al telefono de uno que se perdio en el camino.
+        const payload = JSON.stringify({
+            title, body: text, url, tag, circle_id,
+            ...(outboxId ? { aviso_id: outboxId } : {}),
+            ...(tipo ? { tipo } : {})
+        });
         let sent = 0, failed = 0;
         const toDelete: string[] = [];
         const errores: string[] = [];
 
-        await Promise.all(subs.map(async (s: any) => {
+        await Promise.all((subs || []).map(async (s: any) => {
             try {
                 await webpush.sendNotification({
                     endpoint: s.endpoint,
@@ -255,7 +285,36 @@ Deno.serve(async (req) => {
             deleted = count ?? toDelete.length;
         }
 
-        const resultado = { sent, failed, deleted, ...(errores.length ? { errores } : {}) };
+        let nativeSent = 0, nativeFailed = 0, nativeDeleted = 0;
+        const obsoleteNative: string[] = [];
+        await Promise.all((nativeTokens || []).map(async (device: any) => {
+            try {
+                const result = await sendNativeFcm(device.token, {
+                    title, body: text, url, tag, circle_id, ...(tipo ? { tipo } : {}),
+                });
+                if (result.ok) nativeSent++;
+                else {
+                    nativeFailed++;
+                    errores.push(result.error || "FCM desconocido");
+                    if (result.unregistered) obsoleteNative.push(device.token);
+                }
+            } catch (err: any) {
+                nativeFailed++;
+                errores.push(`FCM: ${String(err?.message || err).slice(0, 120)}`);
+            }
+        }));
+        if (obsoleteNative.length) {
+            const { error, count } = await sb.from("native_push_tokens")
+                .delete({ count: "exact" }).in("token", obsoleteNative);
+            if (error) console.warn("[enviar-push] no pude quitar tokens obsoletos", error);
+            else nativeDeleted = count ?? obsoleteNative.length;
+        }
+
+        const resultado = {
+            sent: sent + nativeSent, failed: failed + nativeFailed,
+            deleted: deleted + nativeDeleted, web_sent: sent, native_sent: nativeSent,
+            ...(errores.length ? { errores } : {})
+        };
         await cerrar(resultado);
         return json({ ok: true, ...resultado });
     } catch (err) {

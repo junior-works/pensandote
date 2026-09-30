@@ -18,9 +18,24 @@
  * correcto en ambos entornos.
  */
 
-const CACHE_NAME = 'pensandote-shell-v0.10.44-push-diagnostico';
+const CACHE_NAME = 'pensandote-shell-v0.10.45-acuse-de-recibo';
 const PUSH_DIAG_DB = 'pensandote-push-diagnostico';
-const PUSH_DIAG_VERSION = '1';
+const PUSH_DIAG_VERSION = '2';
+
+// Acuse de recibo al servidor.
+//
+// El diagnostico de arriba guarda en IndexedDB del telefono si el evento
+// push llego a ejecutarse. Eso sirve, pero para leerlo hay que pedirle al
+// usuario que abra la app y nos cuente lo que ve — y cuando lo que se
+// esta depurando es justamente "no me llega nada", esa dependencia hace
+// imposible avanzar: el servidor dice "entregado" y el usuario dice
+// "nada", y no hay forma de saber cual de los dos tramos fallo.
+//
+// Con esto el propio service worker avisa que recibio el aviso. Si el
+// acuse llega, el push viajo entero y el problema es que Android no lo
+// muestra. Si no llega, el push nunca desperto al telefono. Deja de
+// hacer falta que nadie mire una pantalla para saberlo.
+const PUSH_ACUSE_URL = 'https://uptxuzbfwfbluocvtkvz.supabase.co/functions/v1/push-recibido';
 
 const SHELL_FILES = [
     './',
@@ -195,6 +210,34 @@ self.addEventListener('message', (event) => {
 // Guarda sólo el último push recibido en este dispositivo. No guarda el
 // contenido del aviso: alcanza para distinguir "Google lo aceptó" de
 // "el receptor del teléfono lo procesó" sin conservar datos familiares.
+/**
+ * Le avisa al servidor que este telefono recibio el aviso.
+ *
+ * `aviso_id` es el id de la fila en push_outbox y viaja dentro del push.
+ * Solo lo conoce quien efectivamente lo recibio, asi que sirve de
+ * credencial: no hace falta sesion ni clave. Si el envio falla no pasa
+ * nada — el acuse es informativo y nunca puede romper la notificacion,
+ * que ya se mostro antes de llegar aca.
+ */
+async function acusarRecibo(avisoId, { recibido, aceptado, error }) {
+    if (!avisoId) return;
+    try {
+        await fetch(PUSH_ACUSE_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                aviso_id: avisoId,
+                recibido,
+                mostrado: !!aceptado,
+                error:    error || null,
+                version:  PUSH_DIAG_VERSION
+            })
+        });
+    } catch (err) {
+        console.warn('[sw] no pude acusar recibo', err);
+    }
+}
+
 function guardarDiagnosticoPush(info) {
     return new Promise((resolve, reject) => {
         if (!self.indexedDB) { resolve(); return; }
@@ -296,6 +339,7 @@ self.addEventListener('push', (event) => {
         } catch (err) {
             console.warn('[sw] no pude guardar diagnóstico push', err);
         }
+        await acusarRecibo(data.aviso_id, { recibido, aceptado, error });
     })());
 });
 
