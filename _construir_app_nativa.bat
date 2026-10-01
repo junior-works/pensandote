@@ -36,8 +36,9 @@ echo. >> "%LOG%"
 echo --- Comprobaciones --- >> "%LOG%"
 findstr /i "POST_NOTIFICATIONS" android\app\src\main\AndroidManifest.xml >> "%LOG%" 2>&1
 findstr /i "NativeFirebaseMessagingService" android\app\src\main\AndroidManifest.xml >> "%LOG%" 2>&1
-findstr /i "LauncherActivity.class" android\app\src\main\java\com\juniorworks\pensandote\NativeBootstrapActivity.java >> "%LOG%" 2>&1
-findstr /i "native_fcm_token" android\app\src\main\java\com\juniorworks\pensandote\LauncherActivity.java >> "%LOG%" 2>&1
+findstr /i "pedirEnSegundoPlano" android\app\src\main\java\com\juniorworks\pensandote\Application.java >> "%LOG%" 2>&1
+findstr /i "conEsperaCorta" android\app\src\main\java\com\juniorworks\pensandote\LauncherActivity.java >> "%LOG%" 2>&1
+findstr /i "LAUNCHER" android\app\src\main\AndroidManifest.xml >> "%LOG%" 2>&1
 
 echo.
 echo ==================================================================
