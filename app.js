@@ -19,6 +19,8 @@ import { esEntornoDev } from './js/ui.js';
 import { montarInstall } from './js/install-prompt.js';
 
 import { configEsReal, usuarioActual, procesarCallback } from './js/auth.js';
+import { capturarTokenNativo, registrarTokenNativo } from './js/native-fcm.js';
+import { sbClient } from './js/auth.js';
 import { circulosDelUsuario, membresiaActiva } from './js/circles.js';
 
 import * as Simple    from './js/screens-simple.js';
@@ -445,6 +447,7 @@ function renderRouteReal(ruta) {
 // Bootstrap
 // ---------------------------------------------------------------------
 async function bootstrap() {
+    capturarTokenNativo();
     // El panel de dev y los botones "Ver maqueta demo" sólo aparecen en
     // localhost. En producción (Pages, dominio) la app va directo al modo
     // real sin opciones de demo para no confundir al usuario.
@@ -526,6 +529,10 @@ async function bootstrap() {
         }
 
         if (usr) {
+            // No demora la pantalla: si falla el registro, queda pendiente
+            // para reintentarlo en el próximo arranque del Android instalado.
+            sbClient().then(sb => registrarTokenNativo(sb, usr.id))
+                .catch(err => console.warn('[native fcm]', err));
             try {
                 // Si quedó un token de invitación pendiente del magic-link
                 // round trip (caso B), procesarlo antes de cargar círculos.

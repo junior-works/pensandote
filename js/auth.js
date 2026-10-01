@@ -9,6 +9,8 @@
  * el "sin build". Cuando se estabilice, vendoreamos a ./vendor.
  */
 
+import { desregistrarTokenNativo } from './native-fcm.js';
+
 let _client = null;
 let _clientPromise = null;
 
@@ -165,6 +167,8 @@ export async function usuarioActual() {
 export async function cerrarSesion() {
     if (!configEsReal()) return;
     const sb = await client();
+    try { await desregistrarTokenNativo(sb); }
+    catch (err) { console.warn('[native fcm logout]', err); }
     await sb.auth.signOut();
 }
 

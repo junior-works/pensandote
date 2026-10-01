@@ -18,7 +18,7 @@
  * correcto en ambos entornos.
  */
 
-const CACHE_NAME = 'pensandote-shell-v0.10.45-acuse-de-recibo';
+const CACHE_NAME = 'pensandote-shell-v0.10.46-registro-nativo';
 const PUSH_DIAG_DB = 'pensandote-push-diagnostico';
 const PUSH_DIAG_VERSION = '2';
 
@@ -77,6 +77,7 @@ const SHELL_FILES = [
     './js/utils/avisos-prompt.js',
     './js/utils/avisos-ayuda.js',
     './js/utils/avisos-diagnostico.js',
+    './js/native-fcm.js',
     './js/utils/genero.js',
     './js/utils/panico.js',
     './js/utils/parentesco.js',
