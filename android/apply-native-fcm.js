@@ -60,6 +60,12 @@ replaceOnce(manifest,
   '<service android:name="NativeFirebaseMessagingService"');
 
 const javaDir = path.join(app, 'src', 'main', 'java', 'com', 'juniorworks', 'pensandote');
+// Restos de la pantalla intermedia que rompia el arranque. setup-twa.js no
+// borra los .java que dejo una version anterior, asi que se van de aca.
+for (const viejo of ['NativeBootstrapActivity.java']) {
+  const ruta = path.join(javaDir, viejo);
+  if (fs.existsSync(ruta)) fs.unlinkSync(ruta);
+}
 for (const name of ['NativeFirebaseMessagingService.java', 'TokenFcm.java']) {
   fs.copyFileSync(path.join(root, 'native-fcm', name), path.join(javaDir, name));
 }
