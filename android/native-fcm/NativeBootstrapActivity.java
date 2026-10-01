@@ -12,14 +12,21 @@ import android.os.Looper;
 import android.view.Gravity;
 import android.widget.TextView;
 
+import androidx.browser.customtabs.CustomTabsClient;
+
 import com.google.firebase.messaging.FirebaseMessaging;
 
 /** Obtiene el token nativo antes de abrir la web, sin depender de Chrome Push. */
 public class NativeBootstrapActivity extends Activity {
     private static final int NOTIFICATION_PERMISSION = 1201;
     private boolean launched = false;
-    /** true cuando otra actividad (el TWA) paso al frente. */
-    private boolean quedoAtras = false;
+    /**
+     * true cuando otra ventana nos saco el foco, que es la senal de que el
+     * TWA aparecio. No sirve onStop(): la LauncherActivity del TWA es
+     * translucida y una pantalla translucida no detiene la de atras, asi que
+     * onStop() no se llama aunque el TWA haya arrancado perfecto.
+     */
+    private boolean perdioFoco = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -40,9 +47,9 @@ public class NativeBootstrapActivity extends Activity {
     }
 
     @Override
-    protected void onStop() {
-        super.onStop();
-        quedoAtras = true;
+    public void onWindowFocusChanged(boolean tieneFoco) {
+        super.onWindowFocusChanged(tieneFoco);
+        if (!tieneFoco) perdioFoco = true;
     }
 
     @Override
@@ -109,29 +116,32 @@ public class NativeBootstrapActivity extends Activity {
         String destination = getIntent().getStringExtra("push_url");
         Uri destino = destination != null ? safeDestination(destination) : null;
 
-        // Arrancamos el TWA, que es lo que abre la app a pantalla completa.
-        // Pero el TWA ya se colgo una vez en negro sin tirar ninguna
-        // excepcion, asi que no alcanza con un try/catch: hay que mirar si
-        // efectivamente aparecio.
-        //
-        // Truco: si otra actividad pasa al frente, Android nos llama onStop().
-        // Si a los 6 segundos no nos llamo, el TWA nunca se mostro y abrimos
-        // la web en el navegador. Feo pero funcionando, nunca una pantalla
-        // negra muda.
+        // El TWA es lo que abre la app a pantalla completa, sin barra de
+        // direcciones. Necesita un navegador con soporte de Custom Tabs; si
+        // no hay ninguno no tiene sentido ni intentarlo, y preguntarlo es un
+        // dato concreto en vez de adivinar por cuanto tarda.
+        if (CustomTabsClient.getPackageName(this, null) == null) {
+            abrirEnNavegador(token, destino);
+            return;
+        }
+
         try {
             Intent twa = new Intent(this, LauncherActivity.class);
             if (destino != null) twa.setData(destino);
             if (token != null && !token.isEmpty()) twa.putExtra("native_fcm_token", token);
-            // El dialogo de permisos pudo habernos detenido antes; desde
-            // aca lo que cuenta es si el TWA pasa al frente.
-            quedoAtras = false;
+            // El dialogo de permisos pudo habernos sacado el foco antes;
+            // desde aca lo que cuenta es si el TWA aparece.
+            perdioFoco = false;
             startActivity(twa);
             final String tokenFinal = token;
             final Uri destinoFinal = destino;
+            // Ultima red: si en 12 segundos ni siquiera nos saco el foco, el
+            // TWA no llego a dibujarse. Mejor la web con barra fea que una
+            // pantalla muerta.
             new Handler(Looper.getMainLooper()).postDelayed(() -> {
-                if (quedoAtras) finish();
+                if (perdioFoco) finish();
                 else abrirEnNavegador(tokenFinal, destinoFinal);
-            }, 6000);
+            }, 12000);
             return;
         } catch (Throwable e) {
             // El TWA ni arranco. Seguimos por navegador.
