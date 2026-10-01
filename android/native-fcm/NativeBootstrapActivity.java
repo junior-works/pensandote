@@ -18,6 +18,8 @@ import com.google.firebase.messaging.FirebaseMessaging;
 public class NativeBootstrapActivity extends Activity {
     private static final int NOTIFICATION_PERMISSION = 1201;
     private boolean launched = false;
+    /** true cuando otra actividad (el TWA) paso al frente. */
+    private boolean quedoAtras = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -35,6 +37,12 @@ public class NativeBootstrapActivity extends Activity {
         } else {
             openWithToken();
         }
+    }
+
+    @Override
+    protected void onStop() {
+        super.onStop();
+        quedoAtras = true;
     }
 
     @Override
@@ -101,20 +109,33 @@ public class NativeBootstrapActivity extends Activity {
         String destination = getIntent().getStringExtra("push_url");
         Uri destino = destination != null ? safeDestination(destination) : null;
 
-        // OJO: a proposito NO se abre el TWA (LauncherActivity).
+        // Arrancamos el TWA, que es lo que abre la app a pantalla completa.
+        // Pero el TWA ya se colgo una vez en negro sin tirar ninguna
+        // excepcion, asi que no alcanza con un try/catch: hay que mirar si
+        // efectivamente aparecio.
         //
-        // El TWA necesita que el navegador del telefono soporte Custom Tabs.
-        // En el Xiaomi de prueba no lo soporta y la actividad se queda en una
-        // pantalla negra que no responde: no abre, no cierra, no avisa nada.
-        // Y como nunca termina de arrancar, el token jamas llega a
-        // registrarse — sin token la app instalada no recibe un solo aviso
-        // nativo, que es exactamente para lo que existe.
-        //
-        // No alcanza con envolverlo en try/catch: no tira excepcion, se
-        // cuelga. Asi que mientras el TWA no este arreglado abrimos la web en
-        // el navegador. Se ve la barra de direcciones, que es mas feo, pero el
-        // token se registra y los avisos entran por Firebase directo a esta
-        // app, sin depender de ningun navegador. Primero que funcione.
+        // Truco: si otra actividad pasa al frente, Android nos llama onStop().
+        // Si a los 6 segundos no nos llamo, el TWA nunca se mostro y abrimos
+        // la web en el navegador. Feo pero funcionando, nunca una pantalla
+        // negra muda.
+        try {
+            Intent twa = new Intent(this, LauncherActivity.class);
+            if (destino != null) twa.setData(destino);
+            if (token != null && !token.isEmpty()) twa.putExtra("native_fcm_token", token);
+            // El dialogo de permisos pudo habernos detenido antes; desde
+            // aca lo que cuenta es si el TWA pasa al frente.
+            quedoAtras = false;
+            startActivity(twa);
+            final String tokenFinal = token;
+            final Uri destinoFinal = destino;
+            new Handler(Looper.getMainLooper()).postDelayed(() -> {
+                if (quedoAtras) finish();
+                else abrirEnNavegador(tokenFinal, destinoFinal);
+            }, 6000);
+            return;
+        } catch (Throwable e) {
+            // El TWA ni arranco. Seguimos por navegador.
+        }
         abrirEnNavegador(token, destino);
     }
 
