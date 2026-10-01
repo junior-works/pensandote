@@ -4,6 +4,12 @@ const PENDING = 'pensandote:native-fcm:pending';
 const REGISTERED = 'pensandote:native-fcm:registered';
 const TOKEN_PATTERN = /^[A-Za-z0-9:._-]{40,4096}$/;
 
+// El TWA lleva esta marca en su URL de arranque. Los permisos web de Chrome
+// no sustituyen el permiso de notificaciones de la app Android.
+export function esAndroidNativo() {
+    return new URLSearchParams(location.search).get('app') === 'android';
+}
+
 export function capturarTokenNativo() {
     const hash = location.hash || '';
     const [path, query = ''] = hash.slice(1).split('?');

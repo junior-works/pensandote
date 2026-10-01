@@ -48,6 +48,7 @@ import { montarSeccionContactos, montarSeccionAccesos } from './screens-admin.js
 import { etiquetaDesdeAdultoMayor } from './utils/parentesco.js';
 import { renderFotoInteracciones, wireFotoInteracciones } from './foto-interacciones.js';
 import { montarAlertasCuidado, montarTareasCuidado } from './cuidado-familiar.js';
+import { esAndroidNativo } from './native-fcm.js';
 
 // LocalStorage key para marcar pensamientos recibidos como "vistos".
 const LS_LAST_SEEN = (circleId, userId) =>
@@ -1683,6 +1684,14 @@ async function pintarListaAvisos($cont, circleId) {
 
 async function pintarAvisos($cont, { portada = false } = {}) {
     if (!$cont) return;
+    if (esAndroidNativo()) {
+        if (portada) {
+            $cont.closest('#hogar-avisos-inicio')?.setAttribute('hidden', '');
+        } else {
+            $cont.innerHTML = '<p class="muted">Los avisos de Pensándote se administran en los ajustes de notificaciones del teléfono.</p>';
+        }
+        return;
+    }
     const vapid = window.PENSANDOTE_CONFIG?.VAPID_PUBLIC_KEY || '';
     if (!vapid || vapid.startsWith('REEMPLAZAR')) {
         $cont.innerHTML = `

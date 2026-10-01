@@ -33,7 +33,7 @@ const BACKGROUND_COLOR = '#faf5e9';
 // The web manifest's start_url is "./" (no source param), unlike CTP whose web
 // manifest already carries "./?source=pwa". Set the start URL explicitly so the
 // TWA launches with the source marker, resolving to /pensandote/?source=pwa.
-const START_URL = '/pensandote/?source=pwa';
+const START_URL = '/pensandote/?source=pwa&app=android';
 
 // Signing identity (provided).
 const SIGNING_IDENTITY = {
@@ -71,8 +71,8 @@ async function main() {
   twaManifest.themeColor = new Color(THEME_COLOR);
   twaManifest.backgroundColor = new Color(BACKGROUND_COLOR);
   twaManifest.navigationColor = new Color(THEME_COLOR);
-  twaManifest.appVersionCode = 4;
-  twaManifest.appVersionName = '1.0.3';
+  twaManifest.appVersionCode = 5;
+  twaManifest.appVersionName = '1.0.4';
   twaManifest.minSdkVersion = 23;
   twaManifest.signingKey = { path: KEYSTORE_PATH, alias: KEY_ALIAS };
   twaManifest.generatorApp = 'bubblewrap-cli';

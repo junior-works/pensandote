@@ -94,4 +94,55 @@ replaceOnce(path.join(javaDir, 'LauncherActivity.java'),
         return uri;`,
   'TokenFcm.conEsperaCorta');
 
+const launcher = path.join(javaDir, 'LauncherActivity.java');
+replaceOnce(launcher,
+  'import android.content.pm.ActivityInfo;',
+  'import android.Manifest;\nimport android.content.pm.ActivityInfo;\nimport android.content.pm.PackageManager;',
+  'import android.Manifest;');
+replaceOnce(launcher,
+  '    @Override\n    protected void onCreate(Bundle savedInstanceState) {',
+  `    private static final int PERMISO_AVISOS = 104;
+    private boolean twaLanzada = false;
+
+    // Esperar sólo al diálogo de Android. Si la persona no acepta, la app
+    // igualmente abre; nunca dependemos de Firebase para iniciar la TWA.
+    @Override
+    protected boolean shouldLaunchImmediately() {
+        return false;
+    }
+
+    private void lanzarTwaUnaVez() {
+        if (!twaLanzada && !isFinishing()) {
+            twaLanzada = true;
+            launchTwa();
+        }
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == PERMISO_AVISOS) lanzarTwaUnaVez();
+    }
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {`,
+  'private static final int PERMISO_AVISOS');
+replaceOnce(launcher,
+  `            setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED);
+        }
+    }`,
+  `            setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED);
+        }
+        if (Build.VERSION.SDK_INT >= 33 &&
+                checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED &&
+                !getSharedPreferences("pensandote_fcm", MODE_PRIVATE).getBoolean("permiso_pedido", false)) {
+            getSharedPreferences("pensandote_fcm", MODE_PRIVATE).edit()
+                    .putBoolean("permiso_pedido", true).apply();
+            requestPermissions(new String[] { Manifest.permission.POST_NOTIFICATIONS }, PERMISO_AVISOS);
+        } else {
+            lanzarTwaUnaVez();
+        }
+    }`,
+  'requestPermissions(new String[] { Manifest.permission.POST_NOTIFICATIONS }');
+
 console.log('Integración FCM aplicada al proyecto Android generado.');

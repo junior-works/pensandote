@@ -31,6 +31,7 @@ import { montarNubeInicio } from './nube-asistente.js';
 import { tocaOfrecerAvisos, posponerAvisos, olvidarEspera } from './utils/avisos-prompt.js';
 import { ayudaAvisos, probarAvisosGuiados } from './utils/avisos-ayuda.js';
 import { renderFotoInteracciones, wireFotoInteracciones } from './foto-interacciones.js';
+import { esAndroidNativo } from './native-fcm.js';
 
 // =====================================================================
 // INICIO
@@ -271,6 +272,10 @@ async function pintarAvisosSimple($app, { animar = false } = {}) {
         if ($oferta) $oferta.innerHTML = '';
         if ($pin) $pin.innerHTML = '';
     };
+
+    // La app instalada pide el permiso de Android al abrirse. No ofrecer
+    // aquí una segunda activación que sólo habilita los avisos de Chrome.
+    if (esAndroidNativo()) { limpiar(); return; }
 
     const vapid = window.PENSANDOTE_CONFIG?.VAPID_PUBLIC_KEY || '';
     if (!vapid || vapid.startsWith('REEMPLAZAR')) { limpiar(); return; }
