@@ -71,9 +71,9 @@ async function main() {
   twaManifest.themeColor = new Color(THEME_COLOR);
   twaManifest.backgroundColor = new Color(BACKGROUND_COLOR);
   twaManifest.navigationColor = new Color(THEME_COLOR);
-  twaManifest.appVersionCode = 2;
-  twaManifest.appVersionName = '1.0.1';
-  twaManifest.minSdkVersion = 21;
+  twaManifest.appVersionCode = 3;
+  twaManifest.appVersionName = '1.0.2';
+  twaManifest.minSdkVersion = 23;
   twaManifest.signingKey = { path: KEYSTORE_PATH, alias: KEY_ALIAS };
   twaManifest.generatorApp = 'bubblewrap-cli';
   // enableNotifications en true: sin esto el TWA no declara el permiso ni
