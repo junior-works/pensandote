@@ -995,8 +995,15 @@ export function montarNubeInicio($app) {
         $estado,
         labels: {
             hablar: 'Hablar con Nube',
-            terminar: '⏹ TERMINAR',
+            terminar: '⏹ LISTO',
             grabando: 'Te escucho…'
+        },
+        // Terminar de hablar manda la pregunta. Antes el dictado solo
+        // escribia en el cuadro y habia que tocar la flechita: la mama de
+        // Charly hablo, toco TERMINAR, no paso nada y se quedo esperando.
+        // Para quien usa la pantalla simple, dejar de hablar es mandar.
+        onFinalizar: (dicho) => {
+            if (!ocupado && dicho) preguntar(dicho);
         }
     });
 

@@ -45,7 +45,7 @@ const LABELS_DEFAULT = {
 
 const MAX_RESTARTS = 30;
 
-export function crearDictado({ $textarea, $btnMic, $estado, labels = {} }) {
+export function crearDictado({ $textarea, $btnMic, $estado, labels = {}, onFinalizar = null }) {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     const LBL = { ...LABELS_DEFAULT, ...labels };
 
@@ -169,6 +169,19 @@ export function crearDictado({ $textarea, $btnMic, $estado, labels = {} }) {
                 recognizer = null;
                 setMicLabel(LBL.hablar);
                 setEstado('');
+                // El usuario toco "terminar" porque ya dijo lo que queria
+                // decir. Avisamos para que el caller lo mande solo.
+                //
+                // Sin esto el dictado deja el texto escrito y espera un
+                // segundo boton. Un adulto mayor toca "terminar", no pasa
+                // nada visible y abandona: le pedimos un paso que nadie le
+                // explico. Terminar de hablar ES el envio.
+                if (userStopped && !errorGrave && typeof onFinalizar === 'function') {
+                    const dicho = ($textarea?.value || '').trim();
+                    if (dicho) {
+                        try { onFinalizar(dicho); } catch (_) {}
+                    }
+                }
                 return;
             }
 
