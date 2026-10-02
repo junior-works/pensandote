@@ -28,7 +28,11 @@ function json(body: unknown, status = 200): Response {
     });
 }
 
-const TIPOS_ACCION = new Set(["ir_a", "llamar", "mostrar_tutorial", "guia_paso"]);
+const TIPOS_ACCION = new Set(["ir_a", "llamar", "mostrar_tutorial", "guia_paso", "mensaje_familia"]);
+
+// Largo maximo del mensaje que el adulto le manda a su familia. La tabla
+// mensajes_familia corta en 500; acomodamos abajo de eso con margen.
+const MENSAJE_MAX = 400;
 
 const RUTAS_OK = new Set([
     "#/inicio", "#/emergencias", "#/familia",
@@ -98,6 +102,15 @@ SI EL USUARIO PREGUNTA:
 - UN FLUJO MULTI-PASO (ej. "quiero sumar un medico", "quiero subir un estudio", "sumame un contacto") -> OFRECE el modo "anda conmigo" en forma de pregunta ("¿Te guio paso a paso?") + accion {tipo:"guia_paso", destino:"<slug>"}.
   Slugs: "subir-estudio", "agregar-medico", "agregar-contacto".
 
+MENSAJES PARA LA FAMILIA (leelo con cuidado):
+La persona a veces no te pregunta nada: te esta diciendo algo PARA SU FAMILIA. "Avisale a mi hijo que me quede sin la pastilla de la presion", "decile a Charly que manana tengo turno", "contale a mi hija que me senti mal". Eso no es una consulta, es un recado.
+- Cuando sea un recado -> accion {tipo:"mensaje_familia", destino:"<el mensaje, redactado en tercera persona, claro y corto>"} y tu respuesta tiene que ser una PREGUNTA de confirmacion: "¿Querés que le avise a tu familia?".
+- El texto que pongas en "destino" es lo que va a leer la familia. Escribilo vos, prolijo y entendible, sin el "avisale a" adelante. Ejemplo: si dicen "avisale a mi hijo que me quede sin la pastilla de la presion", el destino es "Se quedó sin la pastilla de la presión".
+- No agregues nada que la persona no haya dicho. Nada de interpretar sintomas ni de dramatizar.
+- NO uses esta accion para preguntas: "¿donde estan mis estudios?", "¿que remedio tomo?", "¿como mando una foto?" son consultas y se responden normal, sin avisarle a nadie.
+- Ante la duda, NO mandes mensaje: respondé normal. Es peor avisarle de mas a la familia que de menos.
+- Nunca digas que el mensaje ya fue enviado: recien sale cuando la persona toca el boton de confirmar.
+
 FORMATO DE SALIDA — JSON EXACTO, sin texto fuera del JSON, sin bloques de codigo:
 {
   "respuesta": "tu respuesta breve y calida para leer en voz alta",
@@ -107,7 +120,8 @@ o con accion (ejemplos — fijate que la respuesta SIEMPRE es una pregunta cuand
 { "respuesta": "Tus estudios estan en Salud, dentro de Mis estudios. ¿Te llevo?", "accion": { "tipo": "ir_a", "destino": "#/estudios" } }
 { "respuesta": "Tus estudios estan en Salud. ¿Te llevo y te marco el boton?", "accion": { "tipo": "ir_a", "destino": "#/estudios", "destacar": "estudios-foto" } }
 { "respuesta": "Para eso te tengo un paso a paso. ¿Te guio?", "accion": { "tipo": "guia_paso", "destino": "subir-estudio" } }
-{ "respuesta": "Esa tecla esta arriba del telefono. Apretala una vez para subir el volumen. ¿Querés que te muestre con un video?", "accion": { "tipo": "mostrar_tutorial", "destino": "subir-volumen" } }`;
+{ "respuesta": "Esa tecla esta arriba del telefono. Apretala una vez para subir el volumen. ¿Querés que te muestre con un video?", "accion": { "tipo": "mostrar_tutorial", "destino": "subir-volumen" } }
+{ "respuesta": "¿Querés que le avise a tu familia?", "accion": { "tipo": "mensaje_familia", "destino": "Se quedó sin la pastilla de la presión" } }`;
 
 Deno.serve(async (req: Request) => {
     if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
@@ -201,6 +215,12 @@ Deno.serve(async (req: Request) => {
                 } else if (tipo === "llamar" && /^[\d+()\-\s]{3,20}$/.test(destino)) {
                     accion = { tipo, destino };
                 } else if (tipo === "guia_paso" && SLUGS_GUIA.has(destino)) {
+                    accion = { tipo, destino };
+                } else if (tipo === "mensaje_familia"
+                           && destino.length >= 2 && destino.length <= MENSAJE_MAX) {
+                    // Aca "destino" es el texto del mensaje, no una ruta. El
+                    // cliente lo muestra y pide confirmacion antes de mandarlo:
+                    // nada sale sin que la persona toque el boton.
                     accion = { tipo, destino };
                 }
             }

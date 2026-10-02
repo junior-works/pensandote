@@ -25,7 +25,8 @@ import {
     responderSolicitudCheckin,
     listarPuntas,
     grabarHistoria,
-    marcarPuntaUsada
+    marcarPuntaUsada,
+    mandarMensajeAFamilia
 } from './data-emotiva.js';
 import { TUTORIALES } from './mocks.js';
 import { ejecutarAccion, construirContexto } from './asistente-pensa.js';
@@ -620,13 +621,49 @@ export function montarNubeInicio($app) {
         registrarActividad();
     }
 
+    /**
+     * Manda a la familia lo que la persona acaba de decirle a Nube.
+     *
+     * Sólo se llega acá si tocó "Sí, avisales": nada sale sin que lo
+     * confirme. En preview no se manda nada — el tutor está mirando la
+     * pantalla de su familiar, no hablando por él.
+     */
+    async function mandarRecado(texto) {
+        const $btn = $respuesta.querySelector('#nube-accion-si');
+        if ($btn) { $btn.disabled = true; $btn.textContent = 'Avisando…'; }
+
+        if (state.modo !== 'real' || esPreview()) {
+            decir('En la aplicación de verdad, acá le avisaría a tu familia.', 'happy');
+            setFrame('happy', 'happy');
+            $respuesta.innerHTML = '';
+            return;
+        }
+        try {
+            await mandarMensajeAFamilia({
+                circleId: state.circuloActivoIdReal,
+                texto
+            });
+            ultimaRespuesta = 'Listo, le avisé a tu familia.';
+            decir(ultimaRespuesta, 'happy');
+            setFrame('happy', 'happy');
+        } catch (err) {
+            console.error('[nube-asistente] mensaje a familia', err, err?.detalle);
+            ultimaRespuesta = 'No pude avisarle a tu familia. Probemos de nuevo en un momento.';
+            decir(ultimaRespuesta, 'empathy');
+            setFrame('empathy', 'empathy');
+        } finally {
+            $respuesta.innerHTML = '';
+        }
+    }
+
     function pintarAccion(accion) {
         if (!accion) { $respuesta.innerHTML = ''; return; }
         const etiquetas = {
             ir_a: 'Sí, llevame',
             llamar: 'Sí, llamar',
             mostrar_tutorial: 'Sí, mostrame',
-            guia_paso: 'Sí, guiame'
+            guia_paso: 'Sí, guiame',
+            mensaje_familia: 'Sí, avisales'
         };
         const etiqueta = etiquetas[accion.tipo];
         if (!etiqueta) { $respuesta.innerHTML = ''; return; }
@@ -637,6 +674,10 @@ export function montarNubeInicio($app) {
         $respuesta.querySelector('#nube-accion-si')?.addEventListener('click', async () => {
             if (accion.tipo === 'mostrar_tutorial') {
                 await abrirGuiaTutorial(accion.destino);
+                return;
+            }
+            if (accion.tipo === 'mensaje_familia') {
+                await mandarRecado(accion.destino);
                 return;
             }
             ejecutarAccion(accion);

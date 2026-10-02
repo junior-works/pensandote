@@ -24,6 +24,32 @@ export async function enviarPensamiento({ circleId, paraUserId = null }) {
     return data;
 }
 
+/**
+ * Un recado del adulto mayor para su familia, dicho a Nube.
+ *
+ * Distinto de una consulta: acá entra sólo lo que va dirigido a
+ * alguien ("avisale a mi hijo que me quedé sin la pastilla"). El
+ * trigger de la base le manda el aviso a los tutores; la app no toca
+ * push directamente.
+ *
+ * La RLS exige que quien inserta sea el miembro en modo simple del
+ * círculo y que lo haga en su propio nombre: un tutor no puede
+ * escribir un mensaje haciéndose pasar por el adulto mayor.
+ */
+export async function mandarMensajeAFamilia({ circleId, texto }) {
+    const limpio = String(texto || '').trim().slice(0, 500);
+    if (!limpio) throw new Error('El mensaje está vacío.');
+    const sb = await sbClient();
+    const { data: { user } } = await sb.auth.getUser();
+    const { data, error } = await sb.from('mensajes_familia').insert({
+        circle_id: circleId,
+        autor_id:  user.id,
+        texto:     limpio
+    }).select().single();
+    if (error) throw enriquecer('mensajes_familia', error);
+    return data;
+}
+
 export async function ultimosPensamientos(circleId, limit = 10) {
     const sb = await sbClient();
     const { data, error } = await sb.from('pensamientos')
