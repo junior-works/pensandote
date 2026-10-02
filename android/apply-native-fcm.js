@@ -43,10 +43,35 @@ replaceOnce(appGradle,
 replaceOnce(appGradle, 'minSdkVersion 21', 'minSdkVersion 23', 'minSdkVersion 23');
 
 const manifest = path.join(app, 'src', 'main', 'AndroidManifest.xml');
+
+// Permisos del cuidado en la calle. El servicio en primer plano es la
+// unica forma de que Android deje medir el acelerometro con la app
+// cerrada; el tipo "health" es el que corresponde a deteccion de caidas
+// y hay que declararlo tambien en Play Console.
+replaceOnce(manifest,
+  '        <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>',
+  `        <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+        <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+        <uses-permission android:name="android.permission.FOREGROUND_SERVICE_HEALTH"/>
+        <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>`,
+  'FOREGROUND_SERVICE_HEALTH');
+
 // LauncherActivity queda como la pantalla de arranque, tal cual la genera
 // bubblewrap. Antes metiamos una actividad propia adelante para conseguir el
 // token de Firebase y eso trababa el arranque: la app se quedaba colgada
 // antes de mostrar nada. El token ahora se pide en segundo plano.
+replaceOnce(manifest,
+  '        <service\n            android:name=".DelegationService"',
+  `        <service android:name="GuardianCaidas"
+            android:exported="false"
+            android:foregroundServiceType="health" />
+
+        <receiver android:name="RedVigia" android:exported="false" />
+
+        <service
+            android:name=".DelegationService"`,
+  '<service android:name="GuardianCaidas"');
+
 replaceOnce(manifest,
   '        <service\n            android:name=".DelegationService"',
   `        <service android:name="NativeFirebaseMessagingService" android:exported="false">
@@ -66,7 +91,9 @@ for (const viejo of ['NativeBootstrapActivity.java']) {
   const ruta = path.join(javaDir, viejo);
   if (fs.existsSync(ruta)) fs.unlinkSync(ruta);
 }
-for (const name of ['NativeFirebaseMessagingService.java', 'TokenFcm.java']) {
+for (const name of ['NativeFirebaseMessagingService.java', 'TokenFcm.java',
+                    'DetectorCaida.java', 'GuardianCaidas.java', 'RedVigia.java',
+                    'Guardian.java']) {
   fs.copyFileSync(path.join(root, 'native-fcm', name), path.join(javaDir, name));
 }
 
@@ -78,7 +105,8 @@ replaceOnce(path.join(javaDir, 'Application.java'),
   `  @Override
   public void onCreate() {
       super.onCreate();
-      TokenFcm.pedirEnSegundoPlano(this);`,
+      TokenFcm.pedirEnSegundoPlano(this);
+      RedVigia.vigilar(this);`,
   'TokenFcm.pedirEnSegundoPlano');
 
 replaceOnce(path.join(javaDir, 'LauncherActivity.java'),
