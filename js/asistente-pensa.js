@@ -1,13 +1,18 @@
 /**
- * Pensándote — Asistente virtual flotante (Fase 1).
+ * Pensándote — acceso a Nube desde cualquier pantalla.
  *
- * Botón flotante bottom-right siempre visible (en sesión real con
- * círculo activo). Al tocarlo abre un overlay con:
- *   - 🎤 "Hablar" (toggle, reusa utils/dictado.js)
- *   - textarea para escribir como fallback
- *   - "✨ Preguntar" → llama a la edge function `asistente-pensa`
- *   - respuesta grande + 🔊 "Repetir" + lectura automática (TTS)
- *   - si la IA devuelve una acción, muestra "Sí, llevame" / "No, gracias"
+ * Esto era un segundo asistente: un botón flotante que abría su propio
+ * chat (micrófono, cuadro de texto, "Preguntar") contra la misma edge
+ * function que usa Nube. Dos asistentes con el mismo cerebro, en dos
+ * lugares distintos, para una persona de ochenta años. Se fue.
+ *
+ * Lo que queda es un atajo: la cara de Nube abajo a la derecha que te
+ * lleva a Nube. El asistente es uno solo y vive en el inicio.
+ *
+ * El archivo además exporta lo que Nube usa de verdad —
+ * `ejecutarAccion`, `construirContexto`, las guías paso a paso y el
+ * resaltado de elementos— y el tracking de confusión que ofrece ayuda
+ * sola cuando la persona da vueltas sin encontrar algo.
  *
  * Se oculta automáticamente:
  *   - Si hay otro modal o el lightbox de fotos abierto.
@@ -24,13 +29,7 @@
 
 import { state, onStateChange } from './state.js';
 import { go, goReplace } from './router.js';
-import {
-    h, modal, stopSpeak, speakES,
-    installModalBackButton, cleanupModalBackButton
-} from './ui.js';
-import { crearDictado } from './utils/dictado.js';
-import { esPreview } from './preview.js';
-import { consultarAsistente } from './data-emotiva.js';
+import { h, modal, stopSpeak, speakES } from './ui.js';
 
 let $btn        = null;
 let $overlay    = null;
@@ -55,26 +54,27 @@ function crearBoton() {
     $btn.type = 'button';
     $btn.id = 'pdt-asistente-btn';
     $btn.className = 'pdt-asistente-btn';
-    $btn.setAttribute('aria-label', 'Asistente Pensándote');
-    $btn.innerHTML = '<span class="pdt-asistente-btn__emoji" aria-hidden="true">👵</span>';
-    // Tap: abre overlay (con 280ms de espera para detectar doble-tap).
-    // Doble-tap: repite el último mensaje del asistente con TTS, sin
-    // abrir overlay. La leve latencia del tap es aceptable y permite
-    // que el doble-tap sea una "tecla rápida" de repetición.
-    let lastTap = 0;
-    let tapTimer = null;
+    $btn.setAttribute('aria-label', 'Ir a Nube');
+    $btn.innerHTML = '<img class="pdt-asistente-btn__cara" src="./assets/nube/nube-reposo.png" alt="" aria-hidden="true">';
+    // Este boton era un SEGUNDO asistente: abria su propio chat, con su
+    // propio microfono y su propio cuadro de texto, contra la misma IA
+    // que Nube. Dos asistentes con el mismo cerebro y dos caras es
+    // justo lo que no necesita un adulto mayor.
+    //
+    // Ahora no asiste: lleva a Nube. Un solo asistente, un solo lugar,
+    // alcanzable desde cualquier pantalla.
     $btn.addEventListener('click', () => {
-        const now = Date.now();
-        const since = now - lastTap;
-        lastTap = now;
-        if (since < 320 && ultRespuesta) {
-            if (tapTimer) { clearTimeout(tapTimer); tapTimer = null; }
-            stopSpeak();
-            try { speakES(ultRespuesta); } catch (_) {}
-            return;
-        }
-        if (tapTimer) clearTimeout(tapTimer);
-        tapTimer = setTimeout(() => { tapTimer = null; abrirOverlay(); }, 280);
+        stopSpeak();
+        ocultarTooltipAsistente();
+        go('#/inicio');
+        // Si ya estabamos en inicio, go() no redibuja: enfocamos igual.
+        setTimeout(() => {
+            const $mic = document.getElementById('nube-mic');
+            if ($mic) {
+                $mic.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                try { $mic.focus({ preventScroll: true }); } catch (_) {}
+            }
+        }, 350);
     });
     document.body.appendChild($btn);
 }
@@ -83,163 +83,15 @@ function actualizarVisibilidad() {
     if (!$btn) return;
     const enSesion = state.modo === 'real' && state.usuarioReal && state.circuloActivoIdReal;
     const hash = location.hash || '#/inicio';
-    // En ambos inicios ya hay una acción de Nube a la vista. El botón
-    // flotante tapaba el campo del tutor y duplicaba al asistente del mayor.
-    // En las demás pantallas sigue disponible como ayuda contextual.
+    // En el inicio no tiene sentido: Nube ya está en pantalla, y el botón
+    // encima tapaba el campo del tutor. En las demás pantallas es el
+    // atajo para volver a ella sin buscar el camino.
     const nubeEsPrincipal = ['simple', 'dashboard'].includes(document.body.dataset.mode)
         && /^#\/inicio(?:\?|$)/.test(hash);
     const enOnboarding = /^#\/tutorial\/como-usar-pensandote(\?|$)/.test(hash);
     const hayOverpane = document.querySelector('.modal-overlay, .lightbox-overlay');
     const debeMostrar = enSesion && !nubeEsPrincipal && !enOnboarding && !hayOverpane;
     $btn.style.display = debeMostrar ? '' : 'none';
-}
-
-function abrirOverlay() {
-    if ($overlay) return;
-    $overlay = document.createElement('div');
-    $overlay.className = 'modal-overlay pdt-asistente-overlay';
-    const enPreview = esPreview();
-    $overlay.innerHTML = `
-        <div class="modal pdt-asistente-modal" role="dialog" aria-modal="true" aria-label="Asistente">
-            <button class="modal__close" aria-label="Cerrar" data-cerrar>×</button>
-            ${enPreview ? `
-                <p class="pdt-asistente-preview-banner">
-                    👀 Vista previa de tu familiar — las respuestas son reales (consumen IA)
-                </p>
-            ` : ''}
-            <h2 class="modal__titulo">Hola, ¿en qué te ayudo?</h2>
-            <p class="muted center" id="pdt-asistente-estado" style="min-height:1.2em; margin:0.2rem 0 0.6rem;"></p>
-
-            <button class="btn btn--xl btn--familia btn--full" id="pdt-mic">🎤 Hablar</button>
-
-            <label class="stack" style="margin-top:0.6rem;">
-                <span class="muted">o escribí tu pregunta</span>
-                <textarea id="pdt-texto" class="input-real" rows="2"
-                          placeholder="Por ejemplo: ¿Dónde están mis estudios?"></textarea>
-            </label>
-
-            <button class="btn btn--xl btn--inicio btn--full" id="pdt-preguntar"
-                    style="margin-top:0.4rem;" disabled>
-                ✨ Preguntar
-            </button>
-
-            <div id="pdt-respuesta" style="margin-top:0.8rem;"></div>
-        </div>
-    `;
-    document.body.appendChild($overlay);
-
-    const $texto    = $overlay.querySelector('#pdt-texto');
-    const $mic      = $overlay.querySelector('#pdt-mic');
-    const $estado   = $overlay.querySelector('#pdt-asistente-estado');
-    const $preg     = $overlay.querySelector('#pdt-preguntar');
-    const $resp     = $overlay.querySelector('#pdt-respuesta');
-
-    // Dictado (toggle). Reusa el helper de Hacéme acordar / PAMI / etc.
-    const dictado = crearDictado({ $textarea: $texto, $btnMic: $mic, $estado });
-
-    // Pulso visual mientras está grabando — detectamos el cambio de
-    // texto del mic (crearDictado lo pasa a "⏹ Tocá para terminar").
-    const micObs = new MutationObserver(() => {
-        const grabando = /terminar/i.test($mic.textContent || '');
-        $mic.classList.toggle('is-recording', grabando);
-    });
-    micObs.observe($mic, { childList: true, subtree: true, characterData: true });
-
-    function actualizarPreguntar() { $preg.disabled = !$texto.value.trim(); }
-    $texto.addEventListener('input', actualizarPreguntar);
-    // El recognizer setea .value sin disparar 'input' → polleamos.
-    const poll = setInterval(actualizarPreguntar, 400);
-
-    function cerrar() {
-        if (!$overlay) return;
-        try { dictado.destroy(); } catch (_) {}
-        try { micObs.disconnect(); } catch (_) {}
-        clearInterval(poll);
-        stopSpeak();
-        cleanupModalBackButton($overlay);
-        $overlay.remove();
-        $overlay = null;
-        actualizarVisibilidad();
-    }
-    installModalBackButton($overlay, cerrar);
-    // Exponemos `cerrar` para que ejecutarAccion lo pueda llamar y
-    // aproveche todo el cleanup (dictado, micObs, poll, etc.) en vez de
-    // hacerlo ad-hoc y leakear timers/observers.
-    $overlay.__cerrar = cerrar;
-    $overlay.addEventListener('click', e => { if (e.target === $overlay) cerrar(); });
-    $overlay.querySelector('[data-cerrar]').addEventListener('click', cerrar);
-
-    $preg.addEventListener('click', async () => {
-        const pregunta = $texto.value.trim();
-        if (!pregunta) { $texto.focus(); return; }
-        try { dictado.destroy(); } catch (_) {}
-        stopSpeak();
-        // En preview SÍ ejecutamos la consulta + acciones reales: el
-        // admin necesita poder testear el asistente desde "ver como papá".
-        // El banner arriba ya le avisa que está consumiendo tokens.
-
-        const origLabel = $preg.textContent;
-        $preg.disabled = true; $preg.textContent = '🤔 Pensando…';
-        $resp.innerHTML = `<p class="muted center" style="margin-top:0.8rem;">🤔 Pensando…</p>`;
-
-        try {
-            const r = await consultarAsistente({
-                texto: pregunta,
-                contexto: construirContexto()
-            });
-            ultRespuesta = String(r?.respuesta || '').trim();
-            renderRespuesta(r, $resp);
-            if (ultRespuesta) { try { speakES(ultRespuesta); } catch (_) {} }
-            // Después de responder, limpiamos el textarea para la próxima
-            // pregunta. El botón "Preguntar otra cosa" lo deja claro.
-            $texto.value = '';
-        } catch (err) {
-            console.error('[asistente-pensa]', err, err?.detalle);
-            $resp.innerHTML = `<section class="card stack" style="margin-top:0.6rem;">
-                <p class="tutorial-paso__texto">No te pude responder ahora. Probá de nuevo en un momento.</p>
-            </section>`;
-        } finally {
-            $preg.disabled = !$texto.value.trim();
-            $preg.textContent = origLabel;
-        }
-    });
-
-    actualizarVisibilidad(); // esconde el botón flotante mientras el overlay está abierto
-}
-
-function renderRespuesta(r, $cont) {
-    const acc = r?.accion;
-    $cont.innerHTML = `
-        <section class="card stack pdt-asistente-resp">
-            <p class="tutorial-paso__texto">${h(r?.respuesta || '')}</p>
-            <button class="btn btn--mini" id="pdt-leer">🔊 Repetir</button>
-            ${acc ? renderAccionHTML(acc) : ''}
-        </section>
-    `;
-    $cont.querySelector('#pdt-leer').addEventListener('click', () => {
-        if (ultRespuesta) { stopSpeak(); speakES(ultRespuesta); }
-    });
-    if (acc) {
-        const $si = $cont.querySelector('#pdt-acc-si');
-        const $no = $cont.querySelector('#pdt-acc-no');
-        if ($si) $si.addEventListener('click', () => ejecutarAccion(acc));
-        if ($no) $no.addEventListener('click', () => { /* nada, se queda en la conversación */ });
-    }
-}
-
-function renderAccionHTML(acc) {
-    let label = '';
-    if (acc.tipo === 'ir_a')                  label = '✅ Sí, llevame';
-    else if (acc.tipo === 'llamar')           label = '📞 Sí, llamar';
-    else if (acc.tipo === 'mostrar_tutorial') label = '📖 Sí, mostrame';
-    else if (acc.tipo === 'guia_paso')        label = '🧭 Sí, guiame';
-    else return '';
-    return `
-        <div class="stack" style="margin-top:0.4rem;">
-            <button class="btn btn--xl btn--inicio btn--full" id="pdt-acc-si">${label}</button>
-            <button class="btn btn--mini" id="pdt-acc-no">No, gracias</button>
-        </div>
-    `;
 }
 
 export function ejecutarAccion(acc) {

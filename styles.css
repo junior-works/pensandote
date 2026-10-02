@@ -1505,6 +1505,16 @@ body[data-mode="simple"] .avisos-mini__ayuda { font-size: var(--fs-xs); margin: 
     transform: translate(2px, 2px);
     box-shadow: 1px 1px 0 var(--line);
 }
+/* Antes era un emoji de viejita: el boton abria un segundo asistente.
+   Ahora es la cara de Nube, porque lleva a Nube. */
+.pdt-asistente-btn__cara {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 50%;
+    display: block;
+    pointer-events: none;
+}
 .pdt-asistente-btn__emoji {
     font-size: 1.8rem;
     line-height: 1;
