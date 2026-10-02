@@ -75,7 +75,7 @@ export async function miembrosDelCirculo(circleId) {
     const sb = await sbClient();
     const { data, error } = await sb
         .from('circle_members')
-        .select('id, user_id, interface_mode, parentesco, permission_level, user:users(nombre_completo, foto_url, telefono)')
+        .select('id, user_id, interface_mode, parentesco, permission_level, cuidado_calle, user:users(nombre_completo, foto_url, telefono)')
         .eq('circle_id', circleId);
     if (error) throw error;
     return data || [];

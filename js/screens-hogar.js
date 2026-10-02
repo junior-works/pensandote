@@ -47,7 +47,7 @@ import { entrarPreviewVerComoPapa, limpiarDatosReales } from './preview.js';
 import { montarSeccionContactos, montarSeccionAccesos } from './screens-admin.js';
 import { etiquetaDesdeAdultoMayor } from './utils/parentesco.js';
 import { renderFotoInteracciones, wireFotoInteracciones } from './foto-interacciones.js';
-import { montarAlertasCuidado, montarTareasCuidado } from './cuidado-familiar.js';
+import { montarAlertasCuidado, montarTareasCuidado, montarCuidadoCalle } from './cuidado-familiar.js';
 import { esAndroidNativo } from './native-fcm.js';
 
 // LocalStorage key para marcar pensamientos recibidos como "vistos".
@@ -137,6 +137,7 @@ export async function renderHogar($app) {
         <section class="card stack cuidado-panel" aria-labelledby="cuidado-tareas-titulo">
             <h2 id="cuidado-tareas-titulo">Cuidados entre todos</h2>
             <div id="sec-tareas-cuidado"><p class="muted">Cargando…</p></div>
+            <div id="sec-cuidado-calle"></div>
         </section>
 
         <section class="card stack hogar-ultimo-carino" id="sec-ultimo-carino" hidden></section>
@@ -198,6 +199,7 @@ export async function renderHogar($app) {
     cargarCheckinsDelDia(c, $app.querySelector('#sec-checkin-estado'));
     montarAlertasCuidado($app.querySelector('#sec-alertas-cuidado'), c.id, _miembrosCache || [], u.id);
     montarTareasCuidado($app.querySelector('#sec-tareas-cuidado'), c.id, _miembrosCache || [], u.id);
+    montarCuidadoCalle($app.querySelector('#sec-cuidado-calle'), c.id, _miembrosCache || [], u.id);
     cargarUltimoCarino(c, u, $app.querySelector('#sec-ultimo-carino'));
 
     cargarProximasCosas(c, $app.querySelector('#sec-proximas'));

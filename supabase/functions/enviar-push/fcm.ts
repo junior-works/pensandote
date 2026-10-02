@@ -53,7 +53,7 @@ async function accessToken(account: ServiceAccount): Promise<string> {
 
 export async function sendNativeFcm(
     token: string,
-    data: { title: string; body: string; url: string; circle_id: string; tag: string; tipo?: string },
+    data: { title: string; body: string; url: string; circle_id: string; tag: string; tipo?: string } & Record<string, string | undefined>,
 ): Promise<{ ok: boolean; unregistered?: boolean; error?: string }> {
     const secret = Deno.env.get("FIREBASE_SERVICE_ACCOUNT_JSON");
     if (!secret) return { ok: false, error: "FIREBASE_SERVICE_ACCOUNT_JSON no configurado" };

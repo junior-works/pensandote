@@ -25,6 +25,7 @@ import {
     esPreview, avisarPreview
 } from './preview.js';
 import { dispararPanico } from './utils/panico.js';
+import { fijarCuidadoCalle, cuidadoCalleDe } from './data-cuidado.js';
 import { crearDictado } from './utils/dictado.js';
 import { iconoContacto } from './utils/genero.js';
 import { montarNubeInicio } from './nube-asistente.js';
@@ -858,8 +859,11 @@ export function renderEmergencias($app) {
                 <small>Avisar a tu familia</small>
             </button>
         </div>
+
+        <div id="sec-cuidado-calle-simple"></div>
     `;
     wireNav($app);
+    montarCuidadoCalleSimple($app.querySelector('#sec-cuidado-calle-simple'));
 
     document.getElementById('btn-panico').addEventListener('click', async () => {
         if (esPreview()) {
@@ -1467,4 +1471,70 @@ export function mostrarPuntoGrabacion() {
 
 export function ocultarPuntoGrabacion() {
     document.getElementById(BIO_PUNTO_ID)?.remove();
+}
+
+// ---------------------------------------------------------------------
+// Cuidado en la calle, del lado de ella
+// ---------------------------------------------------------------------
+// Esto no es una pantalla de configuracion. Es el aviso de que el
+// telefono esta atento, y el boton para que lo pueda apagar.
+//
+// La familia lo prende desde su panel. Si la persona no puede apagarlo
+// desde su propio telefono, esto deja de ser cuidarla y pasa a ser
+// vigilarla. Por eso el boton esta aca, grande, y no escondido.
+//
+// Si esta apagado no se muestra nada: no hay por que ofrecerle prender
+// algo que no entiende para que sirve. Esa conversacion la tiene con su
+// familia, no con una pantalla.
+async function montarCuidadoCalleSimple($cont) {
+    if (!$cont || esPreview()) return;
+    const circleId = state.circuloActivoIdReal;
+    const userId   = state.usuarioReal?.id;
+    if (!circleId || !userId) return;
+
+    let prendido = false;
+    try { prendido = await cuidadoCalleDe(circleId, userId); }
+    catch (err) { console.warn('[cuidado calle simple]', err); return; }
+    if (!prendido) return;
+
+    $cont.innerHTML = `
+        <div class="card stack" style="margin-top:1rem;">
+            <p class="simple-instruccion" style="margin:0;">
+                🚶 Cuando salís de casa, el teléfono queda atento por si te caés,
+                y le avisa a tu familia.
+            </p>
+            <button class="btn btn--xl btn--full" id="btn-cuidado-apagar">
+                <span class="btn__big">Apagar</span>
+                <small>Lo podés volver a prender cuando quieras</small>
+            </button>
+            <p id="cuidado-apagar-estado" class="simple-instruccion" aria-live="polite" style="margin:0;"></p>
+        </div>
+    `;
+
+    const $btn = $cont.querySelector('#btn-cuidado-apagar');
+    const $est = $cont.querySelector('#cuidado-apagar-estado');
+    $btn.addEventListener('click', async () => {
+        const ok = await modal({
+            titulo: 'Apagar el cuidado en la calle',
+            cuerpo: `<p>Si lo apagás, el teléfono ya no va a avisar si te caés
+                     cuando estés afuera. ¿Lo apagamos?</p>`,
+            acciones: [
+                { label: 'No, dejalo prendido' },
+                { label: 'Sí, apagalo', clase: 'btn--danger', value: 'ok' }
+            ]
+        });
+        if (ok !== 'ok') return;
+        $btn.disabled = true;
+        $est.textContent = 'Apagando…';
+        try {
+            await fijarCuidadoCalle(circleId, userId, false);
+            $cont.innerHTML = `<p class="simple-instruccion" style="margin-top:1rem;">
+                ✅ Listo, lo apagamos. Si querés volver a prenderlo, decíselo a tu familia.
+            </p>`;
+        } catch (err) {
+            console.error('[cuidado calle simple]', err);
+            $btn.disabled = false;
+            $est.textContent = 'No pude apagarlo. Probá de nuevo en un momento.';
+        }
+    });
 }

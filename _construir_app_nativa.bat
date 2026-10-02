@@ -38,6 +38,10 @@ findstr /i "POST_NOTIFICATIONS" android\app\src\main\AndroidManifest.xml >> "%LO
 findstr /i "NativeFirebaseMessagingService" android\app\src\main\AndroidManifest.xml >> "%LOG%" 2>&1
 findstr /i "pedirEnSegundoPlano" android\app\src\main\java\com\juniorworks\pensandote\Application.java >> "%LOG%" 2>&1
 findstr /i "conEsperaCorta" android\app\src\main\java\com\juniorworks\pensandote\LauncherActivity.java >> "%LOG%" 2>&1
+findstr /i "tomarCandidatos" android\app\src\main\java\com\juniorworks\pensandote\LauncherActivity.java >> "%LOG%" 2>&1
+findstr /i "GuardianCaidas" android\app\src\main\AndroidManifest.xml >> "%LOG%" 2>&1
+findstr /i "FOREGROUND_SERVICE_HEALTH" android\app\src\main\AndroidManifest.xml >> "%LOG%" 2>&1
+findstr /i "config_cuidado" android\app\src\main\java\com\juniorworks\pensandote\NativeFirebaseMessagingService.java >> "%LOG%" 2>&1
 findstr /i "LAUNCHER" android\app\src\main\AndroidManifest.xml >> "%LOG%" 2>&1
 
 echo.

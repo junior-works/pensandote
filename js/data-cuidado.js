@@ -107,3 +107,39 @@ export async function cambiarTareaCuidado(circleId, id, patch) {
     if (error) throw error;
     if (!data?.length) throw new Error('No se pudo actualizar la tarea.');
 }
+
+/**
+ * Prende o apaga el cuidado en la calle de un miembro.
+ *
+ * Va por una funcion de la base y no por UPDATE a circle_members: la
+ * unica politica de escritura de esa tabla es para admins, y abrirla
+ * para que cada uno edite su propia fila dejaria que cualquiera se
+ * cambie su propio permission_level (RLS no puede comparar la fila
+ * vieja con la nueva). La funcion toca una sola columna.
+ *
+ * Al cambiar, un trigger le manda al telefono de esa persona un mensaje
+ * de configuracion que prende o apaga el servicio nativo. La pantalla no
+ * puede hablarle al cascaron de la app directamente: eso es lo que hace
+ * segura a una TWA.
+ */
+export async function fijarCuidadoCalle(circleId, userId, activo) {
+    const sb = await sbClient();
+    const { data, error } = await sb.rpc('fijar_cuidado_calle', {
+        p_circle_id: circleId,
+        p_user_id:   userId,
+        p_activo:    !!activo
+    });
+    if (error) throw error;
+    return data === true;
+}
+
+/** Si el cuidado en la calle esta prendido para `userId` en el circulo. */
+export async function cuidadoCalleDe(circleId, userId) {
+    const sb = await sbClient();
+    const { data, error } = await sb.from('circle_members')
+        .select('cuidado_calle')
+        .eq('circle_id', circleId).eq('user_id', userId)
+        .maybeSingle();
+    if (error) throw error;
+    return data?.cuidado_calle === true;
+}

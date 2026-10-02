@@ -4,7 +4,8 @@ import { pedirTexto } from './screens-real.js';
 import { listarMedicamentos } from './data-emotiva.js';
 import {
     listarAlertasCuidado, tomarAlerta, cerrarAlerta,
-    listarTareasCuidado, crearTareaCuidado, cambiarTareaCuidado
+    listarTareasCuidado, crearTareaCuidado, cambiarTareaCuidado,
+    fijarCuidadoCalle
 } from './data-cuidado.js';
 
 const FECHA_AR = { dateStyle: 'medium', timeStyle: 'short', timeZone: 'America/Argentina/Buenos_Aires' };
@@ -197,4 +198,90 @@ export async function montarTareasCuidado($cont, circleId, miembros, yoId) {
         }
     };
     await cargar();
+}
+
+// ---------------------------------------------------------------------
+// Cuidado en la calle
+// ---------------------------------------------------------------------
+// El telefono escucha el acelerometro para darse cuenta de una caida.
+// Solo mientras la persona esta afuera: cuando vuelve a casa y agarra el
+// WiFi, el servicio se apaga solo. Esa fue la idea de Charly y es la que
+// hace que esto no se coma la bateria.
+//
+// El interruptor vive aca, en el panel del tutor, pero la persona
+// tambien lo puede apagar desde su propia pantalla. Eso no es un detalle
+// de cortesia: un telefono que avisa donde esta alguien es una cosa
+// seria, y la diferencia entre cuidar y vigilar es que la persona lo
+// sepa y pueda decidir.
+
+export async function montarCuidadoCalle($cont, circleId, miembros, _yoId) {
+    if (!$cont) return;
+
+    // Solo tiene sentido para quien usa la app en modo simple: es su
+    // telefono el que va en el bolsillo.
+    const mayores = (miembros || []).filter(m => m.interface_mode === 'simple');
+    if (!mayores.length) { $cont.innerHTML = ''; return; }
+
+    const pintar = () => {
+        $cont.innerHTML = `
+            <section class="card stack">
+                <h2>🚶 Cuidado en la calle</h2>
+                <p class="muted">
+                    Con esto prendido, el teléfono se da cuenta si hay una caída
+                    cuando ${mayores.length === 1 ? 'está' : 'están'} afuera de casa y nos avisa.
+                    En casa, con el WiFi, se apaga solo para no gastar batería.
+                </p>
+                <ul class="accesos-admin-lista">
+                    ${mayores.map(m => `
+                        <li class="acceso-admin-row">
+                            <span class="acceso-admin-row__emoji">${m.cuidado_calle ? '🟢' : '⚪'}</span>
+                            <div class="acceso-admin-row__info">
+                                <strong>${h(nombreDe(miembros, m.user_id))}</strong>
+                                <small>${m.cuidado_calle
+                                    ? 'Prendido. Se activa sola cuando sale de casa.'
+                                    : 'Apagado.'}</small>
+                            </div>
+                            <div class="acceso-admin-row__acc">
+                                <button class="btn btn--mini ${m.cuidado_calle ? 'btn--danger' : 'btn--inicio'}"
+                                        data-cuidado="${h(m.user_id)}">
+                                    ${m.cuidado_calle ? 'Apagar' : 'Prender'}
+                                </button>
+                            </div>
+                        </li>
+                    `).join('')}
+                </ul>
+                <p class="muted" style="font-size:0.85rem;">
+                    Decile que lo prendiste. Ella también lo puede apagar desde su
+                    pantalla cuando quiera, sin pedirte permiso.
+                </p>
+                <p data-cuidado-estado class="muted" aria-live="polite"></p>
+            </section>
+        `;
+
+        $cont.querySelectorAll('[data-cuidado]').forEach($b => {
+            $b.addEventListener('click', async () => {
+                const userId = $b.dataset.cuidado;
+                const m = mayores.find(x => x.user_id === userId);
+                if (!m) return;
+                const $est = $cont.querySelector('[data-cuidado-estado]');
+                $b.disabled = true;
+                $est.textContent = 'Avisándole al teléfono…';
+                try {
+                    await fijarCuidadoCalle(circleId, userId, !m.cuidado_calle);
+                    m.cuidado_calle = !m.cuidado_calle;
+                    pintar();
+                    $cont.querySelector('[data-cuidado-estado]').textContent =
+                        m.cuidado_calle
+                            ? '✅ Prendido. El teléfono lo va a tomar en cuanto tenga señal.'
+                            : '✅ Apagado.';
+                } catch (err) {
+                    console.error('[cuidado calle]', err);
+                    $b.disabled = false;
+                    $est.textContent = 'No pude cambiarlo. Probá de nuevo en un momento.';
+                }
+            });
+        });
+    };
+
+    pintar();
 }

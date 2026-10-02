@@ -20,6 +20,7 @@ import { montarInstall } from './js/install-prompt.js';
 
 import { configEsReal, usuarioActual, procesarCallback } from './js/auth.js';
 import { capturarTokenNativo, registrarTokenNativo } from './js/native-fcm.js';
+import { capturarCaidasNativas, subirCaidasNativas } from './js/utils/caidas-nativas.js';
 import { sbClient } from './js/auth.js';
 import { circulosDelUsuario, membresiaActiva } from './js/circles.js';
 
@@ -448,6 +449,7 @@ function renderRouteReal(ruta) {
 // ---------------------------------------------------------------------
 async function bootstrap() {
     capturarTokenNativo();
+    capturarCaidasNativas();
     // El panel de dev y los botones "Ver maqueta demo" sólo aparecen en
     // localhost. En producción (Pages, dominio) la app va directo al modo
     // real sin opciones de demo para no confundir al usuario.
@@ -569,6 +571,15 @@ async function bootstrap() {
                 // (los accessors de preview.js los devuelven).
                 if (membresia?.interface_mode === 'simple' && circuloActivoId) {
                     await prepararDatosReales(circuloActivoId, usr.id);
+                }
+
+                // Lo que el servicio de cuidado midio con la app cerrada.
+                // No demora la pantalla: si falla, queda en el telefono
+                // para el proximo arranque.
+                if (circuloActivoId) {
+                    subirCaidasNativas(circuloActivoId, usr.id)
+                        .then(n => { if (n) console.info('[caidas] subidas:', n); })
+                        .catch(err => console.warn('[caidas]', err));
                 }
             } catch (err) {
                 console.error('[bootstrap circles]', err);

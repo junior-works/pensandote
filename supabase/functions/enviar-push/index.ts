@@ -134,6 +134,21 @@ Deno.serve(async (req) => {
         const userId        = typeof cuerpo?.user_id === "string" ? cuerpo.user_id.trim() : "";
         const excludeUserId = typeof cuerpo?.exclude_user_id === "string" ? cuerpo.exclude_user_id.trim() : "";
         const tipo          = typeof cuerpo?.tipo === "string" ? cuerpo.tipo.trim() : "";
+        // `datos` viaja plano dentro del mensaje FCM, con todo en texto
+        // porque FCM no acepta otra cosa. Lo lee el cascaron de Android,
+        // no la notificacion. Entra despues de los campos base para que
+        // pueda fijar `tipo`.
+        const datos: Record<string, string> = {};
+        if (cuerpo?.datos && typeof cuerpo.datos === "object" && !Array.isArray(cuerpo.datos)) {
+            for (const [k, v] of Object.entries(cuerpo.datos)) {
+                if (v === null || v === undefined) continue;
+                datos[k] = typeof v === "string" ? v : JSON.stringify(v);
+            }
+        }
+        // Un mensaje de configuracion es para la app instalada. Mandarlo
+        // tambien por web push solo produce una notificacion en blanco en
+        // la pestaña de la persona.
+        const soloNativo = cuerpo?.solo_nativo === true;
 
         if (!circle_id) return json({ error: "circle_id_requerido" }, 400);
 
@@ -216,12 +231,12 @@ Deno.serve(async (req) => {
         }
 
         // --- Envio ---------------------------------------------------
-        const payload = JSON.stringify({ title, body: text, url, tag, circle_id, ...(tipo ? { tipo } : {}) });
+        const payload = JSON.stringify({ title, body: text, url, tag, circle_id, ...(tipo ? { tipo } : {}), ...datos });
         let sent = 0, failed = 0;
         const toDelete: string[] = [];
         const errores: string[] = [];
 
-        await Promise.all((subs || []).map(async (s: any) => {
+        await Promise.all((soloNativo ? [] : (subs || [])).map(async (s: any) => {
             try {
                 await webpush.sendNotification({
                     endpoint: s.endpoint,
@@ -267,7 +282,7 @@ Deno.serve(async (req) => {
         await Promise.all((nativeTokens || []).map(async (device: any) => {
             try {
                 const result = await sendNativeFcm(device.token, {
-                    title, body: text, url, tag, circle_id, ...(tipo ? { tipo } : {}),
+                    title, body: text, url, tag, circle_id, ...(tipo ? { tipo } : {}), ...datos,
                 });
                 if (result.ok) nativeSent++;
                 else {

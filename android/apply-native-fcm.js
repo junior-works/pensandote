@@ -115,12 +115,29 @@ replaceOnce(path.join(javaDir, 'LauncherActivity.java'),
         if (destino != null && destino.startsWith("#/")) {
             return Uri.parse(uri.toString().split("#")[0] + destino);
         }
-        String token = TokenFcm.conEsperaCorta(this);
-        if (token != null && !token.isEmpty() && uri.getFragment() == null) {
-            return Uri.parse(uri.toString() + "#/inicio?native_fcm=" + Uri.encode(token));
+        if (uri.getFragment() == null) {
+            StringBuilder datos = new StringBuilder();
+
+            String token = TokenFcm.conEsperaCorta(this);
+            if (token != null && !token.isEmpty()) {
+                datos.append("native_fcm=").append(Uri.encode(token));
+            }
+
+            // Lo que junto el servicio mientras la app estaba cerrada.
+            // El lado nativo nunca habla con la base: deja los candidatos
+            // en el telefono y los entrega aca, igual que el token.
+            String caidas = Guardian.tomarCandidatos(this);
+            if (caidas != null) {
+                if (datos.length() > 0) datos.append("&");
+                datos.append("caidas=").append(Uri.encode(caidas));
+            }
+
+            if (datos.length() > 0) {
+                return Uri.parse(uri.toString() + "#/inicio?" + datos.toString());
+            }
         }
         return uri;`,
-  'TokenFcm.conEsperaCorta');
+  'Guardian.tomarCandidatos');
 
 const launcher = path.join(javaDir, 'LauncherActivity.java');
 replaceOnce(launcher,

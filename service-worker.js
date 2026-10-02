@@ -18,7 +18,7 @@
  * correcto en ambos entornos.
  */
 
-const CACHE_NAME = 'pensandote-shell-v0.10.50-panico-directo';
+const CACHE_NAME = 'pensandote-shell-v0.10.51-cuidado-calle';
 const PUSH_DIAG_DB = 'pensandote-push-diagnostico';
 const PUSH_DIAG_VERSION = '2';
 
@@ -80,6 +80,7 @@ const SHELL_FILES = [
     './js/native-fcm.js',
     './js/utils/genero.js',
     './js/utils/panico.js',
+    './js/utils/caidas-nativas.js',
     './js/utils/parentesco.js',
     './js/foto-interacciones.js',
     './assets/nube/nube-sprites-v1.png',
@@ -281,6 +282,13 @@ self.addEventListener('push', (event) => {
     catch (_) {
         try { data = { body: event.data?.text() || '' }; } catch (__) {}
     }
+    // Mensaje de configuracion del cascaron de Android (el guardian de
+    // caidas). No es una notificacion: no tiene nada que mostrar y no se
+    // puede aplicar desde la web. El servidor ya lo manda con
+    // solo_nativo, asi que aca no deberia llegar nunca; esto es por si
+    // queda una fila vieja en la cola.
+    if (data.tipo === 'config_cuidado') return;
+
     // Señal de grabación de biografía (Etapa 3): NO es una notificación
     // ruidosa. Si el papá tiene la app abierta y visible, le posteamos al
     // cliente para que muestre el puntito discreto y NO mostramos pop-up.

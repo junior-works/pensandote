@@ -25,6 +25,33 @@ public class NativeFirebaseMessagingService extends FirebaseMessagingService {
     @Override
     public void onMessageReceived(RemoteMessage message) {
         Map<String, String> data = message.getData();
+
+        // Canal de ida del servidor al cascaron.
+        //
+        // El interruptor del cuidado en la calle lo toca la persona en la
+        // pantalla, que es web. Pero el servicio es nativo y un TWA no
+        // deja que la pagina le hable al cascaron: justamente eso es lo
+        // que lo hace seguro. En vez de abrir un agujero para eso,
+        // usamos el canal que ya existe y ya esta autenticado: el push.
+        //
+        // Este mensaje no muestra ninguna notificacion. Solo prende o
+        // apaga el guardian y arranca o frena el servicio segun donde
+        // este la persona en este momento.
+        if ("config_cuidado".equals(data.get("tipo"))) {
+            final boolean activo = "1".equals(data.get("activo"))
+                                || "true".equalsIgnoreCase(String.valueOf(data.get("activo")));
+            Guardian.prender(this, activo);
+            Intent svc = new Intent(this, GuardianCaidas.class);
+            if (activo && !RedVigia.hayWifi(this)) {
+                try {
+                    if (Build.VERSION.SDK_INT >= 26) startForegroundService(svc);
+                    else                             startService(svc);
+                } catch (Throwable ignored) {}
+            } else if (!activo) {
+                try { stopService(svc); } catch (Throwable ignored) {}
+            }
+            return;
+        }
         String title = data.getOrDefault("title", "Pensándote");
         String body = data.getOrDefault("body", "Tenés un aviso de tu familia.");
         // Al tocar el aviso abrimos el TWA directo, que es la app.

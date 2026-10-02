@@ -71,8 +71,8 @@ async function main() {
   twaManifest.themeColor = new Color(THEME_COLOR);
   twaManifest.backgroundColor = new Color(BACKGROUND_COLOR);
   twaManifest.navigationColor = new Color(THEME_COLOR);
-  twaManifest.appVersionCode = 5;
-  twaManifest.appVersionName = '1.0.4';
+  twaManifest.appVersionCode = 6;
+  twaManifest.appVersionName = '1.0.5';
   twaManifest.minSdkVersion = 23;
   twaManifest.signingKey = { path: KEYSTORE_PATH, alias: KEY_ALIAS };
   twaManifest.generatorApp = 'bubblewrap-cli';
