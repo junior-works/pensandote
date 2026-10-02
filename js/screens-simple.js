@@ -864,53 +864,70 @@ export function renderEmergencias($app) {
     document.getElementById('btn-panico').addEventListener('click', async () => {
         if (esPreview()) {
             await avisarPreview('👀 Vista previa — botón de pánico',
-                'En la app real este botón abre WhatsApp para avisar al familiar de emergencia con tu ubicación. Acá no se ejecuta porque es vista previa.');
+                'En la app real este botón le manda un aviso a todo el círculo con la ubicación, al instante y sin confirmar nada, y además abre WhatsApp para el contacto de emergencia. Acá no se ejecuta porque es vista previa.');
             return;
         }
-        // Aviso real = SOLO WhatsApp. ntfy quedó descartado: nadie de la
-        // familia se va a instalar la app ntfy ni suscribirse a un topic.
-        // WhatsApp lo tienen todos.
+        // El aviso de verdad sale por push a TODO el círculo, con la
+        // ubicación, sin que ella tenga que confirmar nada. WhatsApp va
+        // además, al contacto primario, como segundo canal.
         //
-        // El módulo panico.js pide geo (timeout 5s, sigue sin coords si
-        // el usuario no la concede) y abre wa.me con un mensaje
-        // pre-armado tipo "🆘 [Nombre] tocó el botón…".
+        // Antes esto dependía de que la persona tocara "Enviar" dentro
+        // de WhatsApp. Si se cayó en la calle, ese toque no sucede.
         const telsFijos2 = new Set(EMERGENCIAS_FIJAS.map(f => f.telefono));
         const familiar = (getContactos() || [])
             .filter(c => c.es_emergencia && c.telefono)
             .find(c => !telsFijos2.has(String(c.telefono || '').trim()));
         const telefonoEmergencia = familiar?.telefono || null;
 
-        if (!telefonoEmergencia) {
-            await modal({
-                titulo: 'No puedo avisar todavía',
-                cuerpo: `<p>Tu familia todavía no cargó un contacto de emergencia.
-                          <strong>Llamá vos directo al 911</strong> si te sentís mal.</p>`,
-                acciones: [{ label: 'Entendido', clase: 'btn--inicio btn--xl btn--full', value: 'ok' }]
-            });
-            return;
-        }
-
         const nombre = getMiembroVisto()?.nombre_corto
                     || getMiembroVisto()?.nombre_completo
                     || null;
+
         try {
-            await dispararPanico({ telefonoEmergencia, nombre });
-            // dispararPanico abre WhatsApp en una pestaña nueva — el
-            // usuario tiene que tocar "Enviar" para que llegue. Le
-            // damos un cierre claro con la instrucción.
-            await modal({
-                titulo: '📲 Abrí WhatsApp para tu familiar',
-                cuerpo: `<p>Te abrí WhatsApp con el mensaje listo. <strong>Tocá el botón
-                          verde de enviar</strong> para que le llegue ahora.</p>
-                         <p class="muted">Si por algún motivo no se abrió, llamá directo al 911.</p>`,
-                acciones: [{ label: 'Listo', clase: 'btn--inicio btn--xl btn--full', value: 'ok' }],
-                tono: 'ok'
+            const r = await dispararPanico({
+                circleId: state.circuloActivoIdReal,
+                telefonoEmergencia,
+                nombre
             });
+
+            // El cartel dice lo que realmente pasó. No le prometemos a
+            // una persona asustada algo que no ocurrió.
+            if (r.avisoEnviado) {
+                const dondeEsta = r.conUbicacion
+                    ? 'Saben dónde estás.'
+                    : 'No pude mandar tu ubicación, así que contales dónde estás si podés.';
+                await modal({
+                    titulo: '✅ Ya le avisé a tu familia',
+                    cuerpo: `<p>Les llegó el aviso al teléfono. ${dondeEsta}</p>
+                             ${r.whatsappAbierto ? `<p>Además te abrí WhatsApp: si podés,
+                               <strong>tocá el botón verde</strong> para avisarle también por ahí.</p>` : ''}
+                             <p class="muted">Si te sentís mal, llamá al 911.</p>`,
+                    acciones: [{ label: 'Listo', clase: 'btn--inicio btn--xl btn--full', value: 'ok' }],
+                    tono: 'ok'
+                });
+            } else if (r.whatsappAbierto) {
+                await modal({
+                    titulo: '📲 Abrí WhatsApp para tu familiar',
+                    cuerpo: `<p>No pude mandar el aviso por la aplicación, pero te abrí WhatsApp
+                              con el mensaje listo. <strong>Tocá el botón verde de enviar</strong>
+                              para que le llegue.</p>
+                             <p class="muted">Si te sentís mal, llamá directo al 911.</p>`,
+                    acciones: [{ label: 'Listo', clase: 'btn--inicio btn--xl btn--full', value: 'ok' }],
+                    tono: 'ok'
+                });
+            } else {
+                await modal({
+                    titulo: 'No pude avisarle a tu familia',
+                    cuerpo: `<p>No salió el aviso. <strong>Llamá vos directo al 911</strong>
+                              si te sentís mal, o llamá a alguien de tu familia.</p>`,
+                    acciones: [{ label: 'Entendido', clase: 'btn--inicio btn--xl btn--full', value: 'ok' }]
+                });
+            }
         } catch (err) {
             console.error('[panico]', err);
             await modal({
-                titulo: 'No pude abrir el aviso',
-                cuerpo: `<p>Algo falló abriendo WhatsApp. <strong>Llamá vos directo al 911</strong>
+                titulo: 'No pude avisarle a tu familia',
+                cuerpo: `<p>Algo falló. <strong>Llamá vos directo al 911</strong>
                          si te sentís mal.</p><pre>${h(err?.message || err)}</pre>`,
                 acciones: [{ label: 'OK', clase: 'btn--inicio btn--xl btn--full', value: 'ok' }]
             });

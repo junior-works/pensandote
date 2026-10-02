@@ -1,46 +1,96 @@
 /**
  * Pensándote — botón pánico.
  *
- * Flujo:
- *   1) Pedir geolocalización (timeout corto, seguir sin coords si no
- *      hay permiso — el aviso igual sale).
- *   2) Abrir WhatsApp del contacto de emergencia primario con un
- *      mensaje pre-armado tipo "🆘 [Nombre] tocó el botón…" + link de
- *      Google Maps.
+ * POR QUÉ CAMBIÓ
  *
- * NO usamos ntfy.sh: la familia no va a instalar la app ntfy ni
- * suscribirse a un topic — fricción que no hacen. WhatsApp lo tienen
- * todos. La columna `circles.ntfy_topic` queda en la DB pero no se usa.
+ * Antes esto sólo abría WhatsApp con el mensaje escrito y se detenía
+ * ahí: la persona todavía tenía que encontrar el botón verde y
+ * tocarlo. Un paso más, en otra app, en el peor momento posible. Si se
+ * cayó en la calle y está en el piso, ese paso no sucede, y entonces
+ * no se entera nadie.
+ *
+ * Ahora el aviso sale SOLO, por la misma cañería que ya usamos para
+ * todo lo demás: se escribe una fila en alertas_panico y el trigger de
+ * la base le manda el aviso push a TODO el círculo, con el link de
+ * dónde está. Eso llega al teléfono de la familia con la app cerrada,
+ * sin que ella toque nada más.
+ *
+ * WhatsApp quedó, pero como complemento: suma el contacto primario por
+ * un segundo canal. Si no lo manda, el aviso ya salió igual.
+ *
+ * El orden importa y es a propósito: primero el aviso, después
+ * WhatsApp. Si algo falla, que falle lo accesorio.
  */
 
-export async function dispararPanico({ telefonoEmergencia, nombre = null }) {
-    if (!telefonoEmergencia) {
-        // Caller debería validar antes y mostrar UI honesta, pero
-        // damos un error claro por si no.
-        throw new Error('sin teléfono de emergencia configurado');
-    }
+import { sbClient } from '../auth.js';
 
-    let mapsUrl = '';
+/** La ubicación, o null. Nunca bloquea más de 5 segundos. */
+async function ubicacionAhora() {
     try {
         const pos = await new Promise((res, rej) => {
             navigator.geolocation.getCurrentPosition(res, rej,
                 { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 });
         });
-        const { latitude, longitude } = pos.coords;
-        mapsUrl = `https://maps.google.com/?q=${latitude},${longitude}`;
+        const { latitude, longitude, accuracy } = pos.coords;
+        return {
+            lat: latitude,
+            lng: longitude,
+            precision_m: accuracy ?? null,
+            maps_url: `https://maps.google.com/?q=${latitude},${longitude}`
+        };
     } catch {
-        // sin permisos / timeout: seguimos, el mensaje lo aclara
+        return null;   // sin permiso o sin señal: el aviso sale igual
+    }
+}
+
+/**
+ * Dispara la alerta. Devuelve qué pudo hacer, para que la pantalla le
+ * diga la verdad a la persona en vez de prometerle algo que no pasó.
+ *
+ * @returns {{avisoEnviado: boolean, conUbicacion: boolean, whatsappAbierto: boolean}}
+ */
+export async function dispararPanico({ circleId, telefonoEmergencia, nombre = null }) {
+    const ubi = await ubicacionAhora();
+    const resultado = { avisoEnviado: false, conUbicacion: !!ubi, whatsappAbierto: false };
+
+    // 1) El aviso al círculo. Esto es lo que tiene que salir sí o sí.
+    if (circleId) {
+        try {
+            const sb = await sbClient();
+            const { data: { user } } = await sb.auth.getUser();
+            const { error } = await sb.from('alertas_panico').insert({
+                circle_id:   circleId,
+                autor_id:    user.id,
+                lat:         ubi?.lat ?? null,
+                lng:         ubi?.lng ?? null,
+                precision_m: ubi?.precision_m ?? null,
+                maps_url:    ubi?.maps_url ?? null
+            });
+            if (error) throw error;
+            resultado.avisoEnviado = true;
+        } catch (err) {
+            console.error('[panico] no pude registrar la alerta', err);
+        }
     }
 
-    const quien = (nombre || '').trim() || 'Tu familiar';
-    const partes = [
-        `🆘 ${quien} tocó el botón de ayuda en Pensándote.`,
-        'Puede necesitar asistencia.'
-    ];
-    if (mapsUrl) partes.push(`Ubicación: ${mapsUrl}`);
-    else         partes.push('Ubicación: no la pude obtener (sin permiso de GPS).');
+    // 2) WhatsApp al contacto primario, como refuerzo.
+    if (telefonoEmergencia) {
+        const quien  = (nombre || '').trim() || 'Tu familiar';
+        const partes = [
+            `🆘 ${quien} tocó el botón de ayuda en Pensándote.`,
+            'Puede necesitar asistencia.'
+        ];
+        partes.push(ubi
+            ? `Ubicación: ${ubi.maps_url}`
+            : 'Ubicación: no la pude obtener (sin permiso de GPS).');
+        const tel = String(telefonoEmergencia).replace(/\D/g, '');
+        try {
+            window.open(`https://wa.me/${tel}?text=${encodeURIComponent(partes.join('\n'))}`, '_blank');
+            resultado.whatsappAbierto = true;
+        } catch (err) {
+            console.error('[panico] no pude abrir WhatsApp', err);
+        }
+    }
 
-    const tel = String(telefonoEmergencia).replace(/\D/g, '');
-    const msg = encodeURIComponent(partes.join('\n'));
-    window.open(`https://wa.me/${tel}?text=${msg}`, '_blank');
+    return resultado;
 }
