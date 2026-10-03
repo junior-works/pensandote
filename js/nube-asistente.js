@@ -270,8 +270,9 @@ export function montarNubeInicio($app) {
                 if (hablando) faseVoz += delta;
                 apertura = suavizar(apertura, hablando ? aperturaNube(faseVoz) : 0, delta);
                 if (!hablando && apertura < 0.001) apertura = 0;
-                // Sin bocas abiertas no hay sincronía posible: el paquete del
-                // Diego no las trae. Antes que fingirla, no moverla.
+                // El Diego SI mueve la boca: el paquete trae las poses y
+                // de ahi se recortaron los parches. `animaBoca` queda por
+                // si algun dia entra un ayudante sin bocas.
                 if (asis.animaBoca) {
                     $bocas[0].style.opacity = String(Math.min(1, apertura * 2));
                     $bocas[1].style.opacity = String(Math.max(0, (apertura - 0.5) * 2));
