@@ -18,7 +18,7 @@
  * correcto en ambos entornos.
  */
 
-const CACHE_NAME = 'pensandote-shell-v0.10.54-icono-viejo';
+const CACHE_NAME = 'pensandote-shell-v0.10.55-shell-reportada';
 const PUSH_DIAG_DB = 'pensandote-push-diagnostico';
 const PUSH_DIAG_VERSION = '2';
 
@@ -205,7 +205,10 @@ async function cacheFirst(request) {
 self.addEventListener('message', (event) => {
     if (event.data === 'skipWaiting') self.skipWaiting();
     if (event.data?.type === 'push-diagnostico-version') {
-        event.ports?.[0]?.postMessage({ version: PUSH_DIAG_VERSION });
+        // `shell` es el nombre del cache: la unica fuente de verdad de que
+        // version de la web esta corriendo este telefono. Sin esto hay que
+        // adivinarlo, y adivinarlo ya nos costo una noche.
+        event.ports?.[0]?.postMessage({ version: PUSH_DIAG_VERSION, shell: CACHE_NAME });
     }
 });
 

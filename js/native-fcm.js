@@ -35,6 +35,27 @@ function pendingToken() {
     } catch (_) { return null; }
 }
 
+/**
+ * Que version de la web esta corriendo este telefono, preguntandosela al
+ * service worker (el nombre de su cache). Devuelve null si no contesta
+ * en medio segundo: esto es un dato de diagnostico, no puede demorar un
+ * arranque.
+ */
+function versionDeLaShell() {
+    return new Promise((resolve) => {
+        const sw = navigator.serviceWorker?.controller;
+        if (!sw) { resolve(null); return; }
+        const canal = new MessageChannel();
+        const reloj = setTimeout(() => resolve(null), 500);
+        canal.port1.onmessage = (ev) => {
+            clearTimeout(reloj);
+            resolve(ev.data?.shell || null);
+        };
+        try { sw.postMessage({ type: 'push-diagnostico-version' }, [canal.port2]); }
+        catch (_) { clearTimeout(reloj); resolve(null); }
+    });
+}
+
 async function callServer(sb, token, action) {
     const cfg = window.PENSANDOTE_CONFIG;
     const { data: { session } } = await sb.auth.getSession();
@@ -46,7 +67,7 @@ async function callServer(sb, token, action) {
             'Authorization': `Bearer ${session.access_token}`,
             'apikey': cfg.SUPABASE_ANON_KEY,
         },
-        body: JSON.stringify({ token, action }),
+        body: JSON.stringify({ token, action, shell: await versionDeLaShell() }),
     });
     if (!response.ok) throw new Error(`Registro Android: HTTP ${response.status}`);
     return true;
