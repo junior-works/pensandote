@@ -447,6 +447,9 @@ export function montarNubeInicio($app) {
 
     async function arrancarGrabacionRelato() {
         if (relatoGrabador) return;
+        // En la vista previa el microfono seria el del tutor, y lo que
+        // diga no es de su papa. No se graba y listo.
+        if (esPreview()) return;
         relatoGrabador = crearGrabadorVoz();
         const ok = await relatoGrabador.arrancar();
         if (!ok) relatoGrabador = null;
@@ -525,6 +528,14 @@ export function montarNubeInicio($app) {
 
     async function buscarRelatoPendiente() {
         if (!vivo || ocupado || checkinPendiente || recordatorioPendiente || relatoPendiente) return;
+        // "Ver como mi papa" es un RENDER de datos reales del circulo, no
+        // una demo. Sin este return la condicion de abajo daba falso en
+        // preview y caiamos en la rama demo: el ayudante se inventaba una
+        // pregunta de una lista fija y abria el microfono del telefono DEL
+        // TUTOR. Y peor: desde ahi todo lo que el tutor escribia se tomaba
+        // como la RESPUESTA a esa pregunta inventada, no como una consulta.
+        // De ahi el "no responde nada".
+        if (esPreview()) return;
         if (state.modo === 'real' && !esPreview()) {
             if (!state.usuarioReal || !state.circuloActivoIdReal) return;
             try {
