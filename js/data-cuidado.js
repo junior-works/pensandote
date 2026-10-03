@@ -143,3 +143,41 @@ export async function cuidadoCalleDe(circleId, userId) {
     if (error) throw error;
     return data?.cuidado_calle === true;
 }
+
+/**
+ * Los check-ins recientes del círculo: el último, y el conjunto de
+ * fechas en que hubo alguno.
+ *
+ * El conjunto es lo que permite distinguir un aviso que sigue siendo
+ * verdad de uno que ya se resolvió solo. El aviso "no respondió" sale a
+ * las 16:00; si contesta a las 23, ese aviso dejó de ser cierto, pero
+ * nadie se lo dice al panel y queda ahí para siempre. Con las fechas a
+ * mano, se descarta.
+ */
+export async function resumenCheckins(circleId, dias = 60) {
+    const sb = await sbClient();
+    const desde = new Date(Date.now() - dias * 86400000).toISOString().slice(0, 10);
+    const { data, error } = await sb.from('checkins')
+        .select('user_id, fecha, created_at, estado_animo, respuesta')
+        .eq('circle_id', circleId)
+        .gte('fecha', desde)
+        .order('fecha', { ascending: false });
+    if (error) throw error;
+    const filas = data || [];
+    return {
+        ultimo:  filas[0] || null,
+        fechas:  new Set(filas.map(f => f.fecha))
+    };
+}
+
+/** El último check-in de todos los tiempos, para cuando no hay ninguno reciente. */
+export async function ultimoCheckinDeSiempre(circleId) {
+    const sb = await sbClient();
+    const { data, error } = await sb.from('checkins')
+        .select('fecha, created_at')
+        .eq('circle_id', circleId)
+        .order('fecha', { ascending: false })
+        .limit(1);
+    if (error) throw error;
+    return (data || [])[0] || null;
+}

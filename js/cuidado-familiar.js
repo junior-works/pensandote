@@ -5,7 +5,7 @@ import { listarMedicamentos } from './data-emotiva.js';
 import {
     listarAlertasCuidado, tomarAlerta, cerrarAlerta,
     listarTareasCuidado, crearTareaCuidado, cambiarTareaCuidado,
-    fijarCuidadoCalle
+    fijarCuidadoCalle, resumenCheckins, ultimoCheckinDeSiempre
 } from './data-cuidado.js';
 
 const FECHA_AR = { dateStyle: 'medium', timeStyle: 'short', timeZone: 'America/Argentina/Buenos_Aires' };
@@ -25,39 +25,107 @@ function describirAlerta(a, meds) {
     return 'Aviso para revisar';
 }
 
+/** La fecha de hoy (o de hace N días) en Argentina, como 'YYYY-MM-DD'. */
+function fechaAR(menosDias = 0) {
+    return new Date(Date.now() - menosDias * 86400000)
+        .toLocaleDateString('en-CA', { timeZone: 'America/Argentina/Buenos_Aires' });
+}
+
+function diasEntre(desdeISO, hastaISO) {
+    return Math.round((Date.parse(hastaISO) - Date.parse(desdeISO)) / 86400000);
+}
+
+/**
+ * El panel de avisos del inicio.
+ *
+ * ANTES mostraba toda la cola de los últimos 7 días. Con una persona que
+ * no contesta, eso son catorce renglones idénticos, todos ciertos y
+ * ninguno accionable, tapando lo único que importa: hace cuánto que no
+ * responde. Y con una persona que SÍ contesta pero más tarde que el
+ * aviso, eran renglones falsos: el aviso de las 16:00 seguía ahí aunque
+ * hubiera contestado a las 23.
+ *
+ * AHORA hay dos cosas separadas, porque son dos cosas distintas:
+ *
+ *   - El estado: una línea por persona, que no caduca. "Contestó hoy",
+ *     "hace 3 días que no responde", "no responde desde el 21 de julio".
+ *     Eso es lo que te hace agarrar el teléfono.
+ *
+ *   - Los avisos accionables: sólo los de hoy y ayer, y sólo los que
+ *     siguen siendo verdad. Un "no respondió" de un día en el que
+ *     después contestó no es un aviso: es ruido.
+ *
+ * Lo viejo no se borra. Se deja de mostrar. Las filas son lo que hace
+ * posible la frase del estado: sin ellas no hay "desde el 21 de julio".
+ */
 export async function montarAlertasCuidado($cont, circleId, miembros, yoId) {
     if (!$cont) return;
     $cont.innerHTML = '<p class="muted">Revisando avisos de cuidado…</p>';
+
     const cargar = async () => {
         try {
-            const [avisos, meds] = await Promise.all([
+            const [avisos, meds, checkins] = await Promise.all([
                 listarAlertasCuidado(circleId),
-                listarMedicamentos(circleId).catch(() => [])
+                listarMedicamentos(circleId).catch(() => []),
+                resumenCheckins(circleId).catch(() => ({ ultimo: null, fechas: new Set() }))
             ]);
-            const actuales = avisos.filter(a => {
-                const edad = Date.now() - new Date(a.created_at).getTime();
-                return edad < 7 * 86400000 || a.seguimiento?.estado === 'en_curso';
+
+            const hoy  = fechaAR(0);
+            const ayer = fechaAR(1);
+
+            // --- Estado: hace cuánto que no responde ---------------
+            let ultimo = checkins.ultimo;
+            if (!ultimo) ultimo = await ultimoCheckinDeSiempre(circleId).catch(() => null);
+
+            const simple = (miembros || []).find(x => x.interface_mode === 'simple');
+            const quien  = simple ? nombreDe(miembros, simple.user_id) : 'Tu familiar';
+
+            let estadoHtml;
+            if (!ultimo) {
+                estadoHtml = `<p class="cuidado-estado is-nunca">
+                    ${h(quien)} todavía no contestó ninguna vez cómo está.</p>`;
+            } else if (ultimo.fecha === hoy) {
+                estadoHtml = `<p class="cuidado-estado is-ok">✅ ${h(quien)} contestó hoy cómo está.</p>`;
+            } else {
+                const dias = diasEntre(ultimo.fecha, hoy);
+                const cuando = new Date(ultimo.fecha + 'T12:00:00')
+                    .toLocaleDateString('es-AR', { day: 'numeric', month: 'long' });
+                estadoHtml = dias > 7
+                    ? `<p class="cuidado-estado is-lejos">
+                           ${h(quien)} no responde desde el ${h(cuando)}
+                           <small>(${dias} días)</small></p>`
+                    : `<p class="cuidado-estado is-atento">
+                           Hace ${dias} ${dias === 1 ? 'día' : 'días'} que ${h(quien)} no contesta cómo está.</p>`;
+            }
+
+            // --- Avisos que todavía se pueden atender --------------
+            const vigentes = avisos.filter(a => {
+                if (a.fecha !== hoy && a.fecha !== ayer) return false;
+                // Un "no respondió" de un día en el que después contestó
+                // dejó de ser verdad en el momento en que contestó.
+                if (a.tipo === 'sin_checkin' && checkins.fechas.has(a.fecha)) return false;
+                return a.seguimiento?.estado !== 'resuelta';
             });
-            if (!actuales.length) {
-                $cont.innerHTML = '<p class="muted">No hay avisos pendientes. Si aparece uno, acá van a poder ver quién se ocupa.</p>';
+
+            if (!vigentes.length) {
+                $cont.innerHTML = estadoHtml +
+                    `<p class="muted">No hay nada pendiente de atender hoy.</p>`;
                 return;
             }
-            $cont.innerHTML = `<ul class="cuidado-lista">${actuales.map(a => {
+
+            $cont.innerHTML = estadoHtml + `<ul class="cuidado-lista">${vigentes.map(a => {
                 const s = a.seguimiento;
                 const mia = s?.responsable_id === yoId;
                 const enCurso = s?.estado === 'en_curso';
-                const resuelta = s?.estado === 'resuelta';
                 const cuando = new Date(a.created_at).toLocaleString('es-AR', FECHA_AR);
-                return `<li class="cuidado-item ${resuelta ? 'is-resuelta' : enCurso ? 'is-tomada' : 'is-pendiente'}">
+                return `<li class="cuidado-item ${enCurso ? 'is-tomada' : 'is-pendiente'}">
                     <div class="cuidado-item__cabecera">
                         <strong>${h(describirAlerta(a, meds))}</strong>
                         <small>${h(cuando)}</small>
                     </div>
-                    <p>${resuelta
-                        ? `Confirmado por ${h(nombreDe(miembros, s.responsable_id))}${s.nota ? ` · ${h(s.nota)}` : ''}`
-                        : enCurso
-                            ? `${h(nombreDe(miembros, s.responsable_id))} se está ocupando`
-                            : 'Nadie confirmó aún que se esté ocupando'}</p>
+                    <p>${enCurso
+                        ? `${h(nombreDe(miembros, s.responsable_id))} se está ocupando`
+                        : 'Nadie confirmó aún que se esté ocupando'}</p>
                     ${!s || s.estado === 'liberada'
                         ? `<button class="btn btn--inicio" data-cuidar="${h(a.id)}">Me ocupo</button>`
                         : mia && enCurso
@@ -68,8 +136,9 @@ export async function montarAlertasCuidado($cont, circleId, miembros, yoId) {
                 </li>`;
             }).join('')}</ul>
             <p class="muted cuidado-aclaracion">Un remedio sin confirmar no significa que no lo haya tomado. Antes de marcar un caso como resuelto, hablá con la persona.</p>`;
+
             $cont.querySelectorAll('[data-cuidar]').forEach(btn => btn.addEventListener('click', async () => {
-                const aviso = actuales.find(a => a.id === btn.dataset.cuidar);
+                const aviso = vigentes.find(a => a.id === btn.dataset.cuidar);
                 if (!aviso) return;
                 btn.disabled = true;
                 try { await tomarAlerta(aviso); await cargar(); }
@@ -96,6 +165,7 @@ export async function montarAlertasCuidado($cont, circleId, miembros, yoId) {
             $cont.innerHTML = '<p class="cuidado-error">No pude cargar los avisos de cuidado. Volvé a abrir Inicio.</p>';
         }
     };
+
     await cargar();
 }
 

@@ -5231,3 +5231,12 @@ body :is(.btn--danger, .btn--emergencia, .btn--panico,
 .mas-guardado > summary::before { content: '▸ '; }
 .mas-guardado[open] > summary::before { content: '▾ '; }
 .mas-guardado > summary:focus-visible { outline: 3px solid var(--line, #111); outline-offset: 2px; }
+
+/* Estado del check-in: una línea que no caduca, en vez de una cola de
+   avisos idénticos que sí caducan. */
+.cuidado-estado { margin: 0 0 0.6rem; font-weight: 600; }
+.cuidado-estado.is-ok     { color: #2e7d32; }
+.cuidado-estado.is-atento { color: #b26a00; }
+.cuidado-estado.is-lejos,
+.cuidado-estado.is-nunca  { color: #b3261e; }
+.cuidado-estado small { font-weight: 400; opacity: 0.8; }

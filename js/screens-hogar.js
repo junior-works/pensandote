@@ -1600,8 +1600,12 @@ async function actualizarSeccionPuntas(c, u, $app) {
     const $sugeridas = $app.querySelector('#sec-ideas-sugeridas');
     if (!$cola && !$sugeridas) return;
     let puntas = [];
+    let todas  = [];
     try {
-        puntas = await listarPuntas(c.id);
+        [puntas, todas] = await Promise.all([
+            listarPuntas(c.id),
+            listarPuntas(c.id, { incluirInactivas: true }).catch(() => [])
+        ]);
     } catch (err) {
         if ($cola) $cola.innerHTML = `<p class="muted">Error cargando la cola: ${h(err?.message || err)}</p>`;
     }
@@ -1612,16 +1616,43 @@ async function actualizarSeccionPuntas(c, u, $app) {
         puntas.map(p => String(p.texto || '').trim().toLowerCase())
     );
     if ($sugeridas) renderSugeridas($sugeridas, yaCargadas, c, u, $app);
-    if ($cola) renderCola($cola, puntas, c, u, $app);
+    if ($cola) renderCola($cola, puntas, todas, c, u, $app);
 }
 
 // La cola muestra sólo las pendientes (listarPuntas ya filtra usadas y
 // descartadas). Cada una se puede "Descartar" (soft, sin borrar): la RLS
 // permite al autor o al admin del círculo. Por eso el botón aparece si la
 // punta es propia o si el familiar es admin.
-function renderCola($cont, puntas, c, u, $app) {
+function renderCola($cont, puntas, todas, c, u, $app) {
+    // Lo que Nube efectivamente le preguntó. Sin esto la ventana es una
+    // lista de deseos: mostraba la cola y nada de los resultados, y cuando
+    // la cola quedaba vacía decía "Nube ya preguntó todo lo que cargaste"
+    // aunque no hubiera preguntado nunca nada. Decir lo que pasó, no lo
+    // que uno esperaba que pasara.
+    const preguntadas = (todas || []).filter(p => p.usada_at);
+    const descartadas = (todas || []).filter(p => p.descartada_at && !p.usada_at);
+
+    const yaPreguntadas = preguntadas.length
+        ? `<h3 style="margin: 1rem 0 0.4rem; font-size: 0.95em;">Ya preguntadas (${preguntadas.length})</h3>
+           <ul class="puntas-cola">
+               ${preguntadas.slice(-5).map(p => `
+                   <li class="puntas-cola__item">
+                       <span class="puntas-cola__texto">${h(p.texto)}</span>
+                       <small class="muted">${h(new Date(p.usada_at).toLocaleDateString('es-AR', { day: 'numeric', month: 'short' }))}</small>
+                   </li>`).join('')}
+           </ul>`
+        : '';
+
     if (!puntas.length) {
-        $cont.innerHTML = `<p class="muted">No hay nada pendiente: Nube ya preguntó todo lo que cargaste. Sumá una arriba o elegí de las sugeridas.</p>`;
+        let vacio;
+        if (preguntadas.length) {
+            vacio = 'Nube ya preguntó todo lo que cargaste. Sumá otra arriba o elegí de las sugeridas.';
+        } else if (descartadas.length) {
+            vacio = `No hay ninguna esperando: descartaste ${descartadas.length === 1 ? 'la única que habías cargado' : `las ${descartadas.length} que habías cargado`} y todavía no cargaste otra. Nube no preguntó ninguna todavía.`;
+        } else {
+            vacio = 'Todavía no cargaste ninguna pregunta. Escribí una desde el Inicio y Nube se la va a hacer la próxima vez que abra la app.';
+        }
+        $cont.innerHTML = `<p class="muted">${h(vacio)}</p>${yaPreguntadas}`;
         return;
     }
     const esAdmin = state.membresiaReal?.permission_level === 'admin';
@@ -1640,6 +1671,7 @@ function renderCola($cont, puntas, c, u, $app) {
                 `;
             }).join('')}
         </ul>
+        ${yaPreguntadas}
     `;
     $cont.querySelectorAll('[data-descartar-punta]').forEach(btn => {
         btn.addEventListener('click', async () => {
