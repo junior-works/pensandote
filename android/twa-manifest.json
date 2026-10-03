@@ -20,8 +20,8 @@
     "path": "C:\\Proyectos Junior Works\\pensandote\\android\\android.keystore",
     "alias": "pensandote"
   },
-  "appVersionName": "1.0.4",
-  "appVersionCode": 5,
+  "appVersionName": "1.0.5",
+  "appVersionCode": 6,
   "shortcuts": [],
   "generatorApp": "bubblewrap-cli",
   "webManifestUrl": "https://junior-works.github.io/pensandote/manifest.json",
@@ -43,5 +43,5 @@
   "fileHandlers": [],
   "launchHandlerClientMode": "",
   "displayOverride": [],
-  "appVersion": "1.0.4"
+  "appVersion": "1.0.5"
 }

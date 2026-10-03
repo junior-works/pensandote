@@ -18,7 +18,7 @@
  * correcto en ambos entornos.
  */
 
-const CACHE_NAME = 'pensandote-shell-v0.10.52-panico-ubicacion';
+const CACHE_NAME = 'pensandote-shell-v0.10.53-panico-acuse';
 const PUSH_DIAG_DB = 'pensandote-push-diagnostico';
 const PUSH_DIAG_VERSION = '2';
 

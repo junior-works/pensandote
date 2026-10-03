@@ -873,6 +873,22 @@ export function renderEmergencias($app) {
                 'En la app real este botón le manda un aviso a todo el círculo con la ubicación, al instante y sin confirmar nada, y además abre WhatsApp para el contacto de emergencia. Acá no se ejecuta porque es vista previa.');
             return;
         }
+        // Lo primero es que el botón acuse el toque, antes de cualquier
+        // espera. Sin esto la pantalla se queda igual varios segundos
+        // mientras se pide la ubicación, el botón parece muerto, y la
+        // persona lo aprieta de nuevo. Eso ya pasó: tu vieja lo tocó dos
+        // veces con cinco minutos de diferencia porque no vio nada.
+        const $bp = document.getElementById('btn-panico');
+        const htmlOriginal = $bp ? $bp.innerHTML : '';
+        if ($bp) {
+            $bp.disabled = true;
+            $bp.innerHTML = `<span class="btn__big">Avisando a tu familia…</span>
+                             <small>Esperá unos segundos</small>`;
+        }
+        const soltarBoton = () => {
+            if ($bp) { $bp.disabled = false; $bp.innerHTML = htmlOriginal; }
+        };
+
         // El aviso de verdad sale por push a TODO el círculo, con la
         // ubicación, sin que ella tenga que confirmar nada. WhatsApp va
         // además, al contacto primario, como segundo canal.
@@ -898,6 +914,7 @@ export function renderEmergencias($app) {
 
             // El cartel dice lo que realmente pasó. No le prometemos a
             // una persona asustada algo que no ocurrió.
+            soltarBoton();
             if (r.avisoEnviado) {
                 const dondeEsta = r.conUbicacion
                     ? 'Saben dónde estás.'
@@ -931,6 +948,7 @@ export function renderEmergencias($app) {
             }
         } catch (err) {
             console.error('[panico]', err);
+            soltarBoton();
             await modal({
                 titulo: 'No pude avisarle a tu familia',
                 cuerpo: `<p>Algo falló. <strong>Llamá vos directo al 911</strong>
