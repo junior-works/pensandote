@@ -122,7 +122,25 @@ export function cleanupModalBackButton(overlay) {
  * naturalmente como en cancel/error. Útil para que la UI vuelva al
  * estado "leer" cuando la voz se calla sola.
  */
-export function speakES(texto, { onEnd, onStart, onBoundary, onPause, onResume, voz: pref } = {}) {
+export function speakES(texto, opciones = {}) {
+    const pref = opciones.voz || vozDelAyudante();
+    pararTodo();
+    // Algunos ayudantes tienen voz propia generada en el servidor (Diego).
+    // Se intenta esa primero; si no se puede — sin sesion, sin red, cuota
+    // agotada, funcion caida — cae a la del telefono y la app sigue
+    // hablando igual. Nunca se queda muda por esto.
+    if (pref?.servidor && !opciones.soloTelefono) {
+        const turno = turnoAudio;
+        hablarConServidor(texto, pref, opciones, turno)
+            .then(sono => { if (!sono && turno === turnoAudio) hablarConTelefono(texto, pref, opciones); })
+            .catch(()   => { if (turno === turnoAudio) hablarConTelefono(texto, pref, opciones); });
+        return;
+    }
+    hablarConTelefono(texto, pref, opciones);
+}
+
+// La voz del telefono: lo de siempre. Es el piso del que no nos bajamos.
+function hablarConTelefono(texto, pref, { onEnd, onStart, onBoundary, onPause, onResume } = {}) {
     if (!('speechSynthesis' in window)) { onEnd?.(); return; }
     try {
         window.speechSynthesis.cancel();
@@ -240,8 +258,77 @@ if ('speechSynthesis' in window) {
     window.speechSynthesis.addEventListener?.('voiceschanged', refrescarVoces);
 }
 
-export function stopSpeak() {
+// =====================================================================
+// La voz del servidor (ver js/voz-servidor.js)
+// ---------------------------------------------------------------------
+// El audio llega como MP3, asi que no hay eventos de palabra
+// (`onBoundary`): la boca del ayudante se mueve con su propia cadencia
+// mientras dure el audio, que es lo que ya hacia cuando el telefono no
+// emitia limites de palabra.
+// =====================================================================
+
+let audioActual = null;
+let turnoAudio  = 0;
+
+function pararTodo() {
+    turnoAudio++;
     if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+    if (audioActual) {
+        try { audioActual.pause(); audioActual.src = ''; } catch (_) {}
+        audioActual = null;
+    }
+}
+
+/** true = sono con la voz del servidor; false = hay que usar la del telefono. */
+async function hablarConServidor(texto, pref, opciones, turno) {
+    // Import dinamico A PROPOSITO: si este modulo faltara o tirara error,
+    // un import estatico se llevaria puesto a ui.js y con el a toda la
+    // app. Asi, lo peor que pasa es que hable la voz del telefono.
+    let pedirVoz;
+    try { ({ pedirVoz } = await import('./voz-servidor.js')); }
+    catch (e) { console.warn('[voz] no pude cargar la voz del servidor', e); return false; }
+
+    const urls = await pedirVoz(texto, pref.servidor);
+    if (!urls || !urls.length) return false;
+    if (turno !== turnoAudio) return true;      // nos cortaron mientras cargaba
+
+    opciones.onStart?.();
+    for (let i = 0; i < urls.length; i++) {
+        if (turno !== turnoAudio) return true;
+        const ok = await reproducir(urls[i], turno);
+        if (!ok) {
+            // Si fallo el primero todavia estamos a tiempo de usar el
+            // telefono; si fallo uno del medio, cortamos prolijo.
+            if (turno !== turnoAudio) return true;
+            if (i === 0) return false;
+            opciones.onEnd?.();
+            return true;
+        }
+    }
+    if (turno === turnoAudio) { audioActual = null; opciones.onEnd?.(); }
+    return true;
+}
+
+function reproducir(url, turno) {
+    return new Promise(resolve => {
+        let a;
+        try { a = new Audio(url); } catch (_) { resolve(false); return; }
+        a.preload = 'auto';
+        audioActual = a;
+        let resuelto = false;
+        const fin = ok => { if (!resuelto) { resuelto = true; resolve(ok); } };
+        a.onended  = () => fin(true);
+        a.onerror  = () => fin(false);
+        a.onpause  = () => { if (turno !== turnoAudio) fin(true); };
+        const p = a.play();
+        // En moviles el navegador puede negarse a sonar sin un toque
+        // previo. Ahi devolvemos false y habla el telefono.
+        if (p && typeof p.catch === 'function') p.catch(() => fin(false));
+    });
+}
+
+export function stopSpeak() {
+    pararTodo();
 }
 
 /**

@@ -64,10 +64,15 @@ export const ASISTENTES = {
         animaBoca: true,
         transicionMs: 150,
 
-        // Grave y un poco mas pausado. No va a sonar a el: es una voz
-        // sintetica del telefono. Lo que si logra es que no sea la misma
-        // voz que Nube, que era lo que lo volvia el mismo personaje.
+        // El Diego tiene voz propia, generada en el servidor (ver
+        // js/voz-servidor.js y supabase/functions/voz). Es una voz de IA
+        // y un personaje original: no imita a ninguna persona real.
+        //
+        // `rate`, `pitch`, `indice` y `nombres` siguen valiendo porque son
+        // el PLAN B: cuando no hay sesion, no hay red, se acabo la cuota
+        // del dia o la funcion esta caida, habla el telefono con esto.
         voz: {
+            servidor: 'diego',
             // Android solo expone la voz por defecto de cada idioma, y
             // esas son todas femeninas: no hay voz masculina que elegir.
             // Bajar el tono es la unica palanca que queda desde aca. A
