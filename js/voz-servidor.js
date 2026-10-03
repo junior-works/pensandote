@@ -135,6 +135,34 @@ async function unTrozo(cfg, token, texto, slug, circuloId) {
     }
 }
 
+/**
+ * Deja listas, en segundo plano, las frases que SIEMPRE dice el ayudante.
+ *
+ * Medido en produccion el 03/10: una frase nueva tarda entre 3 y 5
+ * segundos en volver del servidor, y una ya cacheada entre 1,4 y 2. Esa
+ * espera, con la cara ya puesta a hablar, es demasiado para una persona de
+ * ochenta años. Las frases fijas no tienen por que esperarla: se piden
+ * apenas se monta la pantalla, mientras la persona todavia esta mirando, y
+ * cuando toca decirlas ya estan.
+ *
+ * El gasto es acotado y por unica vez: el servidor cachea por circulo, asi
+ * que cada una de estas frases se genera una sola vez en la vida de ese
+ * circulo — no una por dia ni una por sesion.
+ */
+let yaPrecargado = false;
+export function precargar(textos, slug) {
+    if (yaPrecargado || !slug || !Array.isArray(textos)) return;
+    yaPrecargado = true;
+    (async () => {
+        // De a una y con aire entre medio: esto es trabajo de fondo, no
+        // tiene que pelearle el ancho de banda a lo que la persona pidio.
+        for (const t of textos.filter(Boolean).slice(0, 10)) {
+            try { await pedirVoz(t, slug); } catch (_) { /* da igual: hablara el telefono */ }
+            await new Promise(r => setTimeout(r, 500));
+        }
+    })();
+}
+
 /** Para la pantalla de datos técnicos: qué hay configurado del lado del servidor. */
 export async function estadoVozServidor() {
     const cfg = window.PENSANDOTE_CONFIG;

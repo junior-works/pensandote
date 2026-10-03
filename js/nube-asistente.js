@@ -304,6 +304,36 @@ export function montarNubeInicio($app) {
         });
     }
 
+    /**
+     * Las frases que el ayudante dice SIEMPRE, pedidas al servidor apenas
+     * se monta la pantalla.
+     *
+     * La primera que sale por la boca es el "¿como estas hoy?", a los 3,2
+     * segundos de montar (ver `checkinTimer` mas abajo). Pedirla recien en
+     * ese momento significaba esperar entre 1,5 y 5 segundos con la cara
+     * puesta y sin sonido. Pedirla ahora le da esos 3 segundos de ventaja.
+     *
+     * Solo para ayudantes con voz de servidor (hoy el Diego). Nube no pasa
+     * por aca ni gasta nada: habla con la voz del telefono.
+     */
+    async function precargarVozFija() {
+        if (!asis.voz?.servidor || state.modo !== 'real' || esPreview()) return;
+        try {
+            const { precargar } = await import('./voz-servidor.js');
+            const nombre = getMiembroVisto()?.nombre_corto || '';
+            precargar([
+                // En orden de cuan pronto hacen falta.
+                `${nombre ? `${nombre}, ` : ''}¿cómo estás hoy?`,
+                'Tu familia quiere saber cómo estás. ¿Cómo te sentís hoy?',
+                'Listo, le avisé a tu familia.',
+                'No pude avisarle a tu familia. Probemos de nuevo en un momento.',
+                'Ahora no pude responderte. Probemos de nuevo en un momento.'
+            ], asis.voz.servidor);
+        } catch (err) {
+            console.warn('[nube] no pude precargar la voz', err);
+        }
+    }
+
     function programarSugerencia(delay = 18000) {
         clearTimeout(sugerenciaTimer);
         sugerenciaTimer = setTimeout(() => {
@@ -1189,6 +1219,7 @@ export function montarNubeInicio($app) {
     programarParpadeo();
     programarMicroMovimiento();
     programarSugerencia();
+    precargarVozFija();
     checkinTimer = setTimeout(iniciarPreguntaDiaria, 3200);
     // Las preguntas de la familia no viven en una pantalla aparte: Nube
     // las trae a la conversación cuando la persona está tranquila y libre.
