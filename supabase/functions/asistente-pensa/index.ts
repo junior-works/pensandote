@@ -76,7 +76,7 @@ const SYSTEM_PROMPT = `Sos Nube, un asistente conversacional cálido para adulto
 
 REGLAS DURAS:
 - Respondés en 1 o 2 oraciones cortas; si te piden una explicación, podés dar hasta 3 frases breves.
-- Sin tecnicismos. Pensa como una nieta paciente que le explica a su abuela.
+- Sin tecnicismos. Explicá con paciencia, como alguien de la familia que no tiene apuro. El registro propio de cada uno va en COMO HABLAS, al final.
 - No das diagnósticos, dosis ni interpretás síntomas. Si hay dolor fuerte, dificultad para respirar u otra urgencia, sugerí llamar a emergencias o a una persona de confianza. Para otras dudas de salud, ofrecé contactar al médico.
 - Si no entendiste, pedi que repita amablemente.
 - Sos atento, nunca infantilizás. No llenes cada respuesta de ofrecimientos; primero respondé lo que preguntaron.
@@ -133,13 +133,43 @@ o con accion (ejemplos — fijate que la respuesta SIEMPRE es una pregunta cuand
 { "respuesta": "¿Querés que le avise a tu familia?", "accion": { "tipo": "mensaje_familia", "destino": "Se quedó sin la pastilla de la presión" } }`;
 
 /**
- * El mismo prompt, con el nombre que corresponda. Se reemplaza en todo el
- * texto, no solo en la primera linea: el prompt se nombra a si mismo
- * varias veces ("el estado diario se lo pregunta Nube").
+ * COMO HABLA CADA UNO.
+ *
+ * Hasta ahora `promptCon` solo cambiaba el nombre, asi que el Diego era
+ * Nube con otra cara: mismas palabras, mismo tono, misma voz. Y lo que
+ * hace que un personaje sea alguien no es el timbre, es como habla.
+ *
+ * Son personajes propios. Ninguno imita a una persona real, ni usa sus
+ * frases, ni dice ser nadie.
  */
-function promptCon(nombre: string): string {
-    if (nombre === "Nube") return SYSTEM_PROMPT;
-    return SYSTEM_PROMPT.split("Nube").join(nombre);
+const ESTILOS: Record<string, string> = {
+    nube: `
+COMO HABLAS:
+- Sos suave y paciente. Nunca apurás.
+- Hablás como una nieta que tiene todo el tiempo del mundo.`,
+
+    diego: `
+COMO HABLAS:
+- Sos un porteño cálido y de ley. Tratás a la persona como a un amigo de toda la vida, no como a un paciente.
+- Usás el habla de barrio con naturalidad y sin exagerar: "che", "mirá", "dale", "tranquilo", "quedate piola", "contá conmigo". Una o dos por respuesta, no más: no sos una caricatura.
+- Le decís por el nombre cuando viene bien, y a veces "maestro", "amigo", "querido".
+- Sos alentador. Si hizo algo bien, se lo decís: "muy bien ahí", "esa te salió redonda".
+- Si está bajoneado no lo apurás ni lo arreglás con frases hechas: le decís que estás ahí y que lo acompañás.
+- Podés nombrar el fútbol si él lo nombra primero. No lo metas vos de prepo en cada charla.
+- NO sos ninguna persona real, no decís serlo, y no usás frases célebres de nadie. Sos un personaje de esta app.
+- Todo lo de arriba se subordina a las REGLAS DURAS: breve, claro, sin inventar nada. Primero sirve, después hace color.`,
+};
+
+/**
+ * El prompt con el nombre que corresponda y la forma de hablar de ese
+ * ayudante. El nombre se reemplaza en todo el texto, no solo en la primera
+ * linea: el prompt se nombra a si mismo varias veces ("el estado diario se
+ * lo pregunta Nube").
+ */
+function promptCon(slug: string): string {
+    const nombre = NOMBRES_ASISTENTE[slug] || "Nube";
+    const base = nombre === "Nube" ? SYSTEM_PROMPT : SYSTEM_PROMPT.split("Nube").join(nombre);
+    return base + "\n" + (ESTILOS[slug] || ESTILOS.nube);
 }
 
 Deno.serve(async (req: Request) => {
@@ -148,13 +178,13 @@ Deno.serve(async (req: Request) => {
     if (!ANTHROPIC_API_KEY)       return json({ error: "IA no configurada todavia. Pedile a la familia que cargue la API key." }, 500);
 
     let texto = "", contexto: any = {}, historial: unknown[] = [];
-    let nombreAsistente = "Nube";
+    let slugAsistente = "nube";
     try {
         // Se resuelve mas abajo, cuando ya leimos el contexto.
         const body = await req.json();
         texto    = String(body?.texto || "").trim();
         contexto = (body?.contexto && typeof body.contexto === "object") ? body.contexto : {};
-        nombreAsistente = NOMBRES_ASISTENTE[String(contexto?.asistente || "nube")] || "Nube";
+        slugAsistente = NOMBRES_ASISTENTE[String(contexto?.asistente || "nube")] ? String(contexto.asistente) : "nube";
         historial = Array.isArray(body?.historial) ? body.historial.slice(-4) : [];
     } catch {
         return json({ error: "Body invalido — esperaba { texto, contexto? }" }, 400);
@@ -194,7 +224,7 @@ Deno.serve(async (req: Request) => {
             body: JSON.stringify({
                 model:      "claude-haiku-4-5-20251001",
                 max_tokens: 400,
-                system:     promptCon(nombreAsistente),
+                system:     promptCon(slugAsistente),
                 messages:   [...mensajesPrevios, { role: "user", content: userMessage }],
             }),
         });
