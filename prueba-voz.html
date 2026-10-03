@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Prueba de voz — Pensándote</title>
+<style>
+  body { font-family: system-ui, sans-serif; margin: 0; padding: 1.2rem;
+         background: #fdf8ef; color: #3b2a22; line-height: 1.5; }
+  h1 { font-size: 1.3rem; margin: 0 0 .2rem; }
+  p.sub { margin: 0 0 1rem; color: #6b5b54; font-size: .95rem; }
+  button { width: 100%; min-height: 64px; font-size: 1.1rem; font-weight: 700;
+           border-radius: 14px; border: 2px solid #3b2a22; background: #fff;
+           color: #3b2a22; margin: .4rem 0; }
+  button[disabled] { opacity: .5; }
+  #log { margin-top: 1rem; font-family: ui-monospace, monospace; font-size: .85rem;
+         white-space: pre-wrap; background: #fff; border: 1px solid #ddd;
+         border-radius: 10px; padding: .7rem; min-height: 8rem; }
+  .ok { color: #1b6e3c; font-weight: 700; }
+  .mal { color: #a11; font-weight: 700; }
+</style>
+</head>
+<body>
+<h1>Prueba de voz de Diego</h1>
+<p class="sub">Mide si este teléfono aguanta la voz masculina. No toca la app.</p>
+
+<button id="bajar">1 · Bajar la voz (21 MB)</button>
+<button id="hablar" disabled>2 · Que diga una frase</button>
+<button id="hablar2" disabled>3 · Que diga una frase larga</button>
+
+<div id="log">Esperando…</div>
+
+<script type="module">
+const $log = document.getElementById('log');
+const t0 = performance.now();
+const log = (m, clase) => {
+    const seg = ((performance.now() - t0) / 1000).toFixed(1);
+    $log.innerHTML += `\n[${seg}s] ` + (clase ? `<span class="${clase}">${m}</span>` : m);
+    $log.scrollTop = $log.scrollHeight;
+};
+
+const VOZ = 'es_MX-ald-x_low';
+let tts = null;
+
+async function cargarLib() {
+    if (tts) return tts;
+    log('Cargando el motor…');
+    const t = performance.now();
+    tts = await import('https://esm.sh/@diffusionstudio/vits-web@1.0.3');
+    log(`Motor cargado en ${((performance.now() - t) / 1000).toFixed(1)}s`, 'ok');
+    return tts;
+}
+
+document.getElementById('bajar').addEventListener('click', async (e) => {
+    e.target.disabled = true;
+    try {
+        const lib = await cargarLib();
+        const guardadas = await lib.stored();
+        if (guardadas.includes(VOZ)) {
+            log('La voz ya estaba guardada en este teléfono.', 'ok');
+        } else {
+            log('Bajando el modelo…');
+            const t = performance.now();
+            await lib.download(VOZ, (p) => {
+                if (Math.round(p.loaded / p.total * 100) % 20 === 0)
+                    log(`  ${Math.round(p.loaded / p.total * 100)}%`);
+            });
+            log(`Modelo bajado y guardado en ${((performance.now() - t) / 1000).toFixed(1)}s`, 'ok');
+        }
+        document.getElementById('hablar').disabled = false;
+        document.getElementById('hablar2').disabled = false;
+    } catch (err) {
+        log('FALLÓ: ' + (err?.message || err), 'mal');
+        e.target.disabled = false;
+    }
+});
+
+async function decir(texto) {
+    const lib = await cargarLib();
+    log(`Generando: "${texto.slice(0, 40)}…"`);
+    const t = performance.now();
+    const wav = await lib.predict({ text: texto, voiceId: VOZ });
+    const ms = performance.now() - t;
+    log(`Generado en ${(ms / 1000).toFixed(2)}s`, ms < 1500 ? 'ok' : 'mal');
+    const audio = new Audio(URL.createObjectURL(wav));
+    audio.play();
+}
+
+document.getElementById('hablar').addEventListener('click', () =>
+    decir('Buenas tardes, Carlitos. ¿En qué te ayudo?').catch(e => log('FALLÓ: ' + e.message, 'mal')));
+document.getElementById('hablar2').addEventListener('click', () =>
+    decir('Che, Carlitos, tus estudios están en Salud, dentro de Mis estudios. Si querés te llevo y te marco el botón con el dedo, quedate tranquilo.').catch(e => log('FALLÓ: ' + e.message, 'mal')));
+
+log('Listo. Tocá el botón 1.');
+</script>
+</body>
+</html>
