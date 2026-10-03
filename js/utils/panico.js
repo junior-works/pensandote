@@ -24,13 +24,30 @@
 
 import { sbClient } from '../auth.js';
 
-/** La ubicación, o null. Nunca bloquea más de 5 segundos. */
+/**
+ * La ubicación, o null.
+ *
+ * El timeout de getCurrentPosition NO corre mientras el navegador está
+ * mostrando el cartel de permiso: si es la primera vez y ella no lo
+ * contesta, esa promesa no vuelve nunca. Y como el aviso sale después,
+ * el aviso tampoco sale nunca. Justo la vez que más importa.
+ *
+ * Por eso hay un segundo reloj, nuestro, que no depende de nadie: a
+ * los 4 segundos seguimos sin ubicación. Es preferible que la familia
+ * sepa que pasó algo y no dónde, a que no se entere.
+ */
+const ESPERA_UBICACION_MS = 4000;
+
 async function ubicacionAhora() {
     try {
-        const pos = await new Promise((res, rej) => {
-            navigator.geolocation.getCurrentPosition(res, rej,
-                { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 });
-        });
+        const pos = await Promise.race([
+            new Promise((res, rej) => {
+                navigator.geolocation.getCurrentPosition(res, rej,
+                    { enableHighAccuracy: true, timeout: ESPERA_UBICACION_MS, maximumAge: 0 });
+            }),
+            new Promise((_, rej) => setTimeout(() => rej(new Error('sin respuesta')),
+                                               ESPERA_UBICACION_MS))
+        ]);
         const { latitude, longitude, accuracy } = pos.coords;
         return {
             lat: latitude,
@@ -85,8 +102,18 @@ export async function dispararPanico({ circleId, telefonoEmergencia, nombre = nu
             : 'Ubicación: no la pude obtener (sin permiso de GPS).');
         const tel = String(telefonoEmergencia).replace(/\D/g, '');
         try {
-            window.open(`https://wa.me/${tel}?text=${encodeURIComponent(partes.join('\n'))}`, '_blank');
-            resultado.whatsappAbierto = true;
+            // window.open NO tira error cuando el navegador lo bloquea:
+            // devuelve null. Y acá es muy probable que lo bloquee, porque
+            // pasaron segundos desde que ella tocó el botón y el permiso
+            // de abrir ventanas que da ese toque ya venció.
+            //
+            // Si no miramos lo que devuelve, la pantalla le termina
+            // diciendo "te abrí WhatsApp, tocá el botón verde" a una
+            // persona asustada que no tiene ningún WhatsApp abierto.
+            const w = window.open(
+                `https://wa.me/${tel}?text=${encodeURIComponent(partes.join('\n'))}`, '_blank');
+            resultado.whatsappAbierto = !!w;
+            if (!w) console.warn('[panico] el navegador bloqueo la apertura de WhatsApp');
         } catch (err) {
             console.error('[panico] no pude abrir WhatsApp', err);
         }

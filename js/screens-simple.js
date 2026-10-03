@@ -860,10 +860,12 @@ export function renderEmergencias($app) {
             </button>
         </div>
 
+        <div id="sec-permiso-ubicacion"></div>
         <div id="sec-cuidado-calle-simple"></div>
     `;
     wireNav($app);
     montarCuidadoCalleSimple($app.querySelector('#sec-cuidado-calle-simple'));
+    montarPermisoUbicacion($app.querySelector('#sec-permiso-ubicacion'));
 
     document.getElementById('btn-panico').addEventListener('click', async () => {
         if (esPreview()) {
@@ -1536,5 +1538,73 @@ async function montarCuidadoCalleSimple($cont) {
             $btn.disabled = false;
             $est.textContent = 'No pude apagarlo. Probá de nuevo en un momento.';
         }
+    });
+}
+
+// ---------------------------------------------------------------------
+// El permiso de ubicacion, pedido en frio
+// ---------------------------------------------------------------------
+// La primera vez que alguien pide la ubicacion, el navegador muestra un
+// cartel de permiso. Si eso pasa recién cuando ella toca el boton de
+// ayuda, le aparece una pregunta en ingles a medias, en el peor momento
+// posible, y hasta que no la conteste el aviso no sale.
+//
+// Entonces lo pedimos antes, con ella tranquila, mirando esta pantalla.
+// Una sola vez, y despues no molesta mas.
+async function montarPermisoUbicacion($cont) {
+    if (!$cont || esPreview() || !navigator.geolocation) return;
+
+    let estado = 'prompt';
+    try {
+        if (navigator.permissions?.query) {
+            const p = await navigator.permissions.query({ name: 'geolocation' });
+            estado = p.state;
+        }
+    } catch (_) { /* navegador viejo: mostramos el boton igual */ }
+
+    if (estado === 'granted') return;
+
+    if (estado === 'denied') {
+        $cont.innerHTML = `
+            <div class="card stack" style="margin-top:1rem;">
+                <p class="simple-instruccion" style="margin:0;">
+                    Si pedís ayuda, tu familia no va a poder ver dónde estás.
+                    Pedíles que te activen la ubicación: ellos saben cómo.
+                </p>
+            </div>
+        `;
+        return;
+    }
+
+    $cont.innerHTML = `
+        <div class="card stack" style="margin-top:1rem;">
+            <p class="simple-instruccion" style="margin:0;">
+                Falta una cosa para que, si pedis ayuda, tu familia sepa dónde estás.
+            </p>
+            <button class="btn btn--xl btn--full btn--inicio" id="btn-permiso-ubicacion">
+                <span class="btn__big">Activar mi ubicación</span>
+                <small>Te va a preguntar: tocá "Permitir"</small>
+            </button>
+            <p id="permiso-ubicacion-estado" class="simple-instruccion" aria-live="polite" style="margin:0;"></p>
+        </div>
+    `;
+
+    const $btn = $cont.querySelector('#btn-permiso-ubicacion');
+    const $est = $cont.querySelector('#permiso-ubicacion-estado');
+    $btn.addEventListener('click', () => {
+        $btn.disabled = true;
+        $est.textContent = 'Esperando que toques "Permitir"...';
+        navigator.geolocation.getCurrentPosition(
+            () => {
+                $cont.innerHTML = `<p class="simple-instruccion" style="margin-top:1rem;">
+                    Listo. Si alguna vez pedis ayuda, tu familia va a saber dónde estás.
+                </p>`;
+            },
+            () => {
+                $btn.disabled = false;
+                $est.textContent = 'No quedó activada. Podés intentarlo de nuevo, o pedirle a tu familia que te ayude.';
+            },
+            { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+        );
     });
 }
