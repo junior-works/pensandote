@@ -662,11 +662,35 @@ export function montarNubeInicio($app) {
         }
     }
 
+    // Devuelve 'bien' | 'regular' | 'mal' | null.
+    //
+    // null es importante: ANTES esta funcion terminaba en `return 'bien'`,
+    // asi que cualquier texto sin palabras reconocidas se registraba como
+    // que la persona estaba bien. "Llama a mi hija" quedaba archivado como
+    // un dia bueno. La columna `estado_animo` acepta null justamente para
+    // esto: mejor no saber que decir una tranquilidad que nadie dijo.
     function estadoDesdeRespuesta(texto) {
-        const t = String(texto || '').toLowerCase();
-        if (/\b(mal|triste|enfermo|enferma|dolor|solo|sola|angustiad[oa]|preocupad[oa]|p[eé]simo|p[eé]sima)\b/.test(t)) return 'mal';
-        if (/\b(m[aá]s o menos|maso|regular|cansad[oa]|ah[ií]|tirando)\b/.test(t)) return 'regular';
-        return 'bien';
+        const t = sinTildes(texto);
+        if (/\b(mal|triste|enfermo|enferma|dolor|duele|solo|sola|angustiad[oa]|preocupad[oa]|pesimo|pesima|ayuda|ayudame)\b/.test(t)) return 'mal';
+        if (/\b(mas o menos|maso|regular|cansad[oa]|ahi|tirando)\b/.test(t)) return 'regular';
+        if (/\b(bien|barbaro|joya|perfecto|tranquil[oa]|lindo|contento|contenta|de diez|todo ok|excelente|bueno)\b/.test(t)) return 'bien';
+        return null;
+    }
+
+    // Una respuesta a "contame de tu vida" es un recuerdo, no un mandado.
+    // Sin esto, cualquier cosa escrita con un relato pendiente se guardaba
+    // como historia del circulo, con visibilidad 'todos'.
+    function pareceRespuestaDeRelato(texto) {
+        const t = String(texto || '').trim();
+        if (!t) return false;
+        if (esPedidoDeAccion(t)) return false;
+        return t.split(/\s+/).length >= 5;
+    }
+
+    // "Ahora no", "despues", "no me acuerdo": no es un recuerdo ni un
+    // pedido. Es que no quiere. Hay que dejarlo en paz.
+    function pareceNegativa(texto) {
+        return /^(ahora no|despues|mas tarde|otro dia|no quiero|no me acuerdo|no se|dejalo|no, gracias|paso)\b/.test(sinTildes(texto).trim());
     }
 
     function pareceRespuestaDeCheckin(texto) {
@@ -674,6 +698,26 @@ export function montarNubeInicio($app) {
         if (!t) return false;
         if (/\b(pami|anses|recordame|haceme acordar|c[oó]mo|d[oó]nde|qu[eé]|cu[aá]ndo|qui[eé]n)\b/i.test(t)) return false;
         return t.split(/\s+/).length <= 18;
+    }
+
+    // Deja constancia del animo SIN tomar el turno: la persona dijo que se
+    // siente mal Y ademas pidio algo. Lo que pidio es lo urgente; el
+    // registro va solo, en segundo plano, sin hablar.
+    async function anotarAnimoEnSilencio(texto, estadoAnimo) {
+        const pendiente = checkinPendiente;
+        if (!pendiente || state.modo !== 'real' || esPreview()) return;
+        checkinPendiente = null;
+        marcarPreguntaHecha();
+        try {
+            await marcarCheckin(state.circuloActivoIdReal, {
+                respuesta: texto, estadoAnimo, solicitudId: pendiente.solicitudId
+            });
+            if (pendiente.solicitudId) {
+                await responderSolicitudCheckin(pendiente.solicitudId, { respuesta: texto, estadoAnimo });
+            }
+        } catch (err) {
+            console.warn('[nube] no pude anotar el animo', err);
+        }
     }
 
     async function guardarRespuestaCheckin(texto) {
@@ -1103,13 +1147,40 @@ export function montarNubeInicio($app) {
             return;
         }
 
-        if (checkinPendiente && pareceRespuestaDeCheckin(pregunta)) {
-            await guardarRespuestaCheckin(pregunta);
-            return;
-        }
-        if (relatoPendiente) {
-            await guardarRespuestaRelato(pregunta);
-            return;
+        // ORDEN: primero entender, despues guardar. Al reves, una pregunta
+        // pendiente se tragaba cualquier cosa que la persona escribiera.
+        if (checkinPendiente || relatoPendiente) {
+            const pedido = esPedidoDeAccion(pregunta);
+
+            if (!pedido && pareceNegativa(pregunta)) {
+                // No quiere contestar ahora. Se la deja tranquila y la
+                // pregunta no vuelve a insistir en esta sesion.
+                if (checkinPendiente) { checkinPendiente = null; marcarPreguntaHecha(); }
+                if (relatoPendiente)  { relatoPendiente = null; pararGrabacionRelato().catch(() => {}); }
+                ultimaRespuesta = 'Está bien, lo dejamos para otro momento. ¿Te puedo ayudar con algo?';
+                decir(ultimaRespuesta, 'empathy');
+                $texto.value = '';
+                empezarHabla();
+                speakES(ultimaRespuesta, { onEnd: terminarHabla });
+                return;
+            }
+
+            if (!pedido && checkinPendiente && pareceRespuestaDeCheckin(pregunta)) {
+                await guardarRespuestaCheckin(pregunta);
+                return;
+            }
+            if (!pedido && relatoPendiente && pareceRespuestaDeRelato(pregunta)) {
+                await guardarRespuestaRelato(pregunta);
+                return;
+            }
+
+            // Es un pedido. Si ademas dijo que se siente mal, queda
+            // anotado — pero lo que sigue es atenderlo, no archivarlo.
+            if (checkinPendiente && esSenalDeMalestar(pregunta)) {
+                anotarAnimoEnSilencio(pregunta, 'mal');
+            }
+            // La pregunta pendiente NO se cancela ni se da por respondida:
+            // simplemente espera. Se la vuelve a hacer mas tarde.
         }
         if (/^(te quiero contar|quiero contarte|me acuerdo de|cuando yo era|te cuento que)\b/i.test(pregunta)) {
             relatoPendiente = {
@@ -1303,6 +1374,58 @@ function detectarTutorialDemo(p) {
 
 function parecePedidoDeRecordatorio(texto) {
     return /\b(haceme acordar|recordame|recu[eé]rdame|acordame|avisame|av[ií]same|anot[aá] que|poneme (?:un )?recordatorio|quiero (?:un )?recordatorio|necesito recordar|no me (?:dejes )?olvidar|dej[eé] .+ en)\b/i.test(texto);
+}
+
+/**
+ * Minusculas y sin tildes, para que las expresiones de abajo no dependan
+ * de como se escriba.
+ *
+ * No es cosmetico: en JavaScript `\b` no reconoce las vocales acentuadas
+ * como letra, asi que /\bllam[aa]\b/ NO matchea "llama" con tilde. El
+ * caso del informe — "Llama a mi hija" — fallaba exactamente por eso, y
+ * una prueba lo agarro antes de publicarlo.
+ */
+function sinTildes(texto) {
+    return String(texto || '')
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '');
+}
+
+/**
+ * ¿Esto es un PEDIDO, y no la respuesta a lo que Nube acaba de preguntar?
+ *
+ * Existe porque el orden estaba al reves: con una pregunta pendiente,
+ * `preguntar()` guardaba PRIMERO y entendia despues. Reproducido: con el
+ * "¿como estas hoy?" en pantalla, "Llama a mi hija" se archivaba como
+ * respuesta al chequeo y quedaba registrado como un dia bueno; con una
+ * pregunta de recuerdos abierta, "Necesito ayuda" se guardaba como una
+ * historia de su vida, visible para todo el circulo, y nadie atendia el
+ * pedido.
+ *
+ * Ante la duda esto devuelve true: es preferible atender un pedido que no
+ * era, a tragarse uno que si era.
+ */
+function esPedidoDeAccion(texto) {
+    const t = sinTildes(texto).trim();
+    if (!t) return false;
+    if (esSenalDeMalestar(texto)) return true;
+    // Pedir que se contacte a alguien.
+    if (/\b(llama|llamar|llamalo|llamala|telefonea|contacta|contactate|avisale|avisa|decile|mandale|escribile|habla con)\b/.test(t)) return true;
+    // Pedidos que ya tienen su propio camino en la app.
+    if (parecePedidoDeRecordatorio(texto)) return true;
+    if (pareceConsultaDeOrganismo(texto)) return true;
+    if (pareceConsultaDeCuidado(texto)) return true;
+    // Una pregunta no es una respuesta.
+    if (/[?\u00bf]/.test(String(texto || ''))) return true;
+    if (/\b(como|donde|cuando|quien|cuanto|por que|para que)\b/.test(t)) return true;
+    return false;
+}
+
+/** Dolor, miedo o pedido de auxilio. Lo mas importante que puede decir. */
+function esSenalDeMalestar(texto) {
+    const t = sinTildes(texto);
+    return /\b(ayuda|ayudame|auxilio|socorro|emergencia|urgente|me cai|me siento mal|no me siento bien|me duele|tengo dolor|no puedo respirar|mareado|mareada)\b/.test(t);
 }
 
 function pareceConsultaDeOrganismo(texto) {
