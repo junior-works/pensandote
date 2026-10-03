@@ -68,8 +68,13 @@ export const ASISTENTES = {
         // sintetica del telefono. Lo que si logra es que no sea la misma
         // voz que Nube, que era lo que lo volvia el mismo personaje.
         voz: {
-            rate: 0.90,
-            pitch: 0.90,
+            // Android solo expone la voz por defecto de cada idioma, y
+            // esas son todas femeninas: no hay voz masculina que elegir.
+            // Bajar el tono es la unica palanca que queda desde aca. A
+            // 0.75 una voz femenina se lee como grave; mas abajo empieza
+            // a sonar a robot.
+            rate: 0.88,
+            pitch: 0.75,
             indice: 1,
             nombres: /(jorge|pablo|diego|carlos|miguel|andres|andrés|lucas|male|hombre|masculin)/i
         },
