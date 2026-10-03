@@ -40,7 +40,17 @@ export const ASISTENTES = {
         hoja: './assets/nube/nube-sprites-v1.webp',
         retrato: './assets/nube/nube-reposo.webp',
         animaBoca: true,
-        transicionMs: 0
+        transicionMs: 0,
+
+        // La voz la pone el telefono; nosotros solo decimos que preferimos.
+        // Esto es lo que ya habia, que se habia elegido para un perrito:
+        // apenas mas aguda y mas lenta, para que no suene imperativa.
+        voz: {
+            rate: 0.88,
+            pitch: 1.06,
+            indice: 0,
+            nombres: /(elena|helena|laura|dalia|sabina|sofia|sofía|paulina|monica|mónica|luciana|valentina|female|mujer)/i
+        }
     },
     diego: {
         slug:   'diego',
@@ -53,6 +63,16 @@ export const ASISTENTES = {
         retrato: './assets/asistentes/diego/00-reposo.webp',
         animaBoca: true,
         transicionMs: 150,
+
+        // Grave y un poco mas pausado. No va a sonar a el: es una voz
+        // sintetica del telefono. Lo que si logra es que no sea la misma
+        // voz que Nube, que era lo que lo volvia el mismo personaje.
+        voz: {
+            rate: 0.90,
+            pitch: 0.90,
+            indice: 1,
+            nombres: /(jorge|pablo|diego|carlos|miguel|andres|andrés|lucas|male|hombre|masculin)/i
+        },
 
         // LA BOCA, que es lo delicado.
         //

@@ -18,7 +18,7 @@
  * correcto en ambos entornos.
  */
 
-const CACHE_NAME = 'pensandote-shell-v0.10.68-diego-arranca';
+const CACHE_NAME = 'pensandote-shell-v0.10.69-voz-del-ayudante';
 const PUSH_DIAG_DB = 'pensandote-push-diagnostico';
 const PUSH_DIAG_VERSION = '2';
 

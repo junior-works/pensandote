@@ -1,3 +1,5 @@
+import { asistenteActual } from './asistentes.js';
+
 /**
  * Pensándote — helpers de UI compartidos entre pantallas.
  *
@@ -120,18 +122,23 @@ export function cleanupModalBackButton(overlay) {
  * naturalmente como en cancel/error. Útil para que la UI vuelva al
  * estado "leer" cuando la voz se calla sola.
  */
-export function speakES(texto, { onEnd, onStart, onBoundary, onPause, onResume } = {}) {
+export function speakES(texto, { onEnd, onStart, onBoundary, onPause, onResume, voz: pref } = {}) {
     if (!('speechSynthesis' in window)) { onEnd?.(); return; }
     try {
         window.speechSynthesis.cancel();
         const u = new SpeechSynthesisUtterance(texto);
-        const voz = elegirVozCalida();
+        // La voz es DEL AYUDANTE. Si no nos pasan una preferencia la
+        // sacamos del ayudante activo, asi cualquier pantalla que lea algo
+        // en voz alta suena como el que corresponde sin tener que acordarse
+        // de pasarla. Antes habia una sola voz para todos: el Diego sonaba
+        // igual que Nube, con la lista de nombres de mujer y el tono subido
+        // que se habian elegido para un perrito.
+        const preferencia = pref || vozDelAyudante();
+        const voz = elegirVoz(preferencia);
         if (voz) u.voice = voz;
-        u.lang = voz?.lang || 'es-AR';
-        // Un poco más lenta, apenas más aguda y sin volumen al máximo:
-        // resulta menos imperativa sin convertirla en una voz infantil.
-        u.rate = 0.88;
-        u.pitch = 1.06;
+        u.lang   = voz?.lang || 'es-AR';
+        u.rate   = preferencia?.rate  ?? 0.88;
+        u.pitch  = preferencia?.pitch ?? 1.06;
         u.volume = 0.94;
         u.onstart = onStart;
         u.onboundary = onBoundary;
@@ -143,7 +150,7 @@ export function speakES(texto, { onEnd, onStart, onBoundary, onPause, onResume }
         }
         window.speechSynthesis.speak(u);
     } catch (e) {
-        console.warn('TTS falló:', e);
+        console.warn('TTS fallo:', e);
         onEnd?.();
     }
 }
@@ -156,15 +163,39 @@ function refrescarVoces() {
     catch (_) { vocesDisponibles = []; }
 }
 
-function elegirVozCalida() {
-    refrescarVoces();
-    if (!vocesDisponibles.length) return null;
-    const nombresCalidos = /(natural|neural|online|elena|helena|laura|dalia|sabina|sofia|sofía|paulina|monica|mónica|luciana|valentina)/i;
-    return [...vocesDisponibles]
-        .filter(v => /^es(?:-|_)/i.test(v.lang || ''))
-        .sort((a, b) => puntajeVoz(b) - puntajeVoz(a))[0] || null;
+function vozDelAyudante() {
+    try { return asistenteActual()?.voz || null; }
+    catch (_) { return null; }
+}
 
-    function puntajeVoz(v) {
+/**
+ * La app no trae voces: usa las que tiene instaladas el telefono. Con eso
+ * hay que arreglarselas, y hay poco con que elegir.
+ */
+function elegirVoz(pref) {
+    refrescarVoces();
+    const candidatas = vocesDisponibles
+        .filter(v => /^es(?:-|_)/i.test(v.lang || ''))
+        .sort((a, b) => puntajeIdioma(b) - puntajeIdioma(a));
+    if (!candidatas.length) return null;
+
+    // 1) Si alguna voz se llama como las que le quedan bien al personaje,
+    //    esa. Funciona en escritorio (Jorge, Helena, Laura...).
+    const porNombre = pref?.nombres
+        ? candidatas.find(v => pref.nombres.test(v.name || ''))
+        : null;
+    if (porNombre) return porNombre;
+
+    // 2) En Android las voces suelen llamarse "es-us-x-sfb-local": no dicen
+    //    el genero por ningun lado y no hay forma de saberlo. Entonces las
+    //    repartimos por orden, porque dos ayudantes con la misma voz son el
+    //    mismo personaje. Si el telefono tiene una sola voz en espanol van a
+    //    sonar igual y no hay nada que hacer desde aca: lo unico que los
+    //    diferencia ahi es el tono y la velocidad de arriba.
+    const i = Math.min(pref?.indice || 0, candidatas.length - 1);
+    return candidatas[i];
+
+    function puntajeIdioma(v) {
         const lang = String(v.lang || '').replace('_', '-').toLowerCase();
         const name = String(v.name || '');
         let n = 0;
@@ -172,7 +203,6 @@ function elegirVozCalida() {
         else if (lang === 'es-uy') n += 90;
         else if (lang === 'es-419') n += 80;
         else if (lang.startsWith('es-')) n += 55;
-        if (nombresCalidos.test(name)) n += 35;
         if (/natural|neural|online/i.test(name)) n += 25;
         return n;
     }
