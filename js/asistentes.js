@@ -37,8 +37,8 @@ export const ASISTENTES = {
         mencionA: 'a Nube',
         descripcion: 'La nube de siempre. Mueve la boca cuando habla.',
         modo: 'sprite',
-        hoja: './assets/nube/nube-sprites-v1.png',
-        retrato: './assets/nube/nube-reposo.png',
+        hoja: './assets/nube/nube-sprites-v1.webp',
+        retrato: './assets/nube/nube-reposo.webp',
         animaBoca: true,
         transicionMs: 0
     },

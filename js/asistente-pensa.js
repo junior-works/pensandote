@@ -55,7 +55,7 @@ function crearBoton() {
     $btn.id = 'pdt-asistente-btn';
     $btn.className = 'pdt-asistente-btn';
     $btn.setAttribute('aria-label', 'Ir a Nube');
-    $btn.innerHTML = '<img class="pdt-asistente-btn__cara" src="./assets/nube/nube-reposo.png" alt="" aria-hidden="true">';
+    $btn.innerHTML = '<img class="pdt-asistente-btn__cara" src="./assets/nube/nube-reposo.webp" alt="" aria-hidden="true">';
     // Este boton era un SEGUNDO asistente: abria su propio chat, con su
     // propio microfono y su propio cuadro de texto, contra la misma IA
     // que Nube. Dos asistentes con el mismo cerebro y dos caras es

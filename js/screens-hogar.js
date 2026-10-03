@@ -2067,7 +2067,7 @@ async function cargarCheckinsDelDia(c, $cont) {
 }
 
 function pintarAvisosPortada($cont, st, vapid) {
-    const nube = './assets/nube/nube-reposo.png';
+    const nube = './assets/nube/nube-reposo.webp';
     // Las clases de estado se acumulaban: si activabas y despues
     // desactivabas, quedaba pegado el estilo anterior. Reseteamos.
     const $caja = $cont.parentElement;

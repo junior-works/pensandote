@@ -401,7 +401,7 @@ body[data-mode="simple"] .btn--mini { min-height: 44px; font-size: var(--fs-md);
     width: 100%;
     height: 100%;
     background-color: #faf5e9;
-    background-image: url('./assets/nube/nube-sprites-v1.png');
+    background-image: url('./assets/nube/nube-sprites-v1.webp');
     background-repeat: no-repeat;
     background-size: 300% 300%;
     background-position: 0 0;
@@ -415,7 +415,7 @@ body[data-mode="simple"] .btn--mini { min-height: 44px; font-size: var(--fs-md);
     height: 100%;
     pointer-events: none;
     background-color: #faf5e9;
-    background-image: url('./assets/nube/nube-sprites-v1.png');
+    background-image: url('./assets/nube/nube-sprites-v1.webp');
     background-repeat: no-repeat;
     background-size: 300% 300%;
     opacity: 0;
@@ -666,7 +666,7 @@ body.nube-guia-abierta { overflow: hidden; }
     width: 86px;
     aspect-ratio: 1;
     border-radius: 44%;
-    background: #faf5e9 url('./assets/nube/nube-sprites-v1.png') 0 0 / 300% 300% no-repeat;
+    background: #faf5e9 url('./assets/nube/nube-sprites-v1.webp') 0 0 / 300% 300% no-repeat;
     filter: drop-shadow(0 4px 7px rgba(77,39,30,.18));
     animation: nube-guia-cabecea 3.4s ease-in-out infinite;
 }
@@ -674,7 +674,7 @@ body.nube-guia-abierta { overflow: hidden; }
     content: '';
     position: absolute;
     inset: 0;
-    background: #faf5e9 url('./assets/nube/nube-sprites-v1.png') 50% 50% / 300% 300% no-repeat;
+    background: #faf5e9 url('./assets/nube/nube-sprites-v1.webp') 50% 50% / 300% 300% no-repeat;
     clip-path: inset(54% 16% 12% 16% round 36%);
     opacity: 0;
 }

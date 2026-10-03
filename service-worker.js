@@ -18,7 +18,7 @@
  * correcto en ambos entornos.
  */
 
-const CACHE_NAME = 'pensandote-shell-v0.10.60-boca-labio';
+const CACHE_NAME = 'pensandote-shell-v0.10.61-shell-liviana';
 const PUSH_DIAG_DB = 'pensandote-push-diagnostico';
 const PUSH_DIAG_VERSION = '2';
 
@@ -83,11 +83,11 @@ const SHELL_FILES = [
     './js/utils/caidas-nativas.js',
     './js/utils/parentesco.js',
     './js/foto-interacciones.js',
-    './assets/nube/nube-sprites-v1.png',
+    './assets/nube/nube-sprites-v1.webp',
     // El Diego no va acá a propósito: son 820 KB que sólo necesita
     // descargar el teléfono que lo tenga asignado. El service worker los
     // cachea igual al pedirlos la primera vez.
-    './assets/nube/nube-reposo.png'
+    './assets/nube/nube-reposo.webp'
 ];
 
 const STATIC_EXT = /\.(?:png|jpg|jpeg|svg|ico|webp|gif|woff2?|ttf)$/i;
