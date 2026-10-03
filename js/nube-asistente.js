@@ -560,13 +560,17 @@ export function montarNubeInicio($app) {
         const relato = relatoPendiente;
         ocupado = true;
         stopSpeak();
-        // Cerramos el microfono ANTES de guardar. Si no hubo audio,
-        // `audio` viene null y grabarHistoria guarda solo el texto.
-        const { audio, durSeg } = await pararGrabacionRelato();
+        // Pintar PRIMERO. Cerrar el microfono puede tardar hasta 4
+        // segundos (el planton de grabador-voz), y durante esos 4
+        // segundos la pantalla quedaba igual que antes de tocar: para el
+        // que lo usa, no paso nada.
         $texto.disabled = true;
         $enviar.disabled = true;
         decir('Gracias por contármelo. Lo estoy guardando…', 'thinking');
         setFrame('thinking', 'thinking');
+        // Si no hubo audio, `audio` viene null y grabarHistoria guarda
+        // solo el texto.
+        const { audio, durSeg } = await pararGrabacionRelato();
         try {
             if (state.modo === 'real' && !esPreview()) {
                 await grabarHistoria({
@@ -1021,7 +1025,14 @@ export function montarNubeInicio($app) {
 
     async function preguntar(texto) {
         const pregunta = String(texto || '').trim();
-        if (!pregunta || ocupado) return;
+        if (!pregunta) return;
+        // Nunca volver mudo de un toque del usuario: si no podemos
+        // atenderlo ahora, se lo decimos.
+        if (ocupado) {
+            decir('Esperame un segundito, estoy terminando algo.', 'listening');
+            return;
+        }
+
         if (checkinPendiente && pareceRespuestaDeCheckin(pregunta)) {
             await guardarRespuestaCheckin(pregunta);
             return;
@@ -1134,7 +1145,9 @@ export function montarNubeInicio($app) {
 
     $texto.addEventListener('input', () => {
         registrarActividad();
-        $enviar.disabled = !$texto.value.trim() || ocupado;
+        // Solo por texto vacio. Si esta ocupado lo dice preguntar(),
+        // en voz alta: un boton gris no le explica nada a nadie.
+        $enviar.disabled = !$texto.value.trim();
     });
     $texto.addEventListener('keydown', e => {
         if (e.key === 'Enter' && !e.shiftKey) {
