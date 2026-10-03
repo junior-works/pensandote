@@ -41,7 +41,7 @@ function pendingToken() {
  * en medio segundo: esto es un dato de diagnostico, no puede demorar un
  * arranque.
  */
-function versionDeLaShell() {
+export function versionDeLaShell() {
     return new Promise((resolve) => {
         const sw = navigator.serviceWorker?.controller;
         if (!sw) { resolve(null); return; }

@@ -20,7 +20,8 @@ import {
 } from './circles.js';
 import {
     h, modal, esEntornoDev, renderErrorEstructurado,
-    installModalBackButton, cleanupModalBackButton
+    installModalBackButton, cleanupModalBackButton,
+    diagnosticoVoces
 } from './ui.js';
 import { nuevaGrabacion } from './audio.js';
 import { abrirModalInvitacion, pedirTexto, recargarSesion } from './screens-real.js';
@@ -49,7 +50,7 @@ import { etiquetaDesdeAdultoMayor } from './utils/parentesco.js';
 import { renderFotoInteracciones, wireFotoInteracciones } from './foto-interacciones.js';
 import { montarAlertasCuidado, montarTareasCuidado, montarCuidadoCalle,
          montarAsistenteDelCirculo } from './cuidado-familiar.js';
-import { esAndroidNativo } from './native-fcm.js';
+import { esAndroidNativo, versionDeLaShell } from './native-fcm.js';
 import { asistenteDe, asistenteActual } from './asistentes.js';
 
 // LocalStorage key para marcar pensamientos recibidos como "vistos".
@@ -563,6 +564,11 @@ export async function renderAccesos($app) {
                 <p class="muted">Juntar su historia de a pedacitos.</p>
                 <button class="btn" id="btn-ir-biografia">Abrir biografía</button>
             </details>
+            <details class="mas-guardado" id="det-tecnico">
+                <summary>🛠 Datos técnicos de este teléfono</summary>
+                <p class="muted">Para cuando algo no suena o no se ve como debería.</p>
+                <div id="sec-tecnico"><p class="muted">Cargando…</p></div>
+            </details>
         </section>
 
         <section class="card stack hogar-circulos">
@@ -665,6 +671,7 @@ export async function renderAccesos($app) {
     montarSeccionAccesos($app.querySelector('#sec-accesos-admin'), c.id);
     montarTareasCuidado($app.querySelector('#sec-tareas-cuidado'), c.id, _miembrosCache || [], u.id);
     $app.querySelector('#btn-ir-biografia')?.addEventListener('click', () => go('#/biografia'));
+    pintarTecnico($app);
 
 
     // --- Badge de estudios nuevos en el botón ---
@@ -2529,3 +2536,38 @@ function parentescoSimpleEnCirculo() {
     const m = (_miembrosCache || []).find(x => x.interface_mode === 'simple');
     return m ? (m.parentesco || '').toLowerCase() : null;
 }
+
+// =====================================================================
+// Datos tecnicos
+// ---------------------------------------------------------------------
+// Las voces las pone el telefono, no la app, y desde afuera no hay forma
+// de verlas. Sin esto, cuando Charly dice "suena igual que Nube" lo unico
+// que queda es adivinar. Que lo diga el aparato.
+// =====================================================================
+async function pintarTecnico($app) {
+    const $cont = $app.querySelector('#sec-tecnico');
+    if (!$cont) return;
+    const shell = await versionDeLaShell();
+    const d = diagnosticoVoces();
+    $cont.innerHTML = `
+        <dl class="tecnico">
+            <dt>Versión</dt>
+            <dd>${h(shell || 'no la pude leer')}</dd>
+            <dt>Voces en español en este teléfono</dt>
+            <dd>${d.espanol.length
+                ? `<ul>${d.espanol.map(v => `<li>${h(v)}</li>`).join('')}</ul>`
+                : 'ninguna — va a usar la del sistema para los dos'}</dd>
+            <dt>Voz de cada ayudante</dt>
+            <dd><ul>${d.porAyudante.map(a => `
+                <li><strong>${h(a.nombre)}</strong>: ${h(a.voz)}
+                    <small>(tono ${a.tono}, velocidad ${a.velocidad})</small></li>
+            `).join('')}</ul></dd>
+        </dl>
+        ${d.espanol.length < 2 ? `
+            <p class="muted">Con una sola voz en español los dos van a sonar
+            parecido: lo único que los separa es el tono. Se arregla bajando
+            otra voz desde los ajustes de voz del teléfono, no desde acá.</p>
+        ` : ''}
+    `;
+}
+

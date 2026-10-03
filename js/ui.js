@@ -1,4 +1,4 @@
-import { asistenteActual } from './asistentes.js';
+import { asistenteActual, listaDeAsistentes } from './asistentes.js';
 
 /**
  * Pensándote — helpers de UI compartidos entre pantallas.
@@ -207,6 +207,33 @@ function elegirVoz(pref) {
         return n;
     }
 }
+
+/**
+ * Que voz le toca a cada ayudante EN ESTE TELEFONO.
+ *
+ * Existe porque esto no se puede averiguar de otra forma: las voces las pone
+ * el aparato, no la app, y no hay manera de verlas desde afuera. Charly dijo
+ * "en mi movil suena a Nube todavia" y no habia con que contestarle sin
+ * adivinar. Ahora el telefono lo dice.
+ */
+export function diagnosticoVoces() {
+    refrescarVoces();
+    const enEspanol = vocesDisponibles.filter(v => /^es(?:-|_)/i.test(v.lang || ''));
+    return {
+        total: vocesDisponibles.length,
+        espanol: enEspanol.map(v => `${v.name} [${v.lang}]`),
+        porAyudante: listaDeAsistentes().map(a => {
+            const v = elegirVoz(a.voz);
+            return {
+                nombre: a.nombre,
+                voz: v ? `${v.name} [${v.lang}]` : 'la que trae el sistema',
+                tono: a.voz?.pitch ?? 1.06,
+                velocidad: a.voz?.rate ?? 0.88
+            };
+        })
+    };
+}
+
 
 if ('speechSynthesis' in window) {
     refrescarVoces();

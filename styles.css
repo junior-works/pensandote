@@ -5320,3 +5320,12 @@ body :is(.btn--danger, .btn--emergencia, .btn--panico,
     align-self: center;
 }
 .asistentes-lista__item.is-activo strong { font-weight: 700; }
+
+/* Datos tecnicos (Ajustes > Mas). Chico y gris: no es para mirar todos los
+   dias, es para cuando hay que contarle a alguien que pasa en ESTE telefono. */
+.tecnico { margin: 0.4rem 0 0; font-size: 0.95rem; }
+.tecnico dt { margin-top: 0.6rem; font-weight: 700; color: var(--ink-soft, #6b5b54); }
+.tecnico dd { margin: 0.15rem 0 0; word-break: break-word; }
+.tecnico ul { margin: 0.15rem 0 0; padding-left: 1.1rem; }
+.tecnico li { margin: 0.1rem 0; }
+.tecnico small { color: var(--ink-soft, #6b5b54); }
