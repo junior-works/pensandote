@@ -207,9 +207,23 @@ export function montarNubeInicio($app) {
         $bocas.forEach(el => { el.style.opacity = '0'; });
     }
 
+    // El globo es de quien habla. Si el ayudante no dijo nada, no hay
+    // globo: antes quedaba un "¿En qué te ayudo?" fijo tapandole la cara,
+    // que ademas repetia lo que ya dice el boton de abajo.
+    //
+    // Lo que SI dijo queda a la vista aunque ya haya terminado de hablar:
+    // el que lo usa lee despacio y necesita releer la respuesta.
     function decir(texto, estado = 'idle') {
         $bubble.textContent = texto;
+        $bubble.classList.remove('is-callado');
         $rig.dataset.state = estado;
+    }
+
+    // Reposo: sin globo y con la cara entera a la vista.
+    function callar() {
+        $bubble.classList.add('is-callado');
+        $bubble.textContent = '';
+        $rig.dataset.state = 'idle';
     }
 
     function programarParpadeo() {
@@ -886,7 +900,7 @@ export function montarNubeInicio($app) {
                 document.body.classList.remove('nube-guia-abierta');
                 document.removeEventListener('keydown', onTeclaGuia);
                 cerrarGuiaActiva = null;
-                decir('¿Qué más querés aprender?', 'idle');
+                decir('¿Qué más querés aprender?', 'happy');
                 setFrame('idle', 'idle');
             }
 
@@ -1136,7 +1150,7 @@ export function montarNubeInicio($app) {
         } else if (fueGrabando && $texto.value.trim()) {
             preguntar($texto.value);
         } else if (fueGrabando) {
-            decir('¿En qué te ayudo?', 'idle');
+            callar();
             setFrame('idle', 'idle');
         }
         fueGrabando = grabando;

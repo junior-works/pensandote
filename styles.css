@@ -484,6 +484,21 @@ body[data-mode="simple"] .btn--mini { min-height: 44px; font-size: var(--fs-md);
     font-weight: 700;
     line-height: 1.25;
 }
+/* Callado: el hueco se RESERVA igual.
+   Si lo sacaramos del flujo, el boton "Hablar con ..." subiria ~71px
+   cada vez que el ayudante empieza y termina de hablar, y encima el
+   salto cambiaria segun lo largo que sea lo que dice. Para quien esta
+   estirando el dedo hacia ese boton, eso es peor que un globo de mas. */
+.nube-bubble {
+    transition: opacity 0.18s ease;
+}
+.nube-bubble.is-callado {
+    opacity: 0;
+    visibility: hidden;
+}
+@media (prefers-reduced-motion: reduce) {
+    .nube-bubble { transition: none; }
+}
 .nube-bubble::before {
     content: '';
     position: absolute;

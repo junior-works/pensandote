@@ -100,7 +100,7 @@ export async function renderInicio($app) {
                 </div>
             </div>
 
-            <p class="nube-bubble" id="nube-bubble" aria-live="polite">¿En qué te ayudo?</p>
+            <p class="nube-bubble is-callado" id="nube-bubble" aria-live="polite"></p>
             <p class="nube-estado" id="nube-estado" aria-live="polite"></p>
 
             ${(state.modo === 'real' && !esPreview())
