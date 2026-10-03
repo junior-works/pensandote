@@ -30,6 +30,7 @@
 import { state, onStateChange } from './state.js';
 import { go, goReplace } from './router.js';
 import { h, modal, stopSpeak, speakES } from './ui.js';
+import { asistenteActual } from './asistentes.js';
 
 let $btn        = null;
 let $overlay    = null;
@@ -54,8 +55,8 @@ function crearBoton() {
     $btn.type = 'button';
     $btn.id = 'pdt-asistente-btn';
     $btn.className = 'pdt-asistente-btn';
-    $btn.setAttribute('aria-label', 'Ir a Nube');
-    $btn.innerHTML = '<img class="pdt-asistente-btn__cara" src="./assets/nube/nube-reposo.webp" alt="" aria-hidden="true">';
+    $btn.innerHTML = '<img class="pdt-asistente-btn__cara" alt="" aria-hidden="true">';
+    refrescarCara();
     // Este boton era un SEGUNDO asistente: abria su propio chat, con su
     // propio microfono y su propio cuadro de texto, contra la misma IA
     // que Nube. Dos asistentes con el mismo cerebro y dos caras es
@@ -79,8 +80,20 @@ function crearBoton() {
     document.body.appendChild($btn);
 }
 
+// La cara de este boton es la del ayudante del circulo que se esta
+// mirando, no Nube fija: en la app del papa de Charly aparecia la carita
+// de Nube flotando por encima de la cara del Diego.
+function refrescarCara() {
+    if (!$btn) return;
+    const asis = asistenteActual();
+    $btn.setAttribute('aria-label', `Ir a ${asis.nombre}`);
+    const $img = $btn.querySelector('.pdt-asistente-btn__cara');
+    if ($img && $img.getAttribute('src') !== asis.retrato) $img.src = asis.retrato;
+}
+
 function actualizarVisibilidad() {
     if (!$btn) return;
+    refrescarCara();
     const enSesion = state.modo === 'real' && state.usuarioReal && state.circuloActivoIdReal;
     const hash = location.hash || '#/inicio';
     // En el inicio no tiene sentido: Nube ya está en pantalla, y el botón

@@ -8,6 +8,7 @@
 
 import { sbClient } from './auth.js';
 import { enriquecer } from './ui.js';
+import { asistenteActual } from './asistentes.js';
 
 // ---------------------------------------------------------------------
 // Pensamientos
@@ -551,7 +552,7 @@ async function _avisarPuntaNueva(circleId) {
                 target:    'simple',
                 tipo:      'relato_pregunta',
                 title:     'Pensándote',
-                body:      'Te dejaron una pregunta. Tocá y Nube te la cuenta.',
+                body:      `Te dejaron una pregunta. Tocá y ${asistenteActual().nombre} te la cuenta.`,
                 url:       '#/inicio',
                 tag:       `punta-${circleId}`
             })

@@ -1508,8 +1508,8 @@ const PASOS_GUIA_ADMIN = [
         texto: 'Es el gesto más simple. Tocás "Pensé en vos", elegís a quién, y a esa persona le aparece adentro de la app un cariño tuyo. No es un mensaje y no se contesta — es presencia. Él también te puede mandar un pensé desde su lado.'
     },
     {
-        titulo: 'Charlas con Nube',
-        texto: 'Podés dejar preguntas o recuerdos para conversar. Nube se los pregunta de manera natural cuando tu familiar usa la app y guarda lo que responde. Por ahora no se presenta como libro ni como una sección aparte: primero queremos conservar esas charlas y después decidir juntos el mejor destino.'
+        titulo: 'Charlas con el ayudante',
+        texto: 'Podés dejar preguntas o recuerdos para conversar. El ayudante del círculo se los pregunta de manera natural cuando tu familiar usa la app y guarda lo que responde. Por ahora no se presenta como libro ni como una sección aparte: primero queremos conservar esas charlas y después decidir juntos el mejor destino.'
     },
     {
         titulo: 'Ver como lo ve papá',

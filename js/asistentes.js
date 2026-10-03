@@ -16,18 +16,18 @@
  *   'sprite'   Nube. Una sola imagen con nueve cuadros y capas separadas
  *              de ojos y boca, así que puede mover la boca al hablar.
  *
- *   'imagenes' El Diego. Doce archivos sueltos, uno por expresión. El
- *              paquete NO trae bocas abiertas, así que no hay sincronía
- *              de labios: mientras habla se queda en una expresión y el
- *              movimiento lo lleva el globo de texto. Es una limitación
- *              real del material, no una simplificación nuestra. Mejor
- *              eso que fingir una sincronía que no existe.
+ *   'imagenes' El Diego. Doce archivos sueltos, uno por expresión,
+ *              más los parches de boca que se recortaron aparte (ver
+ *              `boca` más abajo). Con eso sí mueve la boca al hablar,
+ *              por amplitud, no por fonema.
  *
  * Además las doce cabezas no están calzadas entre sí (hasta 32 px de
  * corrimiento sobre un lienzo de 1254). A la escala en que se ve la cara
  * son unos 4 px, y el fundido de `transicionMs` los disimula. Si algún
  * día se ve un salto, es por acá.
  */
+
+import { state } from './state.js';
 
 export const ASISTENTES = {
     nube: {
@@ -129,4 +129,19 @@ export function archivoDeCuadro(asis, estado) {
 
 export function listaDeAsistentes() {
     return Object.values(ASISTENTES);
+}
+
+/**
+ * El ayudante del circulo que se esta mirando ahora.
+ *
+ * Existe porque el nombre del ayudante aparece en DECENAS de textos de
+ * las dos pantallas ("Hablar con X", "avisos de X", "X se lo va a
+ * preguntar"). Si cada pantalla lo resuelve por su cuenta, alcanza con
+ * que una se olvide para que al papa de Charly le diga "Hablar con
+ * Nube" abajo de la cara del Diego. Paso.
+ */
+export function asistenteActual() {
+    const circulo = (state.circulosReal || [])
+        .find(x => x.id === state.circuloActivoIdReal);
+    return asistenteDe(circulo);
 }

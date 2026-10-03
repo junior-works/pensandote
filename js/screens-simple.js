@@ -29,6 +29,7 @@ import { fijarCuidadoCalle, cuidadoCalleDe } from './data-cuidado.js';
 import { crearDictado } from './utils/dictado.js';
 import { iconoContacto } from './utils/genero.js';
 import { montarNubeInicio } from './nube-asistente.js';
+import { asistenteActual } from './asistentes.js';
 import { tocaOfrecerAvisos, posponerAvisos, olvidarEspera } from './utils/avisos-prompt.js';
 import { ayudaAvisos, probarAvisosGuiados } from './utils/avisos-ayuda.js';
 import { renderFotoInteracciones, wireFotoInteracciones } from './foto-interacciones.js';
@@ -48,6 +49,10 @@ function iconoAccionNube(tipo) {
 }
 
 export async function renderInicio($app) {
+    // El ayudante es del circulo: el papa de Charly tiene al Diego y la
+    // mama a Nube, asi que NINGUN texto de esta pantalla puede decir
+    // "Nube" escrito a mano.
+    const asis = asistenteActual();
     const yo = getMiembroVisto();
     const fotos = getFotosDia();
     const miembros = getMiembrosReales();
@@ -83,9 +88,9 @@ export async function renderInicio($app) {
             </p>
         ` : ''}
 
-        <section class="nube-home" aria-label="Nube, tu asistente">
+        <section class="nube-home" aria-label="${h(asis.nombre)}, tu asistente">
             <div class="nube-avatar" id="nube-rig" data-state="idle" role="img"
-                 aria-label="Nube, tu asistente de Pensándote">
+                 aria-label="${h(asis.nombre)}, tu asistente de Pensándote">
                 <div class="nube-avatar__shadow" aria-hidden="true"></div>
                 <div class="nube-avatar__body">
                     <div class="nube-avatar__sprite" aria-hidden="true"></div>
@@ -102,7 +107,7 @@ export async function renderInicio($app) {
                 ? `<div id="avisos-oferta" aria-live="polite"></div>`
                 : ''}
 
-            <button class="nube-mic" id="nube-mic" type="button">Hablar con Nube</button>
+            <button class="nube-mic" id="nube-mic" type="button">Hablar con ${h(asis.nombre)}</button>
 
             <div class="nube-escribir">
                 <label class="sr-only" for="nube-texto">También podés escribir</label>
@@ -278,6 +283,12 @@ async function pintarAvisosSimple($app, { animar = false } = {}) {
     // aquí una segunda activación que sólo habilita los avisos de Chrome.
     if (esAndroidNativo()) { limpiar(); return; }
 
+    // En "ver como mi papa" la campana mentia: mostraba el estado de los
+    // avisos del telefono DEL TUTOR, no los de su papa. La vista previa es
+    // render de datos reales del circulo, y el permiso del navegador no es
+    // un dato del circulo: es de este telefono. Asi que aca no va.
+    if (esPreview()) { limpiar(); return; }
+
     const vapid = window.PENSANDOTE_CONFIG?.VAPID_PUBLIC_KEY || '';
     if (!vapid || vapid.startsWith('REEMPLAZAR')) { limpiar(); return; }
 
@@ -311,7 +322,7 @@ async function pintarAvisosSimple($app, { animar = false } = {}) {
         if (!$pin) return;
         const etiqueta = modo === 'on'   ? 'Avisos activados'
                        : modo === 'bloq' ? 'Avisos bloqueados en el teléfono'
-                       : 'Activar avisos de Nube';
+                       : `Activar avisos de ${asistenteActual().nombre}`;
         $pin.innerHTML = `
             <button type="button" class="avisos-pin avisos-pin--${modo}${animar ? ' is-entrando' : ''}"
                     id="avisos-pin-btn" aria-label="${etiqueta}" title="${etiqueta}">
@@ -326,7 +337,7 @@ async function pintarAvisosSimple($app, { animar = false } = {}) {
             // queremos que toque sin querer.
             $btn.addEventListener('click', async () => {
                 const ok = await modal({
-                    titulo: 'Tus avisos de Nube',
+                    titulo: `Tus avisos de ${asistenteActual().nombre}`,
                     cuerpo: '<p>Podés probar que llegan. Si elegís apagarlos, ya no te avisaremos cuando tu familia te deje algo.</p>',
                     acciones: [
                         { label: 'Probar un aviso', clase: 'btn--inicio btn--full', value: 'probar' },

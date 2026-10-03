@@ -28,7 +28,7 @@ import {
     marcarPuntaUsada,
     mandarMensajeAFamilia
 } from './data-emotiva.js';
-import { asistenteDe, archivoDeCuadro } from './asistentes.js';
+import { asistenteDe, archivoDeCuadro, asistenteActual } from './asistentes.js';
 import { TUTORIALES } from './mocks.js';
 import { ejecutarAccion, construirContexto } from './asistente-pensa.js';
 import {
@@ -783,7 +783,7 @@ export function montarNubeInicio($app) {
                          aria-labelledby="nube-guia-titulo">
                     <header class="nube-guia__header">
                         <div>
-                            <span class="nube-guia__eyebrow">Nube te acompaña</span>
+                            <span class="nube-guia__eyebrow">${h(asistenteActual().nombre)} te acompaña</span>
                             <h2 id="nube-guia-titulo">${h(tutorial.titulo)}</h2>
                         </div>
                         <button class="nube-guia__cerrar" type="button" aria-label="Cerrar guía">×</button>
@@ -806,7 +806,7 @@ export function montarNubeInicio($app) {
                         `}
                     </div>
                     <p class="nube-guia__video-ayuda">
-                        El video no arranca solo para que no se mezcle con la voz de Nube.
+                        El video no arranca solo para que no se mezcle con la voz de ${h(asistenteActual().nombre)}.
                         <a href="https://www.youtube.com/results?search_query=${encodeURIComponent(video.query)}"
                            target="_blank" rel="noopener">Buscar otro video</a>
                     </p>
@@ -1022,7 +1022,7 @@ export function montarNubeInicio($app) {
         if (/^(te quiero contar|quiero contarte|me acuerdo de|cuando yo era|te cuento que)\b/i.test(pregunta)) {
             relatoPendiente = {
                 puntaId: null,
-                pregunta: 'Una charla espontánea con Nube'
+                pregunta: `Una charla espontánea con ${asistenteActual().nombre}`
             };
             await guardarRespuestaRelato(pregunta);
             return;
@@ -1090,7 +1090,7 @@ export function montarNubeInicio($app) {
         $btnMic: $mic,
         $estado,
         labels: {
-            hablar: 'Hablar con Nube',
+            hablar: `Hablar con ${asis.nombre}`,
             terminar: '⏹ LISTO',
             grabando: 'Te escucho…'
         },

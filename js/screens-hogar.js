@@ -50,6 +50,7 @@ import { renderFotoInteracciones, wireFotoInteracciones } from './foto-interacci
 import { montarAlertasCuidado, montarTareasCuidado, montarCuidadoCalle,
          montarAsistenteDelCirculo } from './cuidado-familiar.js';
 import { esAndroidNativo } from './native-fcm.js';
+import { asistenteDe, asistenteActual } from './asistentes.js';
 
 // LocalStorage key para marcar pensamientos recibidos como "vistos".
 const LS_LAST_SEEN = (circleId, userId) =>
@@ -110,7 +111,7 @@ export async function renderHogar($app) {
         <section class="card stack hogar-checkin">
             <div class="hogar-checkin__intro">
                 <h2>Estado de hoy</h2>
-                <p>Nube consulta a tu familiar y te avisa cuando responde.</p>
+                <p>${h(asistenteDe(c).nombre)} consulta a tu familiar y te avisa cuando responde.</p>
             </div>
             <div id="sec-checkin-estado">
                 <div class="skel skel--line" aria-hidden="true"></div>
@@ -179,7 +180,7 @@ export async function renderHogar($app) {
             try {
                 await crearPunta(c.id, texto);
                 $inp.value = '';
-                $est.textContent = '✅ Listo. Nube se lo va a preguntar.';
+                $est.textContent = `✅ Listo. ${asistenteDe(c).nombre} se lo va a preguntar.`;
             } catch (err) {
                 console.error('[preguntar rapido]', err);
                 $est.textContent = 'No pude enviarla. Probá de nuevo en un momento.';
@@ -350,10 +351,10 @@ export async function renderFamilia($app) {
         </section>
 
         <section class="card stack hogar-puntas">
-            <h2>🗣 Lo que le va a preguntar Nube</h2>
+            <h2>🗣 Lo que le va a preguntar ${h(asistenteDe(c).nombre)}</h2>
             <p class="muted">
                 Las preguntas se escriben desde el <strong>Inicio</strong>.
-                Acá ves las que Nube todavía no hizo, y podés sumar
+                Acá ves las que ${h(asistenteDe(c).nombre)} todavía no hizo, y podés sumar
                 alguna de las sugeridas.
             </p>
 
@@ -363,7 +364,7 @@ export async function renderFamilia($app) {
                 </summary>
                 <p class="muted" style="font-size:0.85em; margin: 0.4rem 0 0.6rem;">
                     Disparadores de historia de vida. Tocá "Agregar" en las
-                    que te sirvan — Nube se las va a preguntar.
+                    que te sirvan — ${h(asistenteDe(c).nombre)} se las va a preguntar.
                 </p>
                 <ul class="ideas-sugeridas__lista" id="sec-ideas-sugeridas"></ul>
             </details>
@@ -371,7 +372,7 @@ export async function renderFamilia($app) {
             <div id="sec-puntas-cola"><p class="muted">Cargando…</p></div>
 
             <div class="charlas-nube">
-                <h3>💬 Lo que conversó con Nube</h3>
+                <h3>💬 Lo que conversó con ${h(asistenteDe(c).nombre)}</h3>
                 <p class="muted">Acá aparecen sus respuestas, sin convertirlas todavía en un libro ni en una historia publicada.</p>
                 <div id="sec-charlas-nube"><p class="muted">Cargando charlas…</p></div>
             </div>
@@ -1651,11 +1652,11 @@ function renderCola($cont, puntas, todas, c, u, $app) {
     if (!puntas.length) {
         let vacio;
         if (preguntadas.length) {
-            vacio = 'Nube ya preguntó todo lo que cargaste. Sumá otra arriba o elegí de las sugeridas.';
+            vacio = `${asistenteDe(c).nombre} ya preguntó todo lo que cargaste. Sumá otra arriba o elegí de las sugeridas.`;
         } else if (descartadas.length) {
-            vacio = `No hay ninguna esperando: descartaste ${descartadas.length === 1 ? 'la única que habías cargado' : `las ${descartadas.length} que habías cargado`} y todavía no cargaste otra. Nube no preguntó ninguna todavía.`;
+            vacio = `No hay ninguna esperando: descartaste ${descartadas.length === 1 ? 'la única que habías cargado' : `las ${descartadas.length} que habías cargado`} y todavía no cargaste otra. ${asistenteDe(c).nombre} no preguntó ninguna todavía.`;
         } else {
-            vacio = 'Todavía no cargaste ninguna pregunta. Escribí una desde el Inicio y Nube se la va a hacer la próxima vez que abra la app.';
+            vacio = `Todavía no cargaste ninguna pregunta. Escribí una desde el Inicio y ${asistenteDe(c).nombre} se la va a hacer la próxima vez que abra la app.`;
         }
         $cont.innerHTML = `<p class="muted">${h(vacio)}</p>${yaPreguntadas}`;
         return;
@@ -1827,7 +1828,7 @@ async function pintarAvisos($cont, { portada = false } = {}) {
     }
 
     if (['no-soporta', 'bloqueado', 'error'].includes(st.estado)) {
-        $cont.innerHTML = `<div class="avisos-row"><span class="avisos-row__label">Avisos de Nube</span>
+        $cont.innerHTML = `<div class="avisos-row"><span class="avisos-row__label">Avisos de Pensándote</span>
             <button class="btn btn--inicio" id="btn-ayuda-avisos">${st.estado === 'error' ? 'Volver a comprobar' : 'Ayudame a activarlos'}</button></div>`;
         $cont.querySelector('#btn-ayuda-avisos').addEventListener('click', async () => {
             if (st.estado !== 'error') await ayudaAvisos();
@@ -1981,7 +1982,7 @@ async function pintarAvisos($cont, { portada = false } = {}) {
             <button class="btn btn--mini btn--inicio" id="btn-activar-avisos">Activar avisos</button>
         </div>
         <p class="muted avisos-help">
-            Activálos una sola vez en este teléfono. Te avisaremos cuando tu familiar responda a Nube,
+            Activálos una sola vez en este teléfono. Te avisaremos cuando tu familiar responda,
             comparta una foto o confirme un remedio.
         </p>
     `;
@@ -2053,10 +2054,10 @@ async function cargarCheckinsDelDia(c, $cont) {
     $cont.querySelectorAll('[data-pedir-checkin]').forEach(btn => {
         btn.addEventListener('click', async () => {
             btn.disabled = true;
-            btn.textContent = 'Avisando a Nube…';
+            btn.textContent = `Avisando a ${asistenteDe(c).nombre}…`;
             try {
                 await solicitarCheckin(c.id, btn.dataset.pedirCheckin);
-                btn.textContent = '✓ Nube se lo va a preguntar';
+                btn.textContent = `✓ ${asistenteDe(c).nombre} se lo va a preguntar`;
             } catch (err) {
                 console.error('[solicitar checkin]', err);
                 btn.disabled = false;
@@ -2067,7 +2068,7 @@ async function cargarCheckinsDelDia(c, $cont) {
 }
 
 function pintarAvisosPortada($cont, st, vapid) {
-    const nube = './assets/nube/nube-reposo.webp';
+    const nube = asistenteActual().retrato;
     // Las clases de estado se acumulaban: si activabas y despues
     // desactivabas, quedaba pegado el estilo anterior. Reseteamos.
     const $caja = $cont.parentElement;
@@ -2092,7 +2093,7 @@ function pintarAvisosPortada($cont, st, vapid) {
     if (['no-soporta', 'bloqueado', 'error'].includes(st.estado)) {
         $caja?.classList.add('is-blocked');
         $cont.innerHTML = base(`
-            <strong>Nube no puede avisarte todavía</strong>
+            <strong>Pensándote no puede avisarte todavía</strong>
             <span>${st.estado === 'error' ? 'No pude comprobar la conexión. Volvé a intentarlo.' : 'Te acompaño paso a paso para activarlos en este teléfono.'}</span>
         `);
         $cont.insertAdjacentHTML('beforeend', `<button class="avisos-inicio__accion" id="btn-ayuda-avisos-inicio">${st.estado === 'error' ? 'Volver a comprobar' : 'Ayudame a activarlos'}</button>`);
@@ -2104,7 +2105,7 @@ function pintarAvisosPortada($cont, st, vapid) {
     }
 
     $cont.innerHTML = base(`
-        <strong>Que Nube te cuente lo importante</strong>
+        <strong>Que te contemos lo importante</strong>
         <span>Enterate cuando responda, comparta una foto o confirme un remedio.</span>
     `, '<button class="avisos-inicio__accion" id="btn-activar-avisos-inicio">Activar</button>');
 

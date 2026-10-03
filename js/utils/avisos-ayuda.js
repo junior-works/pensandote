@@ -34,7 +34,7 @@ export async function probarAvisosGuiados(circleId) {
     try {
         const reg = await navigator.serviceWorker.getRegistration();
         if (reg) {
-            await reg.showNotification('Nube: prueba del teléfono', {
+            await reg.showNotification('Pensándote: prueba del teléfono', {
                 body: 'Esta es la primera prueba. Ahora te mando otra por internet.',
                 icon: './assets/icon-192.png', tag: 'nube-prueba-local'
             });
