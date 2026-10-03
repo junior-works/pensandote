@@ -24,7 +24,7 @@
 <h1>Prueba de voz de Diego</h1>
 <p class="sub">Mide si este teléfono aguanta la voz masculina. No toca la app.</p>
 
-<button id="bajar">1 · Bajar la voz (21 MB)</button>
+<button id="bajar">1 · Bajar la voz (28 MB)</button>
 <button id="hablar" disabled>2 · Que diga una frase</button>
 <button id="hablar2" disabled>3 · Que diga una frase larga</button>
 
@@ -39,14 +39,14 @@ const log = (m, clase) => {
     $log.scrollTop = $log.scrollHeight;
 };
 
-const VOZ = 'es_MX-ald-x_low';
+const VOZ = 'es_ES-carlfm-x_low';
 let tts = null;
 
 async function cargarLib() {
     if (tts) return tts;
     log('Cargando el motor…');
     const t = performance.now();
-    tts = await import('https://esm.sh/@diffusionstudio/vits-web@1.0.3');
+    tts = await import('./js/vendor/vits-web.browser.js');
     log(`Motor cargado en ${((performance.now() - t) / 1000).toFixed(1)}s`, 'ok');
     return tts;
 }
