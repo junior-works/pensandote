@@ -847,6 +847,11 @@ export function montarNubeInicio($app) {
             if (!tutorial?.pasos?.length) throw new Error('Tutorial no disponible');
 
             cerrarGuiaActiva?.();
+            // El paso a paso es del MISMO ayudante que esta en pantalla. El
+            // nombre ya salia de aca; la cara estaba clavada en el CSS al
+            // sprite de Nube, asi que decia "Diego te acompana" con la
+            // carita del perro al lado. Ahora las dos salen del mismo lugar.
+            const quien = asistenteActual();
             const video = VIDEO_TUTORIALES[slug] || { id: null, query: tutorial.titulo };
             const $overlay = document.createElement('div');
             $overlay.className = 'nube-guia-overlay';
@@ -855,7 +860,7 @@ export function montarNubeInicio($app) {
                          aria-labelledby="nube-guia-titulo">
                     <header class="nube-guia__header">
                         <div>
-                            <span class="nube-guia__eyebrow">${h(asistenteActual().nombre)} te acompaña</span>
+                            <span class="nube-guia__eyebrow">${h(quien.nombre)} te acompaña</span>
                             <h2 id="nube-guia-titulo">${h(tutorial.titulo)}</h2>
                         </div>
                         <button class="nube-guia__cerrar" type="button" aria-label="Cerrar guía">×</button>
@@ -878,13 +883,13 @@ export function montarNubeInicio($app) {
                         `}
                     </div>
                     <p class="nube-guia__video-ayuda">
-                        El video no arranca solo para que no se mezcle con la voz de ${h(asistenteActual().nombre)}.
+                        El video no arranca solo para que no se mezcle con la voz de ${h(quien.nombre)}.
                         <a href="https://www.youtube.com/results?search_query=${encodeURIComponent(video.query)}"
                            target="_blank" rel="noopener">Buscar otro video</a>
                     </p>
 
                     <div class="nube-guia__dialogo">
-                        <div class="nube-guia__cara" aria-hidden="true"></div>
+                        <div class="nube-guia__cara" data-asistente="${h(quien.slug)}" aria-hidden="true"></div>
                         <div class="nube-guia__globo">
                             <strong id="nube-guia-numero"></strong>
                             <p id="nube-guia-texto" aria-live="polite"></p>
@@ -901,6 +906,14 @@ export function montarNubeInicio($app) {
                 </section>
             `;
             document.body.appendChild($overlay);
+            // Nube se dibuja con el sprite (el CSS le mueve la boca). Los
+            // demas ayudantes son imagenes sueltas: les ponemos el retrato
+            // y listo. Si algun dia falta el archivo, queda el fondo crema
+            // y el globo se lee igual.
+            if (quien.modo !== 'sprite' && quien.retrato) {
+                const $cara = $overlay.querySelector('.nube-guia__cara');
+                if ($cara) $cara.style.backgroundImage = `url('${quien.retrato}')`;
+            }
             document.body.classList.add('nube-guia-abierta');
             $overlay.querySelector('.nube-guia__cerrar')?.focus();
 

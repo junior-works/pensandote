@@ -681,10 +681,18 @@ body.nube-guia-abierta { overflow: hidden; }
     width: 86px;
     aspect-ratio: 1;
     border-radius: 44%;
-    background: #faf5e9 url('./assets/nube/nube-sprites-v1.webp') 0 0 / 300% 300% no-repeat;
+    /* La imagen la pone el ayudante, no esta regla. Cuando estaba fija acá,
+       el paso a paso decía "Diego te acompaña" con la carita de Nube. */
+    background: #faf5e9 center top / cover no-repeat;
     filter: drop-shadow(0 4px 7px rgba(77,39,30,.18));
     animation: nube-guia-cabecea 3.4s ease-in-out infinite;
 }
+/* Nube es un sprite de nueve cuadros: hay que encuadrar el de reposo y
+   recortarle la boca aparte para que se mueva. Los demás son un retrato. */
+.nube-guia__cara[data-asistente="nube"] {
+    background: #faf5e9 url('./assets/nube/nube-sprites-v1.webp') 0 0 / 300% 300% no-repeat;
+}
+.nube-guia__cara:not([data-asistente="nube"])::after { content: none; }
 .nube-guia__cara::after {
     content: '';
     position: absolute;
