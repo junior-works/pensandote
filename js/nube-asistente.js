@@ -155,7 +155,6 @@ export function montarNubeInicio($app) {
         bocaAbiertaIdx++;
         $bocas[1].style.backgroundImage = `url("${asis.boca.carpeta}${f}")`;
     }
-    }
     $bocas[0].style.backgroundPosition = FRAMES.talkSoft;
     $bocas[1].style.backgroundPosition = FRAMES.talkOpen;
     let blinkTimer = null;
