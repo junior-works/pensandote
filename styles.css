@@ -5214,3 +5214,20 @@ body :is(.btn--danger, .btn--emergencia, .btn--panico,
         justify-self: stretch;
     }
 }
+
+/* -------------------------------------------------------------------
+   "Más" de Ajustes — lo que se guardó en vez de borrarse.
+   Plegado por defecto: está, no estorba, y se abre si hace falta.
+   ------------------------------------------------------------------- */
+.mas-guardado { border-top: 1px solid var(--line, #ddd); padding-top: 0.6rem; }
+.mas-guardado + .mas-guardado { margin-top: 0.4rem; }
+.mas-guardado > summary {
+    cursor: pointer;
+    font-weight: 700;
+    padding: 0.5rem 0;
+    list-style: none;
+}
+.mas-guardado > summary::-webkit-details-marker { display: none; }
+.mas-guardado > summary::before { content: '▸ '; }
+.mas-guardado[open] > summary::before { content: '▾ '; }
+.mas-guardado > summary:focus-visible { outline: 3px solid var(--line, #111); outline-offset: 2px; }

@@ -134,11 +134,6 @@ export async function renderHogar($app) {
             <div id="sec-alertas-cuidado"><p class="muted">Cargando…</p></div>
         </section>
 
-        <section class="card stack cuidado-panel" aria-labelledby="cuidado-tareas-titulo">
-            <h2 id="cuidado-tareas-titulo">Cuidados entre todos</h2>
-            <div id="sec-tareas-cuidado"><p class="muted">Cargando…</p></div>
-            <div id="sec-cuidado-calle"></div>
-        </section>
 
         <section class="card stack hogar-ultimo-carino" id="sec-ultimo-carino" hidden></section>
 
@@ -198,8 +193,6 @@ export async function renderHogar($app) {
     cargarHeroFoto(c, $app.querySelector('#sec-hero'));
     cargarCheckinsDelDia(c, $app.querySelector('#sec-checkin-estado'));
     montarAlertasCuidado($app.querySelector('#sec-alertas-cuidado'), c.id, _miembrosCache || [], u.id);
-    montarTareasCuidado($app.querySelector('#sec-tareas-cuidado'), c.id, _miembrosCache || [], u.id);
-    montarCuidadoCalle($app.querySelector('#sec-cuidado-calle'), c.id, _miembrosCache || [], u.id);
     cargarUltimoCarino(c, u, $app.querySelector('#sec-ultimo-carino'));
 
     cargarProximasCosas(c, $app.querySelector('#sec-proximas'));
@@ -440,6 +433,68 @@ export async function renderFamilia($app) {
 // Contactos (sub-sección) · Accesos/Trámites (sub-sección) · Tus círculos ·
 // Cerrar sesión. Movido desde el viejo renderHogar.
 // =====================================================================
+/**
+ * "Sus datos" — todo lo que se carga sobre la persona que usa la app,
+ * bajo un solo techo.
+ *
+ * Antes esto estaba repartido en cinco entradas del menu: Salud,
+ * Recorda, Contactos, Estudios y Accesos. Ninguna decia "datos de ella",
+ * y para cargar un remedio y un turno habia que salir y entrar por dos
+ * lados distintos.
+ *
+ * Los contactos van enteros aca porque es lo que mas se toca (y lo que
+ * usa el boton de ayuda). El resto son puertas grandes a las pantallas
+ * que ya existen, con el ultimo dato a la vista para no tener que entrar
+ * solo para mirar.
+ */
+export async function renderSusDatos($app) {
+    const c = state.circulosReal.find(x => x.id === state.circuloActivoIdReal);
+    if (!c) { go('#/inicio'); return; }
+
+    const quien = parentescoSimpleEnCirculo() || 'tu familiar';
+
+    $app.innerHTML = `
+        <h1>\u{1F5C2} Sus datos</h1>
+        <p class="muted">Lo que carg\u00e1s sobre ${h(quien)}: lo ve en su pantalla.</p>
+
+        <section class="card stack">
+            <h2>\u{1F4C7} Contactos</h2>
+            <p class="muted">Los que ve en "Familia" y a los que llama desde Emergencias.</p>
+            <div id="sec-contactos-admin"><p class="muted">Cargando\u2026</p></div>
+        </section>
+
+        <section class="card stack">
+            <h2>\u{1F3E5} Salud</h2>
+            <div class="hogar-acciones__grid">
+                <button class="btn btn--xl btn--medico btn--full" data-ir="#/datos-medicos">
+                    \u{1FA7A} Remedios, m\u00e9dicos y obra social
+                </button>
+                <button class="btn btn--full" data-ir="#/estudios">\u{1F4C4} Estudios y documentos</button>
+            </div>
+        </section>
+
+        <section class="card stack">
+            <h2>\u23F0 Recordatorios</h2>
+            <p class="muted">Turnos, cumplea\u00f1os, lo que haya que no olvidar.</p>
+            <button class="btn btn--xl btn--inicio btn--full" data-ir="#/haceme-acordar">
+                Ver y agregar recordatorios
+            </button>
+        </section>
+
+        <section class="card stack">
+            <h2>\u{1F3DB} Tr\u00e1mites</h2>
+            <p class="muted">PAMI y ANSES.</p>
+            <button class="btn btn--full" data-ir="#/pami-anses">Abrir PAMI / ANSES</button>
+        </section>
+    `;
+
+    $app.querySelectorAll('[data-ir]').forEach($b => {
+        $b.addEventListener('click', () => go($b.dataset.ir));
+    });
+
+    montarSeccionContactos($app.querySelector('#sec-contactos-admin'), c.id);
+}
+
 export async function renderAccesos($app) {
     const u = state.usuarioReal;
     const m = state.membresiaReal;
@@ -449,8 +504,8 @@ export async function renderAccesos($app) {
     _miembrosCache = await miembrosDelCirculo(c.id).catch(() => []);
 
     $app.innerHTML = `
-        <h1>🔗 Accesos</h1>
-        <p class="muted">Todo lo que administrás del círculo de ${h(c.nombre)}.</p>
+        <h1>⚙️ Ajustes</h1>
+        <p class="muted">La configuración del círculo de ${h(c.nombre)}.</p>
 
         <section class="card stack hogar-acciones">
             <h2>⚙️ Administración del círculo</h2>
@@ -477,16 +532,32 @@ export async function renderAccesos($app) {
             <div id="sec-avisos-lista"></div>
         </section>
 
-        <section class="card stack">
-            <h2>📇 Contactos</h2>
-            <p class="muted">Los que ve tu familiar en su pantalla "Familia" y en las emergencias.</p>
-            <div id="sec-contactos-admin"><p class="muted">Cargando…</p></div>
-        </section>
+
 
         <section class="card stack">
-            <h2>🔗 Accesos / Trámites</h2>
-            <p class="muted">Botones grandes (PAMI, ANSES, banco) que aparecen en la app de tu familiar.</p>
-            <div id="sec-accesos-admin"><p class="muted">Cargando…</p></div>
+            <h2>🚶 Cuidado en la calle</h2>
+            <div id="sec-cuidado-calle"></div>
+        </section>
+
+        <!-- Lo que nadie uso nunca. No se borro: se guardo. Si alguna vez
+             hace falta, esta a un click, y mientras tanto no estorba. -->
+        <section class="card stack">
+            <h2>📦 Más</h2>
+            <details class="mas-guardado">
+                <summary>🔗 Accesos / Trámites</summary>
+                <p class="muted">Botones grandes (PAMI, ANSES, banco) en la pantalla de tu familiar.</p>
+                <div id="sec-accesos-admin"><p class="muted">Cargando…</p></div>
+            </details>
+            <details class="mas-guardado">
+                <summary>🤝 Cuidados entre todos</summary>
+                <p class="muted">Repartir tareas entre los miembros del círculo.</p>
+                <div id="sec-tareas-cuidado"><p class="muted">Cargando…</p></div>
+            </details>
+            <details class="mas-guardado">
+                <summary>📖 Biografía</summary>
+                <p class="muted">Juntar su historia de a pedacitos.</p>
+                <button class="btn" id="btn-ir-biografia">Abrir biografía</button>
+            </details>
         </section>
 
         <section class="card stack hogar-circulos">
@@ -582,9 +653,13 @@ export async function renderAccesos($app) {
     pintarAvisos($app.querySelector('#sec-avisos-estado'));
     pintarListaAvisos($app.querySelector('#sec-avisos-lista'), c.id);
 
-    // --- Sub-secciones Contactos + Accesos/Trámites (delegadas a screens-admin) ---
-    montarSeccionContactos($app.querySelector('#sec-contactos-admin'), c.id);
+    // Ajustes guarda lo que casi no se toca: el interruptor del cuidado en
+    // la calle, y plegado, lo que nadie uso todavia.
+    montarCuidadoCalle($app.querySelector('#sec-cuidado-calle'), c.id, _miembrosCache || [], u.id);
     montarSeccionAccesos($app.querySelector('#sec-accesos-admin'), c.id);
+    montarTareasCuidado($app.querySelector('#sec-tareas-cuidado'), c.id, _miembrosCache || [], u.id);
+    $app.querySelector('#btn-ir-biografia')?.addEventListener('click', () => go('#/biografia'));
+
 
     // --- Badge de estudios nuevos en el botón ---
     pintarBadgeEstudios(c, $app);

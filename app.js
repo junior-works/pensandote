@@ -377,8 +377,14 @@ function renderRouteReal(ruta) {
         // Tab "Accesos" (dashboard): pantalla compuesta — administración del
         // círculo + Tus círculos + Contactos + Accesos/Trámites. En modo
         // simple no aplica (el papá no gestiona el círculo).
-        if (ruta.name === 'accesos' && state.membresiaReal?.interface_mode !== 'simple') {
+        if ((ruta.name === 'accesos' || ruta.name === 'ajustes')
+            && state.membresiaReal?.interface_mode !== 'simple') {
             return Hogar.renderAccesos($app);
+        }
+        // "Sus datos": un solo techo para lo que antes estaba repartido
+        // en cinco entradas distintas del menu.
+        if (ruta.name === 'sus-datos' && state.membresiaReal?.interface_mode !== 'simple') {
+            return Hogar.renderSusDatos($app);
         }
         if (ruta.name === 'guia-admin')     return Admin.renderGuiaAdmin($app, ruta);
         if (ruta.name === 'medico')         return Admin.renderMedicoSimpleReal($app);
@@ -728,12 +734,22 @@ bootstrap().catch(err => {
 // posición de la pill.
 // `key` define el acento de color de la tab (ver --admin-accent en
 // styles.css): el nav, el header y los glows toman el color del tab activo.
+// Cuatro solapas, no cinco, y cada una con un nombre que dice que hay
+// adentro. Antes habia cinco entradas que llevaban a pantallas de
+// administracion desparramadas: "Salud", "Recorda" y "Accesos" eran todas
+// cosas que se cargan sobre la misma persona.
+//
+// `match` es generoso a proposito: las pantallas viejas siguen existiendo
+// y se llega a ellas desde adentro, asi que la solapa correcta tiene que
+// quedar marcada igual.
 const ADMIN_NAV_ITEMS = [
-    { href: '#/inicio',         icon: '🏠', label: 'Inicio',   key: 'inicio',  match: ['inicio', 'cuenta'] },
-    { href: '#/familia',        icon: '💜', label: 'Familia',  key: 'familia', match: ['familia'] },
-    { href: '#/datos-medicos',  icon: '🩺', label: 'Salud',    key: 'salud',   match: ['datos-medicos', 'medico', 'salud', 'remedios'] },
-    { href: '#/haceme-acordar', icon: '⏰', label: 'Recordá',  key: 'recorda', match: ['haceme-acordar'] },
-    { href: '#/accesos',        icon: '🔗', label: 'Accesos',  key: 'accesos', match: ['accesos', 'accesos-admin', 'contactos', 'estudios', 'guia-admin'] }
+    { href: '#/inicio',    icon: '🏠', label: 'Hoy',       key: 'hoy',     match: ['inicio', 'cuenta'] },
+    { href: '#/familia',   icon: '💜', label: 'Familia',   key: 'familia', match: ['familia', 'v2', 'biografia'] },
+    { href: '#/sus-datos', icon: '🗂', label: 'Sus datos', key: 'datos',
+      match: ['sus-datos', 'datos-medicos', 'medico', 'salud', 'remedios',
+              'haceme-acordar', 'estudios', 'contactos', 'pami-anses'] },
+    { href: '#/ajustes',   icon: '⚙️', label: 'Ajustes',  key: 'ajustes',
+      match: ['ajustes', 'accesos', 'accesos-admin', 'guia-admin'] }
 ];
 
 function actualizarShellAdmin() {
