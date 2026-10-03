@@ -3,7 +3,7 @@
  *
  * Reúne los ladrillos de la capa emotiva contra Supabase:
  *   - Pensé en vos (in-app, persona a persona, sin ntfy).
- *   - Foto del día + Calendario afectivo + Última vez que hablamos.
+ *   - Foto del día + Calendario afectivo + Último cariño.
  *   - Historias / legado (audio real + favorita + repreguntar).
  * En dashboard, además, un bloque "Acciones del círculo" con
  * accesos visibles a Invitar / Miembros / Contactos / Datos médicos.
@@ -159,7 +159,7 @@ export async function renderHogar($app) {
                 <button class="btn btn--xl btn--pense"  data-qa="carino">💜 Mandar cariño</button>
                 <button class="btn btn--xl btn--familia" data-qa="mensaje">💬 Mandar mensaje</button>
                 <button class="btn btn--xl btn--inicio" data-qa="recordatorio">✏️ Agregar recordatorio</button>
-                <button class="btn btn--xl btn--medico" data-qa="mail">✉️ Mail al médico</button>
+                <button class="btn btn--xl btn--medico" data-qa="mail">🩺 Datos médicos</button>
             </div>
         </section>
     `;
@@ -207,6 +207,9 @@ export async function renderHogar($app) {
     $app.querySelector('[data-qa="carino"]')?.addEventListener('click', () => go('#/familia'));
     $app.querySelector('[data-qa="mensaje"]')?.addEventListener('click', () => mandarMensajeWhatsApp());
     $app.querySelector('[data-qa="recordatorio"]')?.addEventListener('click', () => go('#/haceme-acordar'));
+    // Decia "Mail al medico" y abre el formulario de datos medicos (obra
+    // social, afiliado, el medico de cabecera). No manda ningun mail.
+    // El nombre prometia una cosa y hacia otra; ahora dice lo que hace.
     $app.querySelector('[data-qa="mail"]')?.addEventListener('click', () => go('#/datos-medicos'));
 }
 
@@ -346,7 +349,7 @@ export async function renderFamilia($app) {
         </section>
 
         <section class="card stack">
-            <h2>👨‍👩‍👧 Última vez que hablamos</h2>
+            <h2>💜 Último cariño</h2>
             <div id="sec-contactos">Cargando…</div>
             <p class="muted">Se actualiza solo cuando alguien te manda un pensé.</p>
         </section>
@@ -1234,7 +1237,17 @@ async function onCrearFecha(c, ev, $app) {
 }
 
 // =====================================================================
-// Última vez que hablamos
+// Último cariño
+// ---------------------------------------------------------------------
+// OJO con el nombre: `contactos_ultimo` se escribe en UN solo lugar — al
+// mandar un "Pensé en vos" (ver mandarPensamiento mas abajo). No sabe
+// nada de llamadas, de WhatsApp ni de mensajes. Esta seccion decia
+// "Última vez que hablamos" y "Hablaron hace 3 días" a partir de un
+// corazoncito: le ponia nombre de conversacion a un gesto de un toque, y
+// podia dejar tranquilo a un hijo que hace semanas que no llama.
+// Si algun dia se quiere medir contacto de verdad, hay que escribir esta
+// tabla tambien desde la llamada y el mensaje — y recien ahi se le puede
+// volver a cambiar el nombre.
 // =====================================================================
 async function cargarContactosUltimo(c, u, $cont) {
     try {
@@ -1253,12 +1266,12 @@ async function cargarContactosUltimo(c, u, $cont) {
                     const t = ultimoPor[m.user_id];
                     const txt = t
                         ? formatearHace(hoy - new Date(t).getTime())
-                        : 'todavía no hubo contacto';
+                        : 'todavía no se mandaron cariño';
                     return `
                         <li class="contacto-card" style="grid-template-columns:1fr;">
                             <div class="contacto-card__info">
                                 <strong>${h(m.parentesco || 'Familiar')}</strong>
-                                <small>${h(t ? `Hablaron ${txt}` : txt)}</small>
+                                <small>${h(t ? `Se mandaron cariño ${txt}` : txt)}</small>
                             </div>
                         </li>
                     `;

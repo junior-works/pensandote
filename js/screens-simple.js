@@ -614,6 +614,18 @@ export function renderSalud($app) {
                 <span class="tarjeton__icono">📄</span>
                 <span class="tarjeton__label">Mis estudios</span>
             </button>
+            <!--
+                PAMI y ANSES existe desde siempre (#/pami-anses, con sus
+                respuestas de las paginas oficiales) pero NO tenia ningun
+                boton en toda la app: solo se llegaba si el ayudante te
+                llevaba. El prompt del asistente ademas afirmaba que estaba
+                "en Salud", asi que decia la verdad de una pantalla que no
+                existia. Ahora si esta.
+            -->
+            <button class="tarjeton tarjeton--medico" data-go="#/pami-anses">
+                <span class="tarjeton__icono">📋</span>
+                <span class="tarjeton__label">PAMI y ANSES</span>
+            </button>
         </div>
     `;
     wireNav($app);
