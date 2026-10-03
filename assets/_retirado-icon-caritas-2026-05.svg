@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Pensándote">
+    <!-- Pensándote — ícono base 512x512.
+         Idea: dos cabezas (cercanía) unidas por un puente terracota (el "pensé en vos"). -->
+    <rect width="512" height="512" fill="#faf5e9"/>
+
+    <!-- Puente / abrazo en terracota: une las dos cabezas por abajo. -->
+    <path d="M 96 348 Q 256 472 416 348"
+          fill="none" stroke="#e26b3f" stroke-width="44" stroke-linecap="round"/>
+
+    <!-- Cabeza izquierda y derecha (tinta) — sólidas, simples, legibles a 48px. -->
+    <circle cx="176" cy="216" r="74" fill="#111"/>
+    <circle cx="336" cy="216" r="74" fill="#111"/>
+</svg>
