@@ -181,3 +181,20 @@ export async function ultimoCheckinDeSiempre(circleId) {
     if (error) throw error;
     return (data || [])[0] || null;
 }
+
+/**
+ * Asigna el ayudante del círculo (Nube, el Diego, el que haya).
+ *
+ * Por función y no por UPDATE directo, igual que el cuidado en la calle:
+ * la única política de escritura de `circles` es para su dueño, y abrirla
+ * para esta columna sería abrirla para todas.
+ */
+export async function fijarAsistente(circleId, slug) {
+    const sb = await sbClient();
+    const { data, error } = await sb.rpc('fijar_asistente', {
+        p_circle_id: circleId,
+        p_slug: slug
+    });
+    if (error) throw error;
+    return data === true;
+}

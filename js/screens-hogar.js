@@ -47,7 +47,8 @@ import { entrarPreviewVerComoPapa, limpiarDatosReales } from './preview.js';
 import { montarSeccionContactos, montarSeccionAccesos } from './screens-admin.js';
 import { etiquetaDesdeAdultoMayor } from './utils/parentesco.js';
 import { renderFotoInteracciones, wireFotoInteracciones } from './foto-interacciones.js';
-import { montarAlertasCuidado, montarTareasCuidado, montarCuidadoCalle } from './cuidado-familiar.js';
+import { montarAlertasCuidado, montarTareasCuidado, montarCuidadoCalle,
+         montarAsistenteDelCirculo } from './cuidado-familiar.js';
 import { esAndroidNativo } from './native-fcm.js';
 
 // LocalStorage key para marcar pensamientos recibidos como "vistos".
@@ -534,6 +535,9 @@ export async function renderAccesos($app) {
 
 
 
+
+        <div id="sec-asistente-circulo"></div>
+
         <section class="card stack">
             <h2>🚶 Cuidado en la calle</h2>
             <div id="sec-cuidado-calle"></div>
@@ -655,6 +659,7 @@ export async function renderAccesos($app) {
 
     // Ajustes guarda lo que casi no se toca: el interruptor del cuidado en
     // la calle, y plegado, lo que nadie uso todavia.
+    montarAsistenteDelCirculo($app.querySelector('#sec-asistente-circulo'), c, () => refresh());
     montarCuidadoCalle($app.querySelector('#sec-cuidado-calle'), c.id, _miembrosCache || [], u.id);
     montarSeccionAccesos($app.querySelector('#sec-accesos-admin'), c.id);
     montarTareasCuidado($app.querySelector('#sec-tareas-cuidado'), c.id, _miembrosCache || [], u.id);

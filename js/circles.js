@@ -21,7 +21,7 @@ export async function circulosDelUsuario(userId) {
     const sb = await sbClient();
     const { data, error } = await sb
         .from('circle_members')
-        .select('circle:circles ( id, nombre, owner_id, ntfy_topic, legado_desbloqueado_at, legado_desbloqueado_por )')
+        .select('circle:circles ( id, nombre, owner_id, ntfy_topic, legado_desbloqueado_at, legado_desbloqueado_por, asistente )')
         .eq('user_id', userId);
     if (error) throw error;
     return (data || []).map(r => r.circle).filter(Boolean);

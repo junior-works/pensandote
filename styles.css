@@ -5240,3 +5240,33 @@ body :is(.btn--danger, .btn--emergencia, .btn--panico,
 .cuidado-estado.is-lejos,
 .cuidado-estado.is-nunca  { color: #b3261e; }
 .cuidado-estado small { font-weight: 400; opacity: 0.8; }
+
+/* -------------------------------------------------------------------
+   Ayudante con imágenes sueltas (el Diego).
+   Nube es una textura con capas de ojos y boca; estos personajes son
+   doce archivos independientes, sin bocas abiertas. Así que: nada de
+   capas de rasgos, y un fundido corto para tapar el desfasaje entre
+   cabezas (son ~4 px a esta escala, pero se notan si el cambio es seco).
+   ------------------------------------------------------------------- */
+.nube-avatar--imagenes .nube-avatar__sprite {
+    background-size: contain;
+    background-repeat: no-repeat;
+    background-position: center;
+}
+.nube-avatar--imagenes .nube-avatar__ojos,
+.nube-avatar--imagenes .nube-avatar__boca { display: none !important; }
+
+@media (prefers-reduced-motion: reduce) {
+    .nube-avatar--imagenes .nube-avatar__sprite { transition: none !important; }
+}
+
+/* Elegir ayudante: la cara, el nombre y qué sabe hacer. */
+.asistentes-lista { list-style: none; margin: 0; padding: 0; }
+.asistentes-lista__item {
+    display: flex; align-items: center; gap: 0.7rem;
+    padding: 0.6rem 0; border-top: 1px solid var(--line, #ddd);
+}
+.asistentes-lista__item img { border-radius: 50%; object-fit: cover; flex: 0 0 auto; }
+.asistentes-lista__info { flex: 1 1 auto; min-width: 0; }
+.asistentes-lista__info small { display: block; opacity: 0.75; }
+.asistentes-lista__item.is-activo { font-weight: 600; }

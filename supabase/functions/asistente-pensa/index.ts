@@ -63,6 +63,15 @@ const DESTACAR_OK = new Set([
     "home-checkin",
 ]);
 
+// El ayudante es del circulo: una persona habla con Nube y otra con el
+// Diego. El navegador manda SOLO el slug; el nombre sale de esta lista.
+// Un nombre libre viajando del cliente al prompt del modelo es una puerta
+// que no hace falta abrir.
+const NOMBRES_ASISTENTE: Record<string, string> = {
+    nube:  "Nube",
+    diego: "Diego",
+};
+
 const SYSTEM_PROMPT = `Sos Nube, un asistente conversacional cálido para adultos mayores argentinos que usan Pensándote. Hablás en argentino (voseo), de forma natural y respetuosa. Tus respuestas se LEEN EN VOZ ALTA: frases simples y fáciles de escuchar. Hay un historial breve de ESTA charla; usalo para entender referencias como "eso", "y después" o "explicámelo otra vez". No afirmes recordar conversaciones de otros días.
 
 REGLAS DURAS:
@@ -123,16 +132,29 @@ o con accion (ejemplos — fijate que la respuesta SIEMPRE es una pregunta cuand
 { "respuesta": "Esa tecla esta arriba del telefono. Apretala una vez para subir el volumen. ¿Querés que te muestre con un video?", "accion": { "tipo": "mostrar_tutorial", "destino": "subir-volumen" } }
 { "respuesta": "¿Querés que le avise a tu familia?", "accion": { "tipo": "mensaje_familia", "destino": "Se quedó sin la pastilla de la presión" } }`;
 
+/**
+ * El mismo prompt, con el nombre que corresponda. Se reemplaza en todo el
+ * texto, no solo en la primera linea: el prompt se nombra a si mismo
+ * varias veces ("el estado diario se lo pregunta Nube").
+ */
+function promptCon(nombre: string): string {
+    if (nombre === "Nube") return SYSTEM_PROMPT;
+    return SYSTEM_PROMPT.split("Nube").join(nombre);
+}
+
 Deno.serve(async (req: Request) => {
     if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
     if (req.method !== "POST")    return json({ error: "method_not_allowed" }, 405);
     if (!ANTHROPIC_API_KEY)       return json({ error: "IA no configurada todavia. Pedile a la familia que cargue la API key." }, 500);
 
     let texto = "", contexto: any = {}, historial: unknown[] = [];
+    let nombreAsistente = "Nube";
     try {
+        // Se resuelve mas abajo, cuando ya leimos el contexto.
         const body = await req.json();
         texto    = String(body?.texto || "").trim();
         contexto = (body?.contexto && typeof body.contexto === "object") ? body.contexto : {};
+        nombreAsistente = NOMBRES_ASISTENTE[String(contexto?.asistente || "nube")] || "Nube";
         historial = Array.isArray(body?.historial) ? body.historial.slice(-4) : [];
     } catch {
         return json({ error: "Body invalido — esperaba { texto, contexto? }" }, 400);
@@ -172,7 +194,7 @@ Deno.serve(async (req: Request) => {
             body: JSON.stringify({
                 model:      "claude-haiku-4-5-20251001",
                 max_tokens: 400,
-                system:     SYSTEM_PROMPT,
+                system:     promptCon(nombreAsistente),
                 messages:   [...mensajesPrevios, { role: "user", content: userMessage }],
             }),
         });

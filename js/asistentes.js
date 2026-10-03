@@ -1,0 +1,98 @@
+/**
+ * Pensándote — el catálogo de ayudantes.
+ *
+ * El ayudante es del CÍRCULO, no de la app. Una persona habla con Nube y
+ * otra con el Diego, y el tutor ve el que corresponde a cada una. Por eso
+ * el slug vive en `circles.asistente` y acá sólo está lo que necesita el
+ * navegador para dibujarlo.
+ *
+ * Los nombres para armar frases (sujeto, mención) están también en la
+ * tabla `asistentes` de la base, porque los avisos push los arma un
+ * trigger y no puede importar este archivo. Si agregás uno, va en los dos
+ * lados.
+ *
+ * DOS FORMAS DE DIBUJAR, y es la diferencia que más importa:
+ *
+ *   'sprite'   Nube. Una sola imagen con nueve cuadros y capas separadas
+ *              de ojos y boca, así que puede mover la boca al hablar.
+ *
+ *   'imagenes' El Diego. Doce archivos sueltos, uno por expresión. El
+ *              paquete NO trae bocas abiertas, así que no hay sincronía
+ *              de labios: mientras habla se queda en una expresión y el
+ *              movimiento lo lleva el globo de texto. Es una limitación
+ *              real del material, no una simplificación nuestra. Mejor
+ *              eso que fingir una sincronía que no existe.
+ *
+ * Además las doce cabezas no están calzadas entre sí (hasta 32 px de
+ * corrimiento sobre un lienzo de 1254). A la escala en que se ve la cara
+ * son unos 4 px, y el fundido de `transicionMs` los disimula. Si algún
+ * día se ve un salto, es por acá.
+ */
+
+export const ASISTENTES = {
+    nube: {
+        slug:   'nube',
+        nombre: 'Nube',
+        sujeto: 'Nube',
+        mencionA: 'a Nube',
+        descripcion: 'La nube de siempre. Mueve la boca cuando habla.',
+        modo: 'sprite',
+        hoja: './assets/nube/nube-sprites-v1.png',
+        retrato: './assets/nube/nube-reposo.png',
+        animaBoca: true,
+        transicionMs: 0
+    },
+    diego: {
+        slug:   'diego',
+        nombre: 'Diego',
+        sujeto: 'El Diego',
+        mencionA: 'al Diego',
+        descripcion: 'Un personaje inspirado en el Diego joven. No mueve la boca al hablar.',
+        modo: 'imagenes',
+        carpeta: './assets/asistentes/diego/',
+        retrato: './assets/asistentes/diego/00-reposo.webp',
+        animaBoca: false,
+        transicionMs: 150,
+        // Los nueve estados que usa el rig, mapeados a los archivos que
+        // hay. `talkSoft` y `talkOpen` apuntan al reposo a propósito: sin
+        // bocas abiertas, alternarlas sería un parpadeo feo y falso.
+        cuadros: {
+            idle:      '00-reposo.webp',
+            listening: '03-escucha.webp',
+            blink:     '02-parpadeo-cerrado.webp',
+            happy:     '04-sonrisa-amplia.webp',
+            talkSoft:  '00-reposo.webp',
+            talkOpen:  '00-reposo.webp',
+            thinking:  '06-pensando.webp',
+            empathy:   '05-empatia.webp',
+            surprised: '11-ceja-arriba.webp'
+        },
+        // Para el parpadeo en dos tiempos y los micro-movimientos del reposo.
+        extras: {
+            parpadeoMedio: '01-parpadeo-medio.webp',
+            miradaIzq:     '07-mirada-izquierda.webp',
+            miradaDer:     '08-mirada-derecha.webp',
+            serio:         '09-serio.webp',
+            cabezaInclinada: '10-cabeza-inclinada.webp'
+        }
+    }
+};
+
+export const ASISTENTE_POR_DEFECTO = 'nube';
+
+/** El ayudante de un círculo, con Nube como red de seguridad. */
+export function asistenteDe(circulo) {
+    const slug = circulo?.asistente || ASISTENTE_POR_DEFECTO;
+    return ASISTENTES[slug] || ASISTENTES[ASISTENTE_POR_DEFECTO];
+}
+
+/** La URL de la imagen de un estado. Sólo para el modo 'imagenes'. */
+export function archivoDeCuadro(asis, estado) {
+    if (asis.modo !== 'imagenes') return null;
+    const archivo = asis.cuadros?.[estado] || asis.cuadros?.idle;
+    return archivo ? asis.carpeta + archivo : null;
+}
+
+export function listaDeAsistentes() {
+    return Object.values(ASISTENTES);
+}

@@ -1,11 +1,12 @@
 /** Panel de tutores: un aviso tiene dueño y cada cuidado, responsable. */
 import { h } from './ui.js';
+import { listaDeAsistentes, ASISTENTE_POR_DEFECTO } from './asistentes.js';
 import { pedirTexto } from './screens-real.js';
 import { listarMedicamentos } from './data-emotiva.js';
 import {
     listarAlertasCuidado, tomarAlerta, cerrarAlerta,
     listarTareasCuidado, crearTareaCuidado, cambiarTareaCuidado,
-    fijarCuidadoCalle, resumenCheckins, ultimoCheckinDeSiempre
+    fijarCuidadoCalle, resumenCheckins, ultimoCheckinDeSiempre, fijarAsistente
 } from './data-cuidado.js';
 
 const FECHA_AR = { dateStyle: 'medium', timeStyle: 'short', timeZone: 'America/Argentina/Buenos_Aires' };
@@ -354,4 +355,63 @@ export async function montarCuidadoCalle($cont, circleId, miembros, _yoId) {
     };
 
     pintar();
+}
+
+// ---------------------------------------------------------------------
+// Quién la acompaña
+// ---------------------------------------------------------------------
+// El ayudante es del círculo, no de la app: una persona puede tener a
+// Nube y otra al Diego, y el tutor ve el que le corresponde a cada una.
+// Se elige una vez y queda; no es una configuración para andar tocando.
+export async function montarAsistenteDelCirculo($cont, circulo, onCambio) {
+    if (!$cont || !circulo) return;
+
+    const pintar = (activo) => {
+        $cont.innerHTML = `
+            <section class="card stack">
+                <h2>🗣 Quién la acompaña</h2>
+                <p class="muted">
+                    El ayudante con el que habla, y el que te va a ayudar a vos
+                    con este círculo. Lo ve en su pantalla cada vez que abre la app.
+                </p>
+                <ul class="asistentes-lista">
+                    ${listaDeAsistentes().map(a => `
+                        <li class="asistentes-lista__item ${a.slug === activo ? 'is-activo' : ''}">
+                            <img src="${h(a.retrato)}" alt="" width="56" height="56" loading="lazy">
+                            <div class="asistentes-lista__info">
+                                <strong>${h(a.nombre)}</strong>
+                                <small>${h(a.descripcion)}</small>
+                            </div>
+                            ${a.slug === activo
+                                ? '<span class="pill pill--admin">● Elegido</span>'
+                                : `<button class="btn btn--mini" data-asis="${h(a.slug)}">Elegir</button>`}
+                        </li>
+                    `).join('')}
+                </ul>
+                <p data-asis-estado class="muted" aria-live="polite"></p>
+            </section>
+        `;
+        $cont.querySelectorAll('[data-asis]').forEach($b => {
+            $b.addEventListener('click', async () => {
+                const slug = $b.dataset.asis;
+                const $est = $cont.querySelector('[data-asis-estado]');
+                $b.disabled = true;
+                $est.textContent = 'Cambiando…';
+                try {
+                    await fijarAsistente(circulo.id, slug);
+                    circulo.asistente = slug;
+                    pintar(slug);
+                    $cont.querySelector('[data-asis-estado]').textContent =
+                        '✅ Listo. Lo va a ver la próxima vez que abra la app.';
+                    if (typeof onCambio === 'function') onCambio(slug);
+                } catch (err) {
+                    console.error('[asistente]', err);
+                    $b.disabled = false;
+                    $est.textContent = 'No pude cambiarlo. Probá de nuevo en un momento.';
+                }
+            });
+        });
+    };
+
+    pintar(circulo.asistente || ASISTENTE_POR_DEFECTO);
 }

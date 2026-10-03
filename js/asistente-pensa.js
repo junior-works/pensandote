@@ -125,7 +125,12 @@ export function ejecutarAccion(acc) {
 }
 
 export function construirContexto() {
+    const circulo = (state.circulosReal || []).find(x => x.id === state.circuloActivoIdReal);
     return {
+        // El slug del ayudante, no su nombre: el backend lo traduce contra
+        // su propia lista. Un nombre libre viajando del navegador al prompt
+        // del modelo es una puerta que no hace falta abrir.
+        asistente:           circulo?.asistente || 'nube',
         ruta_actual:         location.hash || '#/inicio',
         circulo_id:          state.circuloActivoIdReal || null,
         parentesco_usuario:  state.membresiaReal?.parentesco || null,

@@ -43,3 +43,10 @@ output/
 # Temporales de las herramientas de trabajo (no van al repo)
 _subir_log.txt
 *.bundle
+
+# Originales del personaje: 25 MB el set suelto y otros 25 el zip. Se
+# quedan en la maquina como fuente. Lo que se publica es la version
+# comprimida de assets/asistentes/diego, que pesa 820 KB.
+assets/nube-maradona-v1/
+assets/nube-maradona-v1.zip
+_diego-v1-comprimido/

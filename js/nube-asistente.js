@@ -28,6 +28,7 @@ import {
     marcarPuntaUsada,
     mandarMensajeAFamilia
 } from './data-emotiva.js';
+import { asistenteDe, archivoDeCuadro } from './asistentes.js';
 import { TUTORIALES } from './mocks.js';
 import { ejecutarAccion, construirContexto } from './asistente-pensa.js';
 import {
@@ -99,6 +100,11 @@ export function montarNubeInicio($app) {
     const $turnos = $app.querySelector('#nube-charla-turnos');
     if (!$rig || !$sprite || !$ojos || $bocas.length < 2 || !$bubble || !$mic || !$texto) return;
 
+    // El ayudante es del círculo: tu vieja puede tener a Nube y tu viejo
+    // al Diego, y esta misma pantalla dibuja al que corresponda.
+    const circuloActivo = (state.circulosReal || []).find(x => x.id === state.circuloActivoIdReal);
+    const asis = asistenteDe(circuloActivo);
+
     let vivo = true;
     let ocupado = false;
     let animacionFrame = null;
@@ -110,6 +116,17 @@ export function montarNubeInicio($app) {
     const movimientoReducido = window.matchMedia('(prefers-reduced-motion: reduce)');
     const $cuerpo = $rig.querySelector('.nube-avatar__body');
     $rig.classList.add('nube-avatar--fluida');
+    $rig.dataset.asistente = asis.slug;
+    if (asis.modo === 'imagenes') {
+        // Doce archivos sueltos en vez de una textura: hay que precargarlos,
+        // porque si no la primera vez que cambia de cara se ve el hueco
+        // mientras baja la imagen.
+        $rig.classList.add('nube-avatar--imagenes');
+        $sprite.style.transition = `opacity ${asis.transicionMs}ms linear`;
+        const urls = new Set(Object.keys(asis.cuadros).map(k => archivoDeCuadro(asis, k)));
+        urls.forEach(u => { const im = new Image(); im.src = u; });
+        $sprite.style.backgroundImage = `url("${archivoDeCuadro(asis, 'idle')}")`;
+    }
     $bocas[0].style.backgroundPosition = FRAMES.talkSoft;
     $bocas[1].style.backgroundPosition = FRAMES.talkOpen;
     let blinkTimer = null;
@@ -136,7 +153,7 @@ export function montarNubeInicio($app) {
         if (!$charla || !$turnos) return;
         $charla.hidden = false;
         $turnos.innerHTML = conversacion.map(t => `
-            <li><span>Vos: ${h(t.pregunta)}</span><span>Nube: ${h(t.respuesta)}</span></li>
+            <li><span>Vos: ${h(t.pregunta)}</span><span>${h(asis.nombre)}: ${h(t.respuesta)}</span></li>
         `).join('');
     }
 
@@ -146,7 +163,12 @@ export function montarNubeInicio($app) {
     function setFrame(nombre, estado = nombre) {
         if (!vivo || !FRAMES[nombre]) return;
         apagarRasgos();
-        $sprite.style.backgroundPosition = FRAMES[nombre];
+        if (asis.modo === 'imagenes') {
+            const url = archivoDeCuadro(asis, nombre);
+            if (url) $sprite.style.backgroundImage = `url("${url}")`;
+        } else {
+            $sprite.style.backgroundPosition = FRAMES[nombre];
+        }
         $rig.dataset.state = estado;
     }
 
@@ -194,8 +216,12 @@ export function montarNubeInicio($app) {
                 if (hablando) faseVoz += delta;
                 apertura = suavizar(apertura, hablando ? aperturaNube(faseVoz) : 0, delta);
                 if (!hablando && apertura < 0.001) apertura = 0;
-                $bocas[0].style.opacity = String(Math.min(1, apertura * 2));
-                $bocas[1].style.opacity = String(Math.max(0, (apertura - 0.5) * 2));
+                // Sin bocas abiertas no hay sincronía posible: el paquete del
+                // Diego no las trae. Antes que fingirla, no moverla.
+                if (asis.animaBoca) {
+                    $bocas[0].style.opacity = String(Math.min(1, apertura * 2));
+                    $bocas[1].style.opacity = String(Math.max(0, (apertura - 0.5) * 2));
+                }
             }
             animacionFrame = requestAnimationFrame(animar);
         };
