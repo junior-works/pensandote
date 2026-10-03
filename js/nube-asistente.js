@@ -117,7 +117,21 @@ export function montarNubeInicio($app) {
     const $cuerpo = $rig.querySelector('.nube-avatar__body');
     $rig.classList.add('nube-avatar--fluida');
     $rig.dataset.asistente = asis.slug;
-    if (asis.modo === 'imagenes') {
+    // La boca "abierta" rota entre A, E y O entre frase y frase. Sin
+    // tiempos de fonemas no hay forma de elegirla bien, pero repetir
+    // siempre la misma vocal en un bucle de amplitud se nota enseguida.
+    //
+    // VA ACA ARRIBA, no al lado de rotarBocaAbierta(). La funcion se iza,
+    // `let` no: declarada despues de la primera llamada, esa llamada tiraba
+    // "Cannot access 'bocaAbiertaIdx' before initialization" y se llevaba
+    // puesto TODO el resto del montaje. Ver el try de abajo.
+    let bocaAbiertaIdx = 0;
+
+    // Dibujar la cara NO puede voltear el montaje. Si algo de esto falla
+    // queda la cara de reposo, pero los controles se enganchan igual: es
+    // mil veces preferible un ayudante que no gesticula, a una pantalla
+    // donde escribis, tocas la flecha y no pasa nada.
+    if (asis.modo === 'imagenes') try {
         // Doce archivos sueltos en vez de una textura: hay que precargarlos,
         // porque si no la primera vez que cambia de cara se ve el hueco
         // mientras baja la imagen.
@@ -142,12 +156,10 @@ export function montarNubeInicio($app) {
             [b.suave, ...b.abiertas, ...Object.values(b.otras || {})]
                 .forEach(f => { const im = new Image(); im.src = b.carpeta + f; });
         }
+    } catch (err) {
+        console.error('[nube-asistente] no pude preparar la cara', err);
     }
 
-    // La boca "abierta" rota entre A, E y O entre frase y frase. Sin
-    // tiempos de fonemas no hay forma de elegirla bien, pero repetir
-    // siempre la misma vocal en un bucle de amplitud se nota enseguida.
-    let bocaAbiertaIdx = 0;
     function rotarBocaAbierta() {
         if (!asis.boca || !$bocas[1]) return;
         const lista = asis.boca.abiertas;
