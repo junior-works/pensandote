@@ -5271,13 +5271,37 @@ body :is(.btn--danger, .btn--emergencia, .btn--panico,
     .nube-avatar--imagenes .nube-avatar__sprite { transition: none !important; }
 }
 
-/* Elegir ayudante: la cara, el nombre y qué sabe hacer. */
+/* Elegir ayudante: la cara, el nombre y qué sabe hacer.
+   El botón NO se achica ni se parte: con `flex: 0 0 auto` y `nowrap`
+   manda él y lo que cede es el texto de al lado. Antes pasaba al revés y
+   "Elegir" salía cortado en tres renglones, una letra por línea. */
 .asistentes-lista { list-style: none; margin: 0; padding: 0; }
 .asistentes-lista__item {
-    display: flex; align-items: center; gap: 0.7rem;
-    padding: 0.6rem 0; border-top: 1px solid var(--line, #ddd);
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.7rem 0;
+    border-top: 1px solid var(--line, #ddd);
 }
-.asistentes-lista__item img { border-radius: 50%; object-fit: cover; flex: 0 0 auto; }
+.asistentes-lista__item:first-child { border-top: 0; }
+.asistentes-lista__item img {
+    flex: 0 0 auto;
+    width: 56px; height: 56px;
+    border-radius: 50%;
+    object-fit: cover;
+    background: #faf5e9;
+}
 .asistentes-lista__info { flex: 1 1 auto; min-width: 0; }
-.asistentes-lista__info small { display: block; opacity: 0.75; }
-.asistentes-lista__item.is-activo { font-weight: 600; }
+.asistentes-lista__info strong { display: block; }
+.asistentes-lista__info small {
+    display: block;
+    opacity: 0.75;
+    line-height: 1.3;
+}
+.asistentes-lista__item > .btn,
+.asistentes-lista__item > .pill {
+    flex: 0 0 auto;
+    white-space: nowrap;
+    align-self: center;
+}
+.asistentes-lista__item.is-activo strong { font-weight: 700; }
