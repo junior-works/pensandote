@@ -51,8 +51,35 @@ export const ASISTENTES = {
         modo: 'imagenes',
         carpeta: './assets/asistentes/diego/',
         retrato: './assets/asistentes/diego/00-reposo.webp',
-        animaBoca: false,
+        animaBoca: true,
         transicionMs: 150,
+
+        // LA BOCA, que es lo delicado.
+        //
+        // Las siete poses de habla vienen como cabezas enteras, y esas
+        // cabezas difieren de la base en TODOS lados, no sólo en la boca:
+        // medido, el cambio fuerte cubre el pelo y el contorno. Alternar
+        // las cabezas completas haría saltar la cara entera.
+        //
+        // Así que de cada pose se recortó sólo el parche de la boca, con
+        // una máscara elíptica de bordes difuminados. El recorte es el que
+        // sugiere el paquete (x=400 y=790, 455x245 sobre 1254) y acá va en
+        // porcentajes porque la cara es un cuadrado: calzan exactos.
+        //
+        // La boca cerrada no está: no hace falta. El archivo de boca
+        // cerrada resultó ser idéntico pixel a pixel al reposo, así que
+        // con no mostrar ningún parche la boca YA está cerrada.
+        boca: {
+            carpeta: './assets/asistentes/diego/bocas/',
+            caja: { left: '31.90%', top: '63.00%', width: '36.28%', height: '19.54%' },
+            // El motor interpola amplitud de 0 a 1: 'suave' entra primero y
+            // 'abierta' se le superpone en los picos. Es sincronía
+            // APROXIMADA por amplitud, no fonética: el paquete no trae
+            // tiempos de fonemas y no los vamos a inventar.
+            suave:   'boca-entreabierta.webp',
+            abiertas: ['boca-a.webp', 'boca-e.webp', 'boca-o.webp'],
+            otras:   { fv: 'boca-fv.webp', i: 'boca-i.webp' }
+        },
         // Los nueve estados que usa el rig, mapeados a los archivos que
         // hay. `talkSoft` y `talkOpen` apuntan al reposo a propósito: sin
         // bocas abiertas, alternarlas sería un parpadeo feo y falso.

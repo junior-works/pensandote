@@ -126,6 +126,35 @@ export function montarNubeInicio($app) {
         const urls = new Set(Object.keys(asis.cuadros).map(k => archivoDeCuadro(asis, k)));
         urls.forEach(u => { const im = new Image(); im.src = u; });
         $sprite.style.backgroundImage = `url("${archivoDeCuadro(asis, 'idle')}")`;
+        // Las dos capas de boca que ya existian para Nube se reusan tal
+        // cual: el motor interpola 0 -> entreabierta -> abierta segun la
+        // amplitud de la voz, que es justo lo que recomienda el paquete.
+        if (asis.boca) {
+            const b = asis.boca;
+            $bocas.forEach($el => {
+                Object.assign($el.style, b.caja);
+                $el.style.backgroundSize = '100% 100%';
+                $el.style.backgroundPosition = '0 0';
+                $el.style.backgroundColor = 'transparent';
+            });
+            $bocas[0].style.backgroundImage = `url("${b.carpeta}${b.suave}")`;
+            rotarBocaAbierta();
+            [b.suave, ...b.abiertas, ...Object.values(b.otras || {})]
+                .forEach(f => { const im = new Image(); im.src = b.carpeta + f; });
+        }
+    }
+
+    // La boca "abierta" rota entre A, E y O entre frase y frase. Sin
+    // tiempos de fonemas no hay forma de elegirla bien, pero repetir
+    // siempre la misma vocal en un bucle de amplitud se nota enseguida.
+    let bocaAbiertaIdx = 0;
+    function rotarBocaAbierta() {
+        if (!asis.boca || !$bocas[1]) return;
+        const lista = asis.boca.abiertas;
+        const f = lista[bocaAbiertaIdx % lista.length];
+        bocaAbiertaIdx++;
+        $bocas[1].style.backgroundImage = `url("${asis.boca.carpeta}${f}")`;
+    }
     }
     $bocas[0].style.backgroundPosition = FRAMES.talkSoft;
     $bocas[1].style.backgroundPosition = FRAMES.talkOpen;
@@ -634,6 +663,7 @@ export function montarNubeInicio($app) {
 
     function empezarHabla() {
         vozActiva = false;
+        if (asis.boca) rotarBocaAbierta();
         faseVoz = 0;
         apagarRasgos();
         $sprite.style.backgroundPosition = FRAMES.idle;

@@ -5253,8 +5253,19 @@ body :is(.btn--danger, .btn--emergencia, .btn--panico,
     background-repeat: no-repeat;
     background-position: center;
 }
-.nube-avatar--imagenes .nube-avatar__ojos,
-.nube-avatar--imagenes .nube-avatar__boca { display: none !important; }
+.nube-avatar--imagenes .nube-avatar__ojos { display: none !important; }
+
+/* La boca es un parche chico pegado sobre la cara, no una capa a pantalla
+   completa como la de Nube. `inset: auto` es necesario: sin eso el
+   `inset: 0` heredado pelea con el alto y el ancho. */
+.nube-avatar--imagenes .nube-avatar__boca {
+    inset: auto;
+    background-color: transparent;
+    background-repeat: no-repeat;
+    clip-path: none;
+    border-radius: 0;
+    z-index: 3;
+}
 
 @media (prefers-reduced-motion: reduce) {
     .nube-avatar--imagenes .nube-avatar__sprite { transition: none !important; }
