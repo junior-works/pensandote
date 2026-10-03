@@ -62,16 +62,22 @@ export const ASISTENTES = {
         // las cabezas completas haría saltar la cara entera.
         //
         // Así que de cada pose se recortó sólo el parche de la boca, con
-        // una máscara elíptica de bordes difuminados. El recorte es el que
-        // sugiere el paquete (x=400 y=790, 455x245 sobre 1254) y acá va en
-        // porcentajes porque la cara es un cuadrado: calzan exactos.
+        // una máscara de caja redondeada y bordes difuminados, recortada
+        // además contra la silueta de la cara base para no inventar
+        // contorno.
         //
-        // La boca cerrada no está: no hace falta. El archivo de boca
-        // cerrada resultó ser idéntico pixel a pixel al reposo, así que
-        // con no mostrar ningún parche la boca YA está cerrada.
+        // El recorte NO es el que sugiere el paquete. Ese (455x245 desde
+        // y=790) cortaba el labio de abajo: cuando la mandíbula baja, el
+        // labio queda más abajo, y al difuminarse ahí se mezclaba con el
+        // mentón de la cara cerrada y el labio se perdía. Medido, el
+        // movimiento real llega hasta y=1159, no hasta 1035. Este recorte
+        // (540x420 desde 360,760) lo cubre entero.
+        //
+        // Y la máscara es caja redondeada, no elipse: una elipse se come
+        // justo las esquinas de abajo, que es donde vive ese labio.
         boca: {
             carpeta: './assets/asistentes/diego/bocas/',
-            caja: { left: '31.90%', top: '63.00%', width: '36.28%', height: '19.54%' },
+            caja: { left: '28.71%', top: '60.61%', width: '43.06%', height: '33.49%' },
             // El motor interpola amplitud de 0 a 1: 'suave' entra primero y
             // 'abierta' se le superpone en los picos. Es sincronía
             // APROXIMADA por amplitud, no fonética: el paquete no trae
@@ -80,9 +86,10 @@ export const ASISTENTES = {
             abiertas: ['boca-a.webp', 'boca-e.webp', 'boca-o.webp'],
             otras:   { fv: 'boca-fv.webp', i: 'boca-i.webp' }
         },
-        // Los nueve estados que usa el rig, mapeados a los archivos que
-        // hay. `talkSoft` y `talkOpen` apuntan al reposo a propósito: sin
-        // bocas abiertas, alternarlas sería un parpadeo feo y falso.
+        // Los nueve estados de EXPRESION que usa el rig. `talkSoft` y
+        // `talkOpen` apuntan al reposo porque el habla no se dibuja
+        // cambiando la cabeza: se dibuja con los parches de boca de
+        // arriba, pegados sobre esta misma cara.
         cuadros: {
             idle:      '00-reposo.webp',
             listening: '03-escucha.webp',
