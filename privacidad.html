@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="es-AR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Política de privacidad — Pensándote</title>
+<style>
+  :root { color-scheme: light dark; --tinta:#1d1b19; --papel:#fdf8f1; --suave:#5d574f; --linea:#e6dcce; --acento:#1f6f6b; }
+  @media (prefers-color-scheme: dark) {
+    :root { --tinta:#f1ece5; --papel:#17150f; --suave:#b3aa9c; --linea:#38322a; --acento:#6fd0c9; }
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--papel); color:var(--tinta);
+         font:17px/1.65 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; }
+  main { max-width: 46rem; margin:0 auto; padding: 2.5rem 16px 5rem; }
+  h1 { font-size:1.9rem; line-height:1.2; margin:0 0 .3rem; }
+  h2 { font-size:1.2rem; margin:2.4rem 0 .6rem; }
+  p, li { color:var(--tinta); }
+  .fecha { color:var(--suave); margin:0 0 2rem; font-size:.95rem; }
+  ul { padding-left:1.2rem; }
+  li { margin:.4rem 0; }
+  a { color:var(--acento); }
+  hr { border:0; border-top:1px solid var(--linea); margin:2.5rem 0; }
+  .nota { border-left:3px solid var(--acento); padding:.2rem 0 .2rem 1rem; color:var(--suave); }
+</style>
+</head>
+<body>
+<main>
+
+<h1>Política de privacidad de Pensándote</h1>
+<p class="fecha">Última actualización: 3 de octubre de 2026</p>
+
+<p>Pensándote es una aplicación hecha por <strong>Junior Works</strong> para que una
+persona mayor y su familia estén en contacto y organicen el día a día:
+recordatorios, remedios, turnos médicos, trámites y mensajes. Esta página explica,
+en castellano claro, qué datos guarda la app, para qué, y con quién se comparten.</p>
+
+<p>Responsable: Junior Works. Contacto:
+<a href="mailto:junioradcan@gmail.com">junioradcan@gmail.com</a>.</p>
+
+<h2>Qué datos guardamos</h2>
+<p>Sólo lo que ustedes cargan en la app, más lo mínimo que hace falta para que
+funcione:</p>
+<ul>
+  <li><strong>Cuenta</strong>: la dirección de correo con la que se entra. No usamos
+      contraseña: se entra con un enlace que llega a ese correo.</li>
+  <li><strong>El círculo familiar</strong>: nombre de la persona mayor, nombres y
+      parentesco de los familiares, y quién tiene permisos de administrador.</li>
+  <li><strong>Salud</strong>: medicamentos y horarios de toma, turnos y datos de
+      médicos, estudios médicos que se suban y lo que se anote como información
+      médica. Son datos sensibles y los tratamos como tales.</li>
+  <li><strong>Vida cotidiana</strong>: recordatorios, respuestas al "¿cómo estás
+      hoy?", fotos, comentarios, mensajes entre familiares, fechas afectivas y
+      los relatos o audios que la persona quiera dejar para su biografía.</li>
+  <li><strong>Ubicación</strong>: <em>sólo</em> cuando se aprieta el botón de ayuda.
+      En ese momento la app pide la ubicación del teléfono y la manda en el aviso,
+      para que la familia sepa dónde está. No hay seguimiento continuo ni se
+      guarda un historial de recorridos. Si el teléfono no da la ubicación en
+      cuatro segundos, el aviso se manda igual, sin ella.</li>
+  <li><strong>Avisos</strong>: un identificador del teléfono para poder mandarle
+      notificaciones, y el registro de qué avisos se enviaron y cuáles llegaron.</li>
+</ul>
+
+<p>No mostramos publicidad, no vendemos datos y no los usamos para perfilar a nadie
+con fines comerciales.</p>
+
+<h2>Quién puede ver cada cosa</h2>
+<p>Todo está separado por círculo familiar. Los datos de un círculo no se le muestran
+nunca a otro, y la base de datos lo impone por sí misma, fila por fila, no sólo la
+pantalla. Dentro del círculo, ven los datos la persona mayor y los familiares que
+ella o el administrador hayan invitado.</p>
+
+<h2>Con quién se comparten</h2>
+<p>Usamos estos servicios para que la app funcione. No hay otros:</p>
+<ul>
+  <li><strong>Supabase</strong> — guarda la base de datos, los archivos y las sesiones.</li>
+  <li><strong>Anthropic (Claude)</strong> — el asistente de la app. Cuando se le
+      pregunta algo, o se le pide leer un estudio, armar un recordatorio o escribir
+      un capítulo de la biografía, ese texto se le manda para que responda.</li>
+  <li><strong>OpenAI</strong> — convierte en voz lo que dice el ayudante Diego. Se
+      le manda el texto que va a leer en voz alta, que puede mencionar un remedio,
+      un turno o algo de la familia. El audio generado se guarda para no tener que
+      pedirlo de nuevo.</li>
+  <li><strong>Google (Firebase Cloud Messaging)</strong> — entrega las notificaciones
+      al teléfono.</li>
+  <li><strong>ntfy.sh</strong> — entrega el aviso del botón de ayuda.</li>
+</ul>
+
+<p class="nota">Ninguno de estos servicios recibe datos para fines propios de
+publicidad por parte nuestra. Cada uno tiene su propia política de privacidad.</p>
+
+<h2>Cuánto tiempo se guardan</h2>
+<p>Mientras la cuenta y el círculo existan. Los datos se guardan para que sirvan de
+memoria: un remedio, una foto o un relato tienen sentido justamente porque quedan.</p>
+
+<h2>Cómo borrar los datos</h2>
+<p>Para borrar la cuenta y sus datos, escribí a
+<a href="mailto:junioradcan@gmail.com">junioradcan@gmail.com</a> desde la misma
+dirección de correo con la que entrás a la app, pidiendo la eliminación.
+Respondemos dentro de los 30 días.</p>
+<p>Se borran los datos personales asociados a esa cuenta. Si quien pide el borrado
+es el dueño del círculo, se borra también el círculo y su contenido: los
+recordatorios, las fotos, los relatos y la información de salud que haya adentro.</p>
+
+<h2>Derechos</h2>
+<p>Se puede pedir acceso a los datos, su corrección, su borrado o una copia,
+escribiendo al correo de arriba. En Argentina, la autoridad de control es la
+Agencia de Acceso a la Información Pública.</p>
+
+<h2>Menores</h2>
+<p>Pensándote no está dirigida a menores de 18 años y no recogemos datos de menores
+a sabiendas.</p>
+
+<h2>Seguridad</h2>
+<p>El acceso a los datos exige haber iniciado sesión, y los permisos se verifican en
+el servidor, no sólo en la pantalla. Aun así, ningún sistema es infalible: si llegara
+a ocurrir un incidente que afecte estos datos, avisaremos a las personas afectadas.</p>
+
+<h2>Cambios</h2>
+<p>Si esta política cambia, actualizamos la fecha de arriba y publicamos la versión
+nueva en esta misma dirección.</p>
+
+<hr>
+<p class="fecha">Pensándote — Junior Works ·
+<a href="mailto:junioradcan@gmail.com">junioradcan@gmail.com</a></p>
+
+</main>
+</body>
+</html>
