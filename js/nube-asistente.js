@@ -1062,13 +1062,47 @@ export function montarNubeInicio($app) {
         }
     }
 
-    async function responderOrganismo(pregunta) {
+    // De que organismo venimos hablando, y hasta cuando vale.
+    //
+    // La edge function recibe UNA pregunta suelta, sin historial. Una
+    // repregunta normal — "¿y qué llevo?", "¿y cuánto tarda?" — llegaba
+    // sin el tema, asi que ni siquiera entraba por este camino: se iba al
+    // asistente general, que no busca en las paginas oficiales. La
+    // persona creia seguir hablando del mismo tramite y la respuesta ya
+    // venia de otro lado.
+    let organismoEnCurso = null;   // { nombre, tema, hasta }
+    const ORGANISMO_VIVE_MS = 5 * 60 * 1000;
+
+    function organismoVigente() {
+        if (!organismoEnCurso) return null;
+        if (Date.now() > organismoEnCurso.hasta) { organismoEnCurso = null; return null; }
+        return organismoEnCurso;
+    }
+
+    /** Una repregunta corta, encadenada a lo anterior: "y que llevo?". */
+    function pareceRepregunta(texto) {
+        const t = sinTildes(texto).trim();
+        if (!t) return false;
+        if (t.split(/\s+/).length > 10) return false;
+        return /^(y |ademas|tambien|eso|entonces|despues)\b/.test(t) || /[?\u00bf]/.test(String(texto || ''));
+    }
+
+    async function responderOrganismo(pregunta, contexto = null) {
         decir('Estoy buscando en las páginas oficiales…', 'thinking');
         setFrame('thinking', 'thinking');
-        const r = await consultarOrganismos(pregunta);
+        // Si es una repregunta, le devolvemos el tema adelante para que la
+        // busqueda caiga en el mismo tramite y no en cualquier otro.
+        const consulta = contexto
+            ? `Sobre ${contexto.nombre}, siguiendo esta consulta: "${contexto.tema}". Nueva pregunta: ${pregunta}`
+            : pregunta;
+        const r = await consultarOrganismos(consulta);
         ultimaRespuesta = String(r?.respuesta || '').trim()
             || 'No encontré una respuesta segura. Podés llamar al 138 para PAMI o al 130 para ANSES.';
         decir(ultimaRespuesta, r?.estado === 'ok' ? 'speaking' : 'empathy');
+        if (r?.estado === 'ok') {
+            const nombre = /anses/i.test(contexto?.nombre || pregunta) ? 'ANSES' : 'PAMI';
+            organismoEnCurso = { nombre, tema: contexto?.tema || pregunta, hasta: Date.now() + ORGANISMO_VIVE_MS };
+        }
         guardarTurno(pregunta, ultimaRespuesta);
         const fuentes = Array.isArray(r?.fuentes) ? r.fuentes.slice(0, 3) : [];
         $respuesta.innerHTML = fuentes.length ? `
@@ -1214,8 +1248,11 @@ export function montarNubeInicio($app) {
                 $texto.value = '';
                 return;
             }
-            if (state.modo === 'real' && pareceConsultaDeOrganismo(pregunta)) {
-                await responderOrganismo(pregunta);
+            const vieneDeOrganismo = organismoVigente();
+            if (state.modo === 'real' && (pareceConsultaDeOrganismo(pregunta)
+                    || (vieneDeOrganismo && pareceRepregunta(pregunta)))) {
+                await responderOrganismo(pregunta,
+                    pareceConsultaDeOrganismo(pregunta) ? null : vieneDeOrganismo);
                 $texto.value = '';
                 return;
             }

@@ -18,7 +18,7 @@
  * correcto en ambos entornos.
  */
 
-const CACHE_NAME = 'pensandote-shell-v0.10.76-rotulos-y-pami';
+const CACHE_NAME = 'pensandote-shell-v0.10.77-fuentes-obligatorias';
 const PUSH_DIAG_DB = 'pensandote-push-diagnostico';
 const PUSH_DIAG_VERSION = '2';
 

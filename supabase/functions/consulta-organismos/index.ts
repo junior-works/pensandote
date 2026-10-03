@@ -125,6 +125,26 @@ Deno.serve(async (req: Request) => {
             });
         }
 
+        // Sin una fuente oficial no afirmamos NADA.
+        //
+        // El modelo tiene la instruccion de marcar [SIN_RESPUESTA] cuando
+        // no encuentra, pero eso depende de que la cumpla. Aca el codigo
+        // devolvia `estado: "ok"` aunque `fuentes` viniera vacio, y la
+        // pantalla lo mostraba como una respuesta buena, sin ninguna
+        // senal de que nadie habia confirmado nada.
+        //
+        // Un requisito, un horario o un telefono inventados le hacen
+        // perder el dia a una persona de ochenta anios que se toma dos
+        // colectivos hasta una oficina. Preferimos decir "no se".
+        if (!fuentes.length) {
+            console.warn("[consulta-organismos] respuesta sin citas, descartada:", texto.slice(0, 200));
+            return json({
+                estado: "sin_respuesta",
+                respuesta: "Esto prefiero no contestártelo de memoria: no lo pude confirmar en la página oficial. Llamá al 138 (PAMI) o al 130 (ANSES) y te lo dicen seguro.",
+                telefonos_ayuda: TELEFONOS,
+            });
+        }
+
         return json({ estado: "ok", respuesta: texto, fuentes });
     } catch (err) {
         console.error("[consulta-organismos]", err);
