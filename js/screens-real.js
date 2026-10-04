@@ -12,7 +12,7 @@ import {
     circulosDelUsuario, membresiaActiva, crearCirculo,
     crearInvitacion, infoInvitacion,
     aceptarInvitacionDashboard, aceptarInvitacionSimple,
-    actualizarParentesco
+    actualizarParentesco, pasarCirculo
 } from './circles.js';
 import { state, setSesionReal, setModo, limpiarSesionReal } from './state.js';
 import { limpiarDatosReales } from './preview.js';
@@ -93,7 +93,7 @@ function mensajeErrorLogin(err) {
     const estado = Number(err?.status || 0);
 
     if (estado === 429 || codigo.includes('rate') || mensaje.includes('rate limit')) {
-        return 'No pudimos enviarlo porque se pidió otro enlace hace muy poco. Esperá un minuto y volvé a intentar.';
+        return 'Ya se pidieron varios enlaces seguidos y el servicio de correo no deja mandar más por un rato. Esperá alrededor de una hora antes de volver a intentar: si seguís tocando el botón, el bloqueo se mantiene.';
     }
     if (codigo.includes('email_address_not_authorized') || mensaje.includes('not authorized')) {
         return 'Ese correo todavía no está habilitado para recibir enlaces de acceso. No sigas intentando: necesitamos revisar la configuración de correo.';
@@ -102,7 +102,7 @@ function mensajeErrorLogin(err) {
         mensaje.includes('fetch') || mensaje.includes('network')) {
         return 'No recibimos respuesta del servicio de acceso. Revisá internet, esperá un minuto y tocá “Volver a intentar”.';
     }
-    return 'No pudimos enviar el enlace. Esperá un minuto y volvé a intentar. Si vuelve a pasar, el detalle ya quedó registrado para revisarlo.';
+    return 'No pudimos enviar el enlace. Esperá unos minutos y volvé a intentar. Si vuelve a pasar, el detalle ya quedó registrado para revisarlo.';
 }
 
 // =====================================================================
@@ -229,6 +229,20 @@ export function renderCuenta($app) {
             <button class="btn btn--familia" id="btn-hogar">🏠 Volver al hogar del círculo</button>
             ${esEntornoDev() ? `<button class="btn btn--mini" id="btn-demo">Ver maqueta demo</button>` : ''}
             <button class="btn btn--mini btn--danger" id="btn-logout">Cerrar sesión</button>
+
+            <hr>
+            <details class="zona-peligro" style="margin-top:0.5rem;">
+                <summary style="cursor:pointer;color:var(--accent-anecdota);font-weight:700;">
+                    Borrar mi cuenta
+                </summary>
+                <p class="muted" style="margin:0.6rem 0;">
+                    Eliminás tu cuenta y todos tus datos en Pensándote. No se puede recuperar.
+                </p>
+                <button class="btn btn--danger" id="btn-borrar-cuenta" type="button"
+                        style="border-color:var(--accent-anecdota);">
+                    🗑 Borrar mi cuenta
+                </button>
+            </details>
         </section>
     `;
 
@@ -299,6 +313,292 @@ export function renderCuenta($app) {
     });
     const btnHogar = document.getElementById('btn-hogar');
     if (btnHogar) btnHogar.addEventListener('click', () => go('#/inicio'));
+
+    const btnBorrar = document.getElementById('btn-borrar-cuenta');
+    if (btnBorrar) btnBorrar.addEventListener('click', () => abrirModalBorrarCuenta($app));
+}
+
+// =====================================================================
+// BORRAR CUENTA — destructivo, doble confirmación
+// ---------------------------------------------------------------------
+// Paso 1: advertencia clara + "Cancelar" / "Sí, quiero seguir".
+// Paso 2: el usuario tipea exactamente "BORRAR" para habilitar el botón
+//         final. Mientras corre el borrado mostramos estado y bloqueamos.
+//   - Éxito: signOut + reload limpio → bootstrap muestra la bienvenida.
+//   - Error: mensaje claro, NO se desloguea (la cuenta NO fue borrada).
+// =====================================================================
+export function abrirModalBorrarCuenta($app) {
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    document.body.appendChild(overlay);
+
+    let cerrado = false;
+    function cerrar() {
+        if (cerrado) return;
+        cerrado = true;
+        cleanupModalBackButton(overlay);
+        overlay.remove();
+    }
+    installModalBackButton(overlay, cerrar);
+    overlay.addEventListener('click', e => { if (e.target === overlay) cerrar(); });
+
+    // ---- Paso 1: advertencia, con los numeros reales ----
+    // El dueño de un circulo, al borrarse, se lleva los datos de TODOS los
+    // miembros (fotos, remedios, biografia, estudios de la otra persona).
+    // Antes de habilitar "seguir" le preguntamos al servidor que se
+    // perderia y se lo decimos con numeros. Si la consulta falla no
+    // bloqueamos el borrado (Play exige que funcione): mostramos el aviso
+    // generico y dejamos seguir.
+    function pintarPaso1() {
+        overlay.innerHTML = `
+            <div class="modal modal--danger" role="dialog" aria-modal="true" aria-labelledby="bc-titulo">
+                <button class="modal__close" aria-label="Cerrar" data-close-x>×</button>
+                <h2 id="bc-titulo" class="modal__titulo">🗑 Borrar mi cuenta</h2>
+                <div class="modal__cuerpo">
+                    <p>Vas a borrar tu cuenta y todos tus datos en Pensándote. Esto incluye:
+                       tus círculos, recordatorios, fotos, audios, biografía, estudios médicos,
+                       contactos y todo lo que hayas guardado.</p>
+                    <div id="bc-previo" class="muted" style="margin:0.6rem 0;">
+                        Revisando qué se borraría…
+                    </div>
+                    <p><strong>No se puede recuperar.</strong></p>
+                </div>
+                <div class="modal__acciones modal__acciones--stack">
+                    <button type="button" class="btn btn--mini" data-cancel>Cancelar</button>
+                    <button type="button" class="btn btn--danger" data-seguir disabled
+                            style="border-color:var(--accent-anecdota);opacity:0.5;">Sí, quiero seguir</button>
+                </div>
+            </div>
+        `;
+        overlay.querySelector('[data-close-x]').addEventListener('click', cerrar);
+        overlay.querySelector('[data-cancel]').addEventListener('click', cerrar);
+        const btnSeguir = overlay.querySelector('[data-seguir]');
+        btnSeguir.addEventListener('click', pintarPaso2);
+
+        function habilitarSeguir() {
+            btnSeguir.disabled = false;
+            btnSeguir.style.opacity = '1';
+        }
+
+        cargarPrevio().then(info => {
+            if (cerrado) return;
+            const caja = overlay.querySelector('#bc-previo');
+            if (caja) caja.innerHTML = textoPrevio(info) + pintarTraspaso(info);
+            activarTraspaso();
+            habilitarSeguir();
+        }).catch(err => {
+            console.warn('[borrar-cuenta] previo', err);
+            if (cerrado) return;
+            const caja = overlay.querySelector('#bc-previo');
+            if (caja) caja.textContent = '';
+            habilitarSeguir();
+        });
+    }
+
+    // Consulta al servidor que se perderia. No borra nada.
+    async function cargarPrevio() {
+        const sb = await sbClient();
+        const { data, error } = await sb.functions.invoke('borrar-cuenta', {
+            method: 'POST',
+            body: { modo: 'previo' },
+        });
+        if (error || !data || data.error) {
+            throw new Error((data && data.error) || error?.message || 'previo_fallido');
+        }
+        return data;
+    }
+
+    // Arma el aviso concreto. Si es dueño de circulos con otra gente
+    // adentro, eso es lo primero y lo mas fuerte que tiene que leer.
+    function textoPrevio(info) {
+        const propios = Number(info.circulos_propios || 0);
+        const otras   = Number(info.otras_personas || 0);
+        if (!propios) {
+            return 'Se borra tu cuenta y lo tuyo. Los círculos de los que '
+                 + 'participás siguen existiendo para los demás.';
+        }
+        const nombres = Array.isArray(info.circulos_nombres) ? info.circulos_nombres : [];
+        const lista = nombres.length
+            ? ` (${nombres.map(n => h(String(n))).join(', ')})`
+            : '';
+        const queCirculos = propios === 1
+            ? `Sos dueño de 1 círculo${lista}`
+            : `Sos dueño de ${propios} círculos${lista}`;
+        if (!otras) {
+            return `<strong>${queCirculos}</strong> y se borra completo con todo lo que tiene adentro.`;
+        }
+        const gente = otras === 1
+            ? 'hay 1 persona más adentro'
+            : `hay ${otras} personas más adentro`;
+        return `<strong>Atención: ${queCirculos} y ${gente}.</strong> `
+             + 'Al borrar tu cuenta se borra todo lo de esas personas también: '
+             + 'sus fotos, sus remedios, su biografía, sus estudios médicos. '
+             + 'Sus cuentas quedan sin círculo.';
+    }
+
+    // Nombre presentable de quien puede recibir el circulo. Varios
+    // familiares no cargaron nombre_completo: ahi el parentesco es lo
+    // unico que identifica a la persona, asi que no puede faltar.
+    function comoSeLlama(p) {
+        const nombre = String(p.nombre || '').trim();
+        const par    = String(p.parentesco || '').trim();
+        if (nombre && par) return `${nombre} (${par})`;
+        return nombre || par || 'otro familiar';
+    }
+
+    // Si hay a quien pasarle el circulo, eso va ANTES de borrar: es la
+    // salida que no pierde los datos de los demas.
+    function pintarTraspaso(info) {
+        const conCandidatos = (Array.isArray(info.circulos) ? info.circulos : [])
+            .filter(c => Array.isArray(c.puede_recibir) && c.puede_recibir.length);
+        if (!conCandidatos.length) return '';
+
+        const filas = conCandidatos.map(c => {
+            const opciones = c.puede_recibir.map(p => `
+                <button type="button" class="btn btn--mini" data-pasar
+                        data-circulo="${h(String(c.circle_id))}"
+                        data-nuevo="${h(String(p.user_id))}"
+                        data-quien="${h(comoSeLlama(p))}">
+                    Pasar a ${h(comoSeLlama(p))}
+                </button>`).join('');
+            return `
+                <div style="margin:0.5rem 0;">
+                    <div><strong>${h(String(c.nombre || 'Círculo'))}</strong></div>
+                    <div class="fila-botones" style="gap:0.4rem;flex-wrap:wrap;">${opciones}</div>
+                </div>`;
+        }).join('');
+
+        return `
+            <div style="margin:0.8rem 0;padding:0.7rem;border:1px solid var(--borde,#ccc);border-radius:8px;">
+                <p style="margin:0 0 0.4rem;"><strong>No hace falta borrar todo.</strong>
+                   Podés pasarle el círculo a otro familiar: queda a cargo él
+                   y no se pierde nada. Después borrás tu cuenta tranquilo.</p>
+                ${filas}
+            </div>`;
+    }
+
+    // Engancha los botones de traspaso. Al terminar vuelve a consultar el
+    // previo: si ya no es dueño de nada, el aviso cambia solo.
+    function activarTraspaso() {
+        overlay.querySelectorAll('[data-pasar]').forEach(btn => {
+            btn.addEventListener('click', async () => {
+                const quien = btn.dataset.quien || 'ese familiar';
+                const todos = overlay.querySelectorAll('[data-pasar]');
+                todos.forEach(b => { b.disabled = true; });
+                btn.textContent = `Pasando el círculo a ${quien}…`;
+                try {
+                    await pasarCirculo(btn.dataset.circulo, btn.dataset.nuevo);
+                    pintarPaso1();
+                } catch (err) {
+                    console.error('[pasar-circulo]', err);
+                    const caja = overlay.querySelector('#bc-previo');
+                    if (caja) {
+                        const aviso = document.createElement('p');
+                        aviso.style.color = 'var(--accent-anecdota)';
+                        aviso.textContent = err?.message
+                            || 'No se pudo pasar el círculo. Volvé a intentar.';
+                        caja.appendChild(aviso);
+                    }
+                    todos.forEach(b => { b.disabled = false; });
+                    btn.textContent = `Pasar a ${quien}`;
+                }
+            });
+        });
+    }
+
+    // ---- Paso 2: tipear BORRAR ----
+    function pintarPaso2() {
+        overlay.innerHTML = `
+            <div class="modal modal--danger" role="dialog" aria-modal="true" aria-labelledby="bc-titulo2">
+                <button class="modal__close" aria-label="Cerrar" data-close-x>×</button>
+                <h2 id="bc-titulo2" class="modal__titulo">Confirmá el borrado</h2>
+                <div class="modal__cuerpo">
+                    <p>Para confirmar, escribí la palabra <strong>BORRAR</strong> (en mayúsculas)
+                       en el casillero.</p>
+                    <input id="bc-input" type="text" class="input-real" autocomplete="off"
+                           autocapitalize="off" autocorrect="off" spellcheck="false"
+                           placeholder="BORRAR" aria-label="Escribí BORRAR para confirmar">
+                    <p id="bc-estado" class="muted" style="margin:0.6rem 0 0;min-height:1.4em;"></p>
+                </div>
+                <div class="modal__acciones modal__acciones--stack">
+                    <button type="button" class="btn btn--mini" data-cancel>Cancelar</button>
+                    <button type="button" class="btn btn--danger" data-eliminar disabled
+                            style="border-color:var(--accent-anecdota);opacity:0.5;">
+                        Eliminar mi cuenta
+                    </button>
+                </div>
+            </div>
+        `;
+        const input    = overlay.querySelector('#bc-input');
+        const btnElim  = overlay.querySelector('[data-eliminar]');
+        const estado   = overlay.querySelector('#bc-estado');
+
+        overlay.querySelector('[data-close-x]').addEventListener('click', cerrar);
+        overlay.querySelector('[data-cancel]').addEventListener('click', cerrar);
+
+        // Habilita el botón final SOLO con el match exacto, case-sensitive.
+        input.addEventListener('input', () => {
+            const ok = input.value === 'BORRAR';
+            btnElim.disabled = !ok;
+            btnElim.style.opacity = ok ? '1' : '0.5';
+        });
+        input.focus();
+
+        btnElim.addEventListener('click', async () => {
+            if (input.value !== 'BORRAR') return;
+            // Bloquear toda la interacción mientras corre.
+            input.disabled = true;
+            btnElim.disabled = true;
+            btnElim.style.opacity = '0.5';
+            btnElim.textContent = 'Borrando tu cuenta…';
+            overlay.querySelector('[data-cancel]').disabled = true;
+            overlay.querySelector('[data-close-x]').disabled = true;
+            estado.textContent = 'Esto puede tardar unos segundos. No cierres la app.';
+
+            try {
+                const sb = await sbClient();
+                const { data, error } = await sb.functions.invoke('borrar-cuenta', { method: 'POST' });
+                if (error || (data && data.error)) {
+                    throw new Error((data && data.error) || error?.message || 'fallo_desconocido');
+                }
+                // Éxito: cerrar sesión, limpiar estado en memoria y recargar
+                // limpio. El bootstrap de app.js, sin sesión, muestra la
+                // pantalla de bienvenida (renderBienvenida).
+                try { await cerrarSesion(); } catch (_) { /* ya da igual */ }
+                limpiarDatosReales();
+                limpiarSesionReal();
+                history.replaceState(null, '', window.location.pathname);
+                window.location.reload();
+            } catch (err) {
+                console.error('[borrar-cuenta]', err);
+                pintarError();
+            }
+        });
+    }
+
+    // ---- Error: la cuenta NO fue borrada ----
+    function pintarError() {
+        overlay.innerHTML = `
+            <div class="modal modal--danger" role="dialog" aria-modal="true" aria-labelledby="bc-err">
+                <button class="modal__close" aria-label="Cerrar" data-close-x>×</button>
+                <h2 id="bc-err" class="modal__titulo">No se pudo borrar</h2>
+                <div class="modal__cuerpo">
+                    <p>No se pudo completar el borrado. Volvé a intentar o escribinos.
+                       <strong>Tu cuenta NO fue eliminada.</strong></p>
+                </div>
+                <div class="modal__acciones modal__acciones--stack">
+                    <button type="button" class="btn btn--mini" data-cancel>Cerrar</button>
+                    <button type="button" class="btn btn--danger" data-reintentar
+                            style="border-color:var(--accent-anecdota);">Reintentar</button>
+                </div>
+            </div>
+        `;
+        overlay.querySelector('[data-close-x]').addEventListener('click', cerrar);
+        overlay.querySelector('[data-cancel]').addEventListener('click', cerrar);
+        overlay.querySelector('[data-reintentar]').addEventListener('click', pintarPaso2);
+    }
+
+    pintarPaso1();
 }
 
 // =====================================================================

@@ -28,6 +28,43 @@ export async function circulosDelUsuario(userId) {
 }
 
 /**
+ * Le pasa un círculo a otro familiar. El que deja de ser dueño pierde
+ * el derecho a borrar el círculo; sus permisos de admin no cambian.
+ *
+ * La regla vive en la base (trigger trg_circles_proteger_owner), no acá:
+ * sólo el dueño actual puede entregar el círculo, y sólo a alguien que
+ * ya sea miembro admin de ese mismo círculo. Si el trigger rechaza,
+ * llega como error 42501 y lo traducimos a algo legible.
+ *
+ * @param {string} circleId
+ * @param {string} nuevoDuenoId  user_id del familiar que lo recibe
+ */
+export async function pasarCirculo(circleId, nuevoDuenoId) {
+    const sb = await sbClient();
+    const { data, error } = await sb
+        .from('circles')
+        .update({ owner_id: nuevoDuenoId })
+        .eq('id', circleId)
+        .select('id, owner_id');
+    if (error) {
+        if (error.code === '42501' || /due[nñ]o/i.test(error.message || '')) {
+            throw enriquecer('pasar circulo', {
+                ...error,
+                message: 'No se pudo pasar el círculo: tiene que recibirlo '
+                       + 'un familiar que ya sea administrador del círculo.',
+            });
+        }
+        throw enriquecer('pasar circulo', error);
+    }
+    // Sin filas devueltas el UPDATE no aplicó (RLS lo filtró). No se
+    // puede dar por hecho que salió bien.
+    if (!data || !data.length || data[0].owner_id !== nuevoDuenoId) {
+        throw new Error('El círculo no cambió de dueño. Volvé a intentar.');
+    }
+    return data[0];
+}
+
+/**
  * RPC: abre el legado del círculo. Sólo admins (la RPC valida).
  * Después, las historias con es_legado=true pasan a ser visibles
  * para los oyentes según su visibilidad normal.
