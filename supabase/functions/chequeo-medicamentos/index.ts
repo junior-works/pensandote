@@ -1,5 +1,14 @@
 // Pensandote - Edge Function: chequeo-medicamentos
-// Corre cada 1 min (pg_cron). Service role. verify_jwt=false.
+// La dispara pg_cron. Service role. verify_jwt=false.
+//
+// OJO CON LA FRECUENCIA: el 22/9/2026 el cron paso de cada minuto a cada
+// 10 (migracion 20260922103000_cron_bajar_frecuencia), porque dos tareas
+// por minuto tenian frenada la instancia de Postgres y la app no
+// respondia. Esta funcion seguia buscando el minuto EXACTO de la dosis,
+// asi que desde ese dia un remedio solo sonaba si su horario caia justo
+// en :04, :05, :14, :15, :24, :25... Un remedio a las 08:00 no sonaba
+// nunca. Por eso ahora mira una VENTANA de minutos hacia atras en vez de
+// un minuto puntual: no depende de cada cuanto corra el cron.
 //
 // Hace DOS cosas distintas, que antes eran una sola:
 //
@@ -53,6 +62,13 @@ function json(body: unknown, status = 200) {
 // tutor que sigue sin confirmarse. Decidido con Charly el 03/10/2026.
 const MINUTOS_PARA_AVISAR_AL_TUTOR = 30;
 
+// Cuantos minutos hacia atras mira cada corrida. Tiene que ser mayor que
+// el hueco entre corridas del cron (hoy 10 minutos) para que ningun
+// horario quede en el medio sin que nadie lo vea. Con 11 hay un minuto
+// de margen. El dedup impide que un aviso salga dos veces, asi que
+// pasarse no duplica nada: quedarse corto, en cambio, pierde avisos.
+const VENTANA_MINUTOS = 11;
+
 // "HH:MM" y "YYYY-MM-DD" en zona Buenos Aires.
 function ahoraAR(): { hhmm: string; fecha: string; minutos: number } {
     const fmt = new Intl.DateTimeFormat("en-CA", {
@@ -88,6 +104,23 @@ function ahoraARMenos(minutos: number): { hhmm: string; fecha: string; minutos: 
         fecha:   `${get("year")}-${get("month")}-${get("day")}`,
         minutos: parseInt(hh, 10) * 60 + parseInt(mm, 10),
     };
+}
+
+/**
+ * Los horarios de los ultimos `cuantos` minutos, contados desde
+ * `desdeHaceMin` minutos atras, como Map "HH:MM" -> fecha de ESE minuto.
+ *
+ * La fecha importa: una ventana que arranca a las 00:03 incluye las
+ * 23:55 de AYER. Guardarla junto al horario evita buscar una dosis de
+ * ayer con la fecha de hoy, que no la encontraria nunca.
+ */
+function ventanaDeMinutos(desdeHaceMin: number, cuantos: number): Map<string, string> {
+    const m = new Map<string, string>();
+    for (let k = desdeHaceMin; k < desdeHaceMin + cuantos; k++) {
+        const t = ahoraARMenos(k);
+        if (!m.has(t.hhmm)) m.set(t.hhmm, t.fecha);
+    }
+    return m;
 }
 
 // Minutos desde medianoche de un "HH:MM" (o null si no parsea).
@@ -222,10 +255,10 @@ Deno.serve(async (req) => {
         auth: { autoRefreshToken: false, persistSession: false },
     });
 
-    const { hhmm, fecha, minutos } = ahoraAR();
-    // Slots que matchean: este minuto y el anterior (cubre un tick de
-    // cron perdido sin disparar antes de tiempo). El dedup evita repetir.
-    const minutosOk = new Set([minutos, minutos - 1]);
+    const { hhmm } = ahoraAR();
+    // Horarios que entran en esta corrida: los de los ultimos
+    // VENTANA_MINUTOS minutos, cada uno con la fecha de su propio minuto.
+    const ventanaDosis = ventanaDeMinutos(0, VENTANA_MINUTOS);
 
     // select('*') para tolerar que la migracion de fases no este aplicada
     // todavia (fecha_inicio/fecha_fin/fases pueden no existir aun).
@@ -247,11 +280,14 @@ Deno.serve(async (req) => {
     const dispositivos = new Map<string, boolean>();
 
     for (const med of meds as any[]) {
-        if (!activoHoy(med, fecha)) continue;
         const horarios = Array.isArray(med.horarios) ? med.horarios : [];
         for (const hor of horarios) {
-            const min = hhmmAMin(hor);
-            if (min === null || !minutosOk.has(min)) continue;
+            if (hhmmAMin(hor) === null) continue;
+            // La fecha sale del slot, no de "hoy": la ventana puede cruzar
+            // la medianoche.
+            const fecha = ventanaDosis.get(hor);
+            if (!fecha) continue;
+            if (!activoHoy(med, fecha)) continue;
 
             if (!(await reservarAviso(sb, med.id, fecha, hor, "dosis"))) continue;
 
@@ -284,22 +320,22 @@ Deno.serve(async (req) => {
     // hora de ahora, asi una dosis de las 23:50 se revisa con SU fecha y
     // no con la de hoy cuando ya pasó la medianoche.
     // -----------------------------------------------------------------
-    const atras = ahoraARMenos(MINUTOS_PARA_AVISAR_AL_TUTOR);
-    const minutosAtrasOk = new Set([atras.minutos, atras.minutos - 1]);
+    const ventanaTutor = ventanaDeMinutos(MINUTOS_PARA_AVISAR_AL_TUTOR, VENTANA_MINUTOS);
 
     for (const med of meds as any[]) {
-        if (!activoHoy(med, atras.fecha)) continue;
         const horarios = Array.isArray(med.horarios) ? med.horarios : [];
         for (const hor of horarios) {
-            const min = hhmmAMin(hor);
-            if (min === null || !minutosAtrasOk.has(min)) continue;
+            if (hhmmAMin(hor) === null) continue;
+            const fechaDosis = ventanaTutor.get(hor);
+            if (!fechaDosis) continue;
+            if (!activoHoy(med, fechaDosis)) continue;
 
             // ¿La confirmo? Una fila en tomas_medicamento alcanza.
             const { data: tomas, error: errTomas } = await sb
                 .from("tomas_medicamento")
                 .select("id")
                 .eq("medicamento_id", med.id)
-                .eq("fecha", atras.fecha)
+                .eq("fecha", fechaDosis)
                 .eq("horario", hor)
                 .limit(1);
             if (errTomas) {
@@ -308,7 +344,7 @@ Deno.serve(async (req) => {
             }
             if (tomas && tomas.length) continue; // confirmada: nadie se entera
 
-            if (!(await reservarAviso(sb, med.id, atras.fecha, hor, "sin_confirmar"))) continue;
+            if (!(await reservarAviso(sb, med.id, fechaDosis, hor, "sin_confirmar"))) continue;
 
             // "Sin confirmar" NO es "no lo tomo". El texto lo dice asi.
             const ok = await llamarEnviarPush({
