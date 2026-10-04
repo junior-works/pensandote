@@ -59,9 +59,9 @@ const VOCES: Record<string, { voice: string; instructions: string }> = {
         instructions: [
             "Hablá en español rioplatense argentino, con voseo real y la «y/ll» suave de Buenos Aires. Nada de acento neutro ni de España.",
             "",
-            "Voz masculina de registro medio, algo nasal, áspera y aireada. En palabras cargadas de emoción dejá que la voz suba por un instante a un tono más fino, casi aflautado, y caiga de nuevo. Que suene hablado, no actuado ni cantado. No imites la voz de ninguna persona real.",
+            "Voz masculina de registro medio-agudo, liviana y algo nasal, con apenas una aspereza cálida. Hablá un poco más alto que el Ash habitual, sin resonancia grave de pecho ni caída grave al final de cada frase. Cuando te entusiasmes, dejá asomar inflexiones finas, apenas aflautadas, y volvé naturalmente al tono medio-agudo. Que suene hablado y cercano, nunca forzado, actuado ni cantado. No imites la voz de ninguna persona real.",
             "",
-            "Cadencia de entrevista argentina espontánea: arrancás suave, acelerás cuando te entusiasmas, repetís alguna palabra mientras encontrás la idea y hacés pausas desparejas. El «eeeeh» inicial debe salir como una duda prolongada y natural, no como una palabra leída. Terminá con complicidad y humor, sin retar.",
+            "Cadencia de charla argentina espontánea: alterná arranques tranquilos con ráfagas un poco más rápidas, pequeñas pausas irregulares y alguna vocal apenas estirada al enfatizar. Dejá una sonrisa audible en las frases afectuosas. Si el texto incluye «eeeeh», decilo como una duda natural, no como una palabra leída; no agregues muletillas que no estén escritas. Mantené siempre la dicción clara, especialmente al explicar salud, horarios o medicamentos. Cerrá con calidez y complicidad, sin retar.",
         ].join("\n"),
     },
 };
